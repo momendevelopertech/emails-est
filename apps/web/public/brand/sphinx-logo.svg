@@ -1,11 +1,22 @@
-<svg width="420" height="120" viewBox="0 0 420 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="420" height="120" fill="white" fill-opacity="0"/>
-  <path d="M21 58C20 45 25 35 36 29C49 22 65 25 74 36" stroke="#253A92" stroke-width="4" stroke-linecap="round"/>
-  <path d="M20 59C19 75 29 87 43 90" stroke="#253A92" stroke-width="4" stroke-linecap="round"/>
-  <circle cx="48" cy="40" r="3" fill="#253A92"/>
-  <path d="M43 48C50 50 56 48 60 43" stroke="#253A92" stroke-width="3" stroke-linecap="round"/>
-  <text x="92" y="66" fill="#253A92" font-size="64" font-family="Segoe UI, Arial, sans-serif" letter-spacing="2">SPHINX</text>
-  <line x1="92" y1="79" x2="337" y2="79" stroke="#253A92" stroke-width="4"/>
-  <line x1="92" y1="88" x2="337" y2="88" stroke="#D89D6B" stroke-width="4"/>
-  <text x="220" y="112" fill="#253A92" font-size="28" font-style="italic" font-family="Georgia, serif">Since 1944</text>
+﻿<svg width="1369" height="515" viewBox="0 0 1369 515" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1369" height="515" fill="white"/>
+
+  <!-- Sphinx head -->
+  <path d="M26 250C20 168 54 110 122 86C196 60 291 76 355 140" stroke="#253A92" stroke-width="9" stroke-linecap="round"/>
+  <path d="M22 258C20 351 80 438 170 468" stroke="#253A92" stroke-width="9" stroke-linecap="round"/>
+  <path d="M175 97C213 112 247 146 263 197" stroke="#253A92" stroke-width="8" stroke-linecap="round"/>
+  <path d="M136 171C157 146 195 134 227 154" stroke="#253A92" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="237" cy="165" r="7" fill="#253A92"/>
+  <path d="M211 207C252 225 294 211 325 178" stroke="#253A92" stroke-width="8" stroke-linecap="round"/>
+  <path d="M214 236C270 252 302 236 326 214" stroke="#253A92" stroke-width="7" stroke-linecap="round"/>
+  <path d="M160 287C227 277 278 300 314 342" stroke="#253A92" stroke-width="8" stroke-linecap="round"/>
+  <path d="M294 342C304 400 303 444 292 486" stroke="#253A92" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Wordmark -->
+  <text x="365" y="265" fill="#253A92" font-size="240" font-family="Segoe UI, Arial, sans-serif" letter-spacing="5">SPHINX</text>
+
+  <line x1="373" y1="338" x2="1329" y2="338" stroke="#253A92" stroke-width="14"/>
+  <line x1="373" y1="365" x2="1329" y2="365" stroke="#D57A42" stroke-width="6"/>
+
+  <text x="802" y="487" fill="#253A92" font-size="122" font-style="italic" font-family="Georgia, 'Times New Roman', serif">Since 1944</text>
 </svg>
