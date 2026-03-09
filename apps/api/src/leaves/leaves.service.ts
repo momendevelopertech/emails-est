@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
-import { differenceInBusinessDays, addDays } from 'date-fns';
+import { differenceInBusinessDays, startOfMonth, endOfMonth } from 'date-fns';
 
 @Injectable()
 export class LeavesService {
@@ -17,11 +17,67 @@ export class LeavesService {
         private auditService: AuditService,
     ) { }
 
+    private async ensureYearBalances(userId: string, year: number) {
+        const defaults: Array<{ leaveType: any; days: number }> = [
+            { leaveType: 'ANNUAL', days: 21 },
+            { leaveType: 'CASUAL', days: 7 },
+            { leaveType: 'EMERGENCY', days: 3 },
+            { leaveType: 'MISSION', days: 10 },
+        ];
+
+        for (const item of defaults) {
+            await this.prisma.leaveBalance.upsert({
+                where: {
+                    userId_year_leaveType: {
+                        userId,
+                        year,
+                        leaveType: item.leaveType,
+                    },
+                },
+                update: {},
+                create: {
+                    userId,
+                    year,
+                    leaveType: item.leaveType,
+                    totalDays: item.days,
+                    usedDays: 0,
+                    remainingDays: item.days,
+                },
+            });
+        }
+    }
+
     async getBalances(userId: string) {
         const year = new Date().getFullYear();
+        await this.ensureYearBalances(userId, year);
         return this.prisma.leaveBalance.findMany({
             where: { userId, year },
         });
+    }
+
+    async getMonthlyAbsenceDeduction(userId: string, role: string, month?: string) {
+        const now = month ? new Date(`${month}-01`) : new Date();
+        const monthStart = startOfMonth(now);
+        const monthEnd = endOfMonth(now);
+
+        const where: any = {
+            leaveType: 'ABSENCE_WITH_PERMISSION',
+            status: 'HR_APPROVED',
+            startDate: { gte: monthStart, lte: monthEnd },
+        };
+        if (role === 'EMPLOYEE') {
+            where.userId = userId;
+        }
+
+        const requests = await this.prisma.leaveRequest.findMany({
+            where,
+            select: { totalDays: true },
+        });
+
+        return {
+            month: `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}`,
+            deductedDays: requests.reduce((sum, req) => sum + req.totalDays, 0),
+        };
     }
 
     async createRequest(userId: string, data: {
@@ -31,22 +87,29 @@ export class LeavesService {
         reason?: string;
         attachmentUrl?: string;
     }) {
-        const balance = await this.prisma.leaveBalance.findUnique({
-            where: {
-                userId_year_leaveType: {
-                    userId,
-                    year: new Date().getFullYear(),
-                    leaveType: data.leaveType,
-                },
-            },
-        });
-
-        if (!balance) throw new BadRequestException('Leave balance not found');
+        const year = new Date(data.startDate).getFullYear();
+        await this.ensureYearBalances(userId, year);
 
         const days = differenceInBusinessDays(new Date(data.endDate), new Date(data.startDate)) + 1;
+        if (days <= 0) {
+            throw new BadRequestException('End date must be same day or after start date');
+        }
 
-        if (balance.remainingDays < days) {
-            throw new BadRequestException(`Insufficient leave balance. Available: ${balance.remainingDays} days`);
+        if (data.leaveType !== 'ABSENCE_WITH_PERMISSION') {
+            const balance = await this.prisma.leaveBalance.findUnique({
+                where: {
+                    userId_year_leaveType: {
+                        userId,
+                        year,
+                        leaveType: data.leaveType,
+                    },
+                },
+            });
+
+            if (!balance) throw new BadRequestException('Leave balance not found');
+            if (balance.remainingDays < days) {
+                throw new BadRequestException(`Insufficient leave balance. Available: ${balance.remainingDays} days`);
+            }
         }
 
         const request = await this.prisma.leaveRequest.create({
@@ -72,7 +135,6 @@ export class LeavesService {
 
         await this.notificationsService.notifyLeaveAction(request, 'submitted');
 
-        // Notify managers in the department
         if (request.user.departmentId) {
             const managers = await this.prisma.user.findMany({
                 where: {
@@ -87,9 +149,9 @@ export class LeavesService {
                     senderId: userId,
                     type: 'LEAVE_REQUEST',
                     title: 'New Leave Request',
-                    titleAr: 'طلب إجازة جديد',
+                    titleAr: 'New Leave Request',
                     body: `${request.user.fullName} submitted a ${request.leaveType} leave request.`,
-                    bodyAr: `قدّم ${request.user.fullName} طلب إجازة.`,
+                    bodyAr: `${request.user.fullName} submitted a leave request.`,
                     metadata: { leaveRequestId: request.id },
                 });
             }
@@ -160,20 +222,21 @@ export class LeavesService {
                 updateData.approvedByHrId = actorId;
                 updateData.approvedByHrAt = new Date();
 
-                // Deduct days from balance
-                await this.prisma.leaveBalance.update({
-                    where: {
-                        userId_year_leaveType: {
-                            userId: request.userId,
-                            year: new Date(request.startDate).getFullYear(),
-                            leaveType: request.leaveType,
+                if (request.leaveType !== 'ABSENCE_WITH_PERMISSION') {
+                    await this.prisma.leaveBalance.update({
+                        where: {
+                            userId_year_leaveType: {
+                                userId: request.userId,
+                                year: new Date(request.startDate).getFullYear(),
+                                leaveType: request.leaveType,
+                            },
                         },
-                    },
-                    data: {
-                        usedDays: { increment: request.totalDays },
-                        remainingDays: { decrement: request.totalDays },
-                    },
-                });
+                        data: {
+                            usedDays: { increment: request.totalDays },
+                            remainingDays: { decrement: request.totalDays },
+                        },
+                    });
+                }
             } else {
                 newStatus = 'REJECTED';
             }
@@ -196,7 +259,6 @@ export class LeavesService {
 
         await this.notificationsService.notifyLeaveAction(request, action === 'approve' ? 'approved' : 'rejected');
 
-        // WhatsApp notify manager approval to HR
         if (newStatus === 'MANAGER_APPROVED') {
             const hrAdmins = await this.prisma.user.findMany({
                 where: { role: { in: ['HR_ADMIN', 'SUPER_ADMIN'] } },
@@ -206,9 +268,9 @@ export class LeavesService {
                     receiverId: hr.id,
                     type: 'LEAVE_REQUEST',
                     title: 'Leave Pending HR Approval',
-                    titleAr: 'إجازة بانتظار موافقة HR',
+                    titleAr: 'Leave Pending HR Approval',
                     body: `${request.user.fullName}'s leave has been approved by manager. Awaiting HR decision.`,
-                    bodyAr: `تمت الموافقة على إجازة ${request.user.fullName} من المدير. بانتظار قرار HR.`,
+                    bodyAr: `${request.user.fullName} leave approved by manager. Awaiting HR decision.`,
                     metadata: { leaveRequestId: id },
                 });
             }
@@ -220,8 +282,10 @@ export class LeavesService {
     async cancelRequest(id: string, userId: string, role: string) {
         const request = await this.prisma.leaveRequest.findUnique({ where: { id } });
         if (!request) throw new NotFoundException('Not found');
-        if (role === 'EMPLOYEE' && request.userId !== userId) throw new ForbiddenException();
-        if (role === 'EMPLOYEE' && request.status !== 'PENDING') {
+        if (request.userId !== userId) {
+            throw new ForbiddenException('Only request owner can cancel');
+        }
+        if (request.status !== 'PENDING') {
             throw new BadRequestException('Can only cancel pending requests');
         }
 
@@ -242,25 +306,31 @@ export class LeavesService {
         const startDate = data.startDate ? new Date(data.startDate) : request.startDate;
         const endDate = data.endDate ? new Date(data.endDate) : request.endDate;
         const days = differenceInBusinessDays(endDate, startDate) + 1;
+        if (days <= 0) {
+            throw new BadRequestException('End date must be same day or after start date');
+        }
 
-        const balance = await this.prisma.leaveBalance.findUnique({
-            where: {
-                userId_year_leaveType: {
-                    userId: request.userId,
-                    year: new Date(startDate).getFullYear(),
-                    leaveType: data.leaveType ?? request.leaveType,
+        const finalLeaveType = data.leaveType ?? request.leaveType;
+        if (finalLeaveType !== 'ABSENCE_WITH_PERMISSION') {
+            const balance = await this.prisma.leaveBalance.findUnique({
+                where: {
+                    userId_year_leaveType: {
+                        userId: request.userId,
+                        year: new Date(startDate).getFullYear(),
+                        leaveType: finalLeaveType,
+                    },
                 },
-            },
-        });
-        if (!balance) throw new BadRequestException('Leave balance not found');
-        if (balance.remainingDays < days) {
-            throw new BadRequestException(`Insufficient leave balance. Available: ${balance.remainingDays} days`);
+            });
+            if (!balance) throw new BadRequestException('Leave balance not found');
+            if (balance.remainingDays < days) {
+                throw new BadRequestException(`Insufficient leave balance. Available: ${balance.remainingDays} days`);
+            }
         }
 
         const updated = await this.prisma.leaveRequest.update({
             where: { id },
             data: {
-                leaveType: data.leaveType ?? request.leaveType,
+                leaveType: finalLeaveType,
                 startDate,
                 endDate,
                 totalDays: days,

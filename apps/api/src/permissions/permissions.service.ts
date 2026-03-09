@@ -7,7 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { addMonths, setDate, startOfDay } from 'date-fns';
 
 @Injectable()
@@ -18,7 +18,7 @@ export class PermissionsService {
         private auditService: AuditService,
     ) { }
 
-    // Permission cycle: Day 11 → Day 10 next month
+    // Permission cycle: day 11 to day 10 next month.
     private getCycleForDate(date: Date): { start: Date; end: Date } {
         const d = date.getDate();
         let cycleStart: Date;
@@ -34,6 +34,40 @@ export class PermissionsService {
         }
 
         return { start: cycleStart, end: cycleEnd };
+    }
+
+    private parseHours(arrivalTime?: string, leaveTime?: string) {
+        if (!arrivalTime || !leaveTime) {
+            return null;
+        }
+
+        const [startH, startM] = arrivalTime.split(':').map(Number);
+        const [endH, endM] = leaveTime.split(':').map(Number);
+        if ([startH, startM, endH, endM].some((n) => Number.isNaN(n))) {
+            throw new BadRequestException('Invalid time format');
+        }
+
+        const startMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+        const diff = Math.abs(endMinutes - startMinutes) / 60;
+        if (diff <= 0) {
+            throw new BadRequestException('Permission duration must be greater than zero');
+        }
+
+        return diff;
+    }
+
+    private async getReservedHoursInCycle(cycleId: string, excludeRequestId?: string) {
+        const result = await this.prisma.permissionRequest.aggregate({
+            _sum: { hoursUsed: true },
+            where: {
+                cycleId,
+                status: { in: ['PENDING', 'MANAGER_APPROVED', 'HR_APPROVED'] },
+                ...(excludeRequestId ? { id: { not: excludeRequestId } } : {}),
+            },
+        });
+
+        return result._sum.hoursUsed ?? 0;
     }
 
     async getOrCreateCycle(userId: string) {
@@ -72,32 +106,20 @@ export class PermissionsService {
     }) {
         const cycle = await this.getOrCreateCycle(userId);
 
-        // Calculate hours 
-        let hoursUsed = 0;
-        if (data.arrivalTime && data.leaveTime) {
-            const [startH, startM] = data.arrivalTime.split(':').map(Number);
-            const [endH, endM] = data.leaveTime.split(':').map(Number);
-            const startMins = startH * 60 + startM;
-            const endMins = endH * 60 + endM;
-            hoursUsed = Math.abs(endMins - startMins) / 60;
-        } else {
-            // Default to 2 hours if not specified
+        let hoursUsed = this.parseHours(data.arrivalTime, data.leaveTime);
+        if (!hoursUsed) {
+            if (data.permissionType === 'PERSONAL') {
+                throw new BadRequestException('Personal permission requires start and end time');
+            }
             hoursUsed = 2;
         }
 
-        if (cycle.remainingHours < hoursUsed) {
+        const reservedHours = await this.getReservedHoursInCycle(cycle.id);
+        const availableHours = Math.max(0, 4 - reservedHours);
+        if (availableHours < hoursUsed) {
             throw new BadRequestException(
-                `Insufficient permission hours. Available: ${cycle.remainingHours}h, Requested: ${hoursUsed}h`,
+                `Insufficient permission hours. Available: ${availableHours}h, Requested: ${hoursUsed}h`,
             );
-        }
-
-        // Check existing requests: max 2 per cycle (4h = once, or 2h+2h = twice)
-        const existingRequests = await this.prisma.permissionRequest.count({
-            where: { cycleId: cycle.id, status: { not: 'REJECTED' } },
-        });
-
-        if (existingRequests >= 2) {
-            throw new BadRequestException('Maximum 2 permission requests per cycle allowed');
         }
 
         const request = await this.prisma.permissionRequest.create({
@@ -122,7 +144,6 @@ export class PermissionsService {
             entityId: request.id,
         });
 
-        // Notify managers
         if (request.user.departmentId) {
             const managers = await this.prisma.user.findMany({
                 where: {
@@ -137,9 +158,9 @@ export class PermissionsService {
                     senderId: userId,
                     type: 'PERMISSION_REQUEST',
                     title: 'New Permission Request',
-                    titleAr: 'طلب إذن جديد',
+                    titleAr: 'New Permission Request',
                     body: `${request.user.fullName} requested ${hoursUsed}h permission on ${new Date(data.requestDate).toLocaleDateString()}.`,
-                    bodyAr: `طلب ${request.user.fullName} إذن ${hoursUsed} ساعة.`,
+                    bodyAr: `${request.user.fullName} requested ${hoursUsed}h permission.`,
                     metadata: { permissionRequestId: request.id },
                 });
             }
@@ -177,14 +198,21 @@ export class PermissionsService {
         if (role === 'MANAGER') {
             newStatus = action === 'approve' ? 'MANAGER_APPROVED' : 'REJECTED';
             updateData.managerComment = comment;
-            if (action === 'approve') { updateData.approvedByMgrId = actorId; updateData.approvedByMgrAt = new Date(); }
+            if (action === 'approve') {
+                updateData.approvedByMgrId = actorId;
+                updateData.approvedByMgrAt = new Date();
+            }
         } else {
             newStatus = action === 'approve' ? 'HR_APPROVED' : 'REJECTED';
             updateData.hrComment = comment;
             if (action === 'approve') {
+                const cycle = await this.prisma.permissionCycle.findUnique({ where: { id: request.cycleId } });
+                if (!cycle || cycle.remainingHours < request.hoursUsed) {
+                    throw new BadRequestException('Insufficient remaining hours in permission cycle');
+                }
+
                 updateData.approvedByHrId = actorId;
                 updateData.approvedByHrAt = new Date();
-                // Deduct from cycle
                 await this.prisma.permissionCycle.update({
                     where: { id: request.cycleId },
                     data: {
@@ -205,21 +233,20 @@ export class PermissionsService {
             entityId: id,
         });
 
-        // Notify employee
         await this.notificationsService.createInApp({
             receiverId: request.userId,
             type: action === 'approve' ? 'PERMISSION_APPROVED' : 'PERMISSION_REJECTED',
-            title: action === 'approve' ? 'Permission Approved ✅' : 'Permission Rejected ❌',
-            titleAr: action === 'approve' ? 'تمت الموافقة على الإذن ✅' : 'تم رفض الإذن ❌',
+            title: action === 'approve' ? 'Permission Approved' : 'Permission Rejected',
+            titleAr: action === 'approve' ? 'Permission Approved' : 'Permission Rejected',
             body: comment || (action === 'approve' ? 'Your permission has been approved.' : 'Your permission has been rejected.'),
-            bodyAr: comment || (action === 'approve' ? 'تمت الموافقة على طلبك.' : 'تم رفض طلبك.'),
+            bodyAr: comment || (action === 'approve' ? 'Your permission has been approved.' : 'Your permission has been rejected.'),
             metadata: { permissionRequestId: id },
         });
 
         if (request.user.phone) {
             await this.notificationsService.sendWhatsApp(
                 request.user.phone,
-                `📋 SPHINX HR: Permission ${action === 'approve' ? 'Approved ✅' : 'Rejected ❌'}\n${comment || ''}`,
+                `SPHINX HR: Permission ${action === 'approve' ? 'Approved' : 'Rejected'}\n${comment || ''}`,
             );
         }
 
@@ -235,26 +262,30 @@ export class PermissionsService {
         }
 
         const cycle = await this.getOrCreateCycle(request.userId);
-        let hoursUsed = request.hoursUsed;
         const arrivalTime = data.arrivalTime ?? request.arrivalTime;
         const leaveTime = data.leaveTime ?? request.leaveTime;
-        if (arrivalTime && leaveTime) {
-            const [startH, startM] = arrivalTime.split(':').map(Number);
-            const [endH, endM] = leaveTime.split(':').map(Number);
-            const startMins = startH * 60 + startM;
-            const endMins = endH * 60 + endM;
-            hoursUsed = Math.abs(endMins - startMins) / 60;
+        const permissionType = data.permissionType ?? request.permissionType;
+
+        let hoursUsed = this.parseHours(arrivalTime, leaveTime);
+        if (!hoursUsed) {
+            if (permissionType === 'PERSONAL') {
+                throw new BadRequestException('Personal permission requires start and end time');
+            }
+            hoursUsed = 2;
         }
-        if (cycle.remainingHours < hoursUsed) {
+
+        const reservedHours = await this.getReservedHoursInCycle(cycle.id, id);
+        const availableHours = Math.max(0, 4 - reservedHours);
+        if (availableHours < hoursUsed) {
             throw new BadRequestException(
-                `Insufficient permission hours. Available: ${cycle.remainingHours}h, Requested: ${hoursUsed}h`,
+                `Insufficient permission hours. Available: ${availableHours}h, Requested: ${hoursUsed}h`,
             );
         }
 
         const updated = await this.prisma.permissionRequest.update({
             where: { id },
             data: {
-                permissionType: data.permissionType ?? request.permissionType,
+                permissionType,
                 requestDate: data.requestDate ? new Date(data.requestDate) : request.requestDate,
                 arrivalTime,
                 leaveTime,
@@ -270,10 +301,8 @@ export class PermissionsService {
     async cancelRequest(id: string, actorId: string, role: string) {
         const request = await this.prisma.permissionRequest.findUnique({ where: { id } });
         if (!request) throw new NotFoundException('Not found');
-        if (role === 'EMPLOYEE') {
-            if (request.userId !== actorId) throw new ForbiddenException();
-            if (request.status !== 'PENDING') throw new BadRequestException('Can only cancel pending requests');
-        }
+        if (request.userId !== actorId) throw new ForbiddenException('Only request owner can cancel');
+        if (request.status !== 'PENDING') throw new BadRequestException('Can only cancel pending requests');
         await this.prisma.permissionRequest.update({ where: { id }, data: { status: 'CANCELLED' } });
         await this.auditService.log({ userId: actorId, action: 'PERMISSION_CANCELLED', entity: 'PermissionRequest', entityId: id });
         return { message: 'Cancelled' };
@@ -300,10 +329,8 @@ export class PermissionsService {
         });
     }
 
-    // Auto-reset cycles on day 11 of each month
     @Cron('0 0 11 * *')
     async resetCycles() {
-        console.log('Resetting permission cycles...');
         const users = await this.prisma.user.findMany({ select: { id: true } });
         for (const user of users) {
             await this.getOrCreateCycle(user.id);

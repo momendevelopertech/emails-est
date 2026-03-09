@@ -23,9 +23,14 @@ export class ReportsController {
         return this.reportsService.getPermissionReport(query);
     }
 
+    @Get('forms')
+    getFormsReport(@Query() query: any) {
+        return this.reportsService.getFormsReport(query);
+    }
+
     @Get('employees')
-    getEmployeeReport(@Query('departmentId') deptId?: string) {
-        return this.reportsService.getEmployeeReport(deptId);
+    getEmployeeReport(@Query() query: any) {
+        return this.reportsService.getEmployeeReport(query);
     }
 
     @Get('leaves/excel')

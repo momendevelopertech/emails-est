@@ -24,11 +24,11 @@ body {
 }
 
 .font-base {
-    font-family: var(--font-manrope), 'Segoe UI', sans-serif;
+    font-family: var(--font-latin-primary), 'Segoe UI', sans-serif;
 }
 
 .font-ar {
-    font-family: var(--font-cairo), 'Segoe UI', sans-serif;
+    font-family: var(--font-arabic-primary), 'Segoe UI', sans-serif;
 }
 
 .bg-atmosphere {
@@ -60,4 +60,14 @@ body {
 
 .pill {
     @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold;
+}
+
+.rbc-header {
+    white-space: normal;
+    line-height: 1.3;
+    padding: 8px 4px;
+    font-size: 12px;
+    overflow: visible;
+    text-overflow: clip;
+    min-height: 42px;
 }

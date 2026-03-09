@@ -54,6 +54,7 @@ async function main() {
             phone: '+201000000001',
             passwordHash: superAdminPass,
             role: 'SUPER_ADMIN',
+            governorate: 'CAIRO',
             departmentId: mgmtDept?.id,
             jobTitle: 'System Administrator',
             jobTitleAr: 'مسؤول النظام',
@@ -75,6 +76,7 @@ async function main() {
             phone: '+201000000002',
             passwordHash: hrAdminPass,
             role: 'HR_ADMIN',
+            governorate: 'CAIRO',
             departmentId: hrDept?.id,
             jobTitle: 'HR Manager',
             jobTitleAr: 'مدير الموارد البشرية',
@@ -96,6 +98,7 @@ async function main() {
             phone: '+201000000003',
             passwordHash: managerPass,
             role: 'MANAGER',
+            governorate: 'ALEXANDRIA',
             departmentId: salesDept?.id,
             jobTitle: 'Sales Manager',
             jobTitleAr: 'مدير المبيعات',
@@ -117,6 +120,7 @@ async function main() {
             phone: '+201000000004',
             passwordHash: empPass,
             role: 'EMPLOYEE',
+            governorate: 'ALEXANDRIA',
             departmentId: salesDept?.id,
             jobTitle: 'Sales Representative',
             jobTitleAr: 'ممثل مبيعات',
@@ -132,7 +136,7 @@ async function main() {
     const allUsers = [superAdmin, hrAdmin, manager, employee];
 
     for (const user of allUsers) {
-        for (const [leaveType, days] of [['ANNUAL', 21], ['EMERGENCY', 3], ['MISSION', 10]] as const) {
+        for (const [leaveType, days] of [['ANNUAL', 21], ['CASUAL', 7], ['EMERGENCY', 3], ['MISSION', 10]] as const) {
             await prisma.leaveBalance.upsert({
                 where: { userId_year_leaveType: { userId: user.id, year, leaveType } },
                 update: {},

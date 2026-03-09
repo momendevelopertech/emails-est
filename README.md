@@ -11,21 +11,35 @@ Enterprise HR Management System for SPHINX. The stack is a Next.js 14 app with a
 
 1. Copy `.env.example` to `.env` and fill secrets.
 1. Install dependencies from repo root.
-1. Start services.
+1. Prepare database.
+1. Run frontend and backend.
 
 ```bash
-pnpm install
-pnpm db:generate
-pnpm db:push
-pnpm db:seed
-pnpm dev
+npm install
+npm run db:generate
+npm run db:push
+npm run db:seed
+npm run dev
 ```
+
+If Redis is not available locally, the API now falls back to direct DB reads (cache disabled), so core endpoints still work.
 
 ## Docker
 
 ```bash
 docker compose up --build
 ```
+
+## Vercel
+
+Deploy `apps/web` to Vercel as the frontend app.
+
+Required Vercel environment variables:
+
+- `NEXT_PUBLIC_API_URL` (your deployed API URL + `/api`)
+- `NEXT_PUBLIC_SOCKET_URL` (your deployed API URL)
+
+The NestJS API (`apps/api`) should be deployed as a separate service (for example Render/Railway/Fly.io) because it needs a long-running Node server, PostgreSQL, and Redis.
 
 ## Default Logins (Seed)
 

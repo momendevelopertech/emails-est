@@ -1,61 +1,129 @@
-'use client';
+﻿'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
+import { enumLabels } from '@/lib/enum-labels';
+import PageLoader from './PageLoader';
 
 type Department = { id: string; name: string };
 type User = {
     id: string;
     employeeNumber: string;
+    username?: string | null;
     fullName: string;
     email: string;
+    phone?: string;
     role: string;
+    governorate?: 'CAIRO' | 'ALEXANDRIA' | null;
     isActive: boolean;
+    createdAt: string;
     department?: Department | null;
 };
 
+type UsersResponse = {
+    items: User[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+};
+
 export default function EmployeesClient({ locale }: { locale: string }) {
+    const t = useTranslations('employees');
+    const router = useRouter();
     const { user, ready } = useRequireAuth(locale);
     const [employees, setEmployees] = useState<User[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
     const [form, setForm] = useState<any>({});
+    const [createOpen, setCreateOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(20);
+    const [totalPages, setTotalPages] = useState(1);
+    const [total, setTotal] = useState(0);
+    const [filters, setFilters] = useState<any>({
+        name: '',
+        phone: '',
+        departmentId: '',
+        status: '',
+        from: '',
+        to: '',
+    });
 
-    const fetchAll = async () => {
-        const [usersRes, deptRes] = await Promise.all([api.get('/users'), api.get('/departments')]);
-        setEmployees(usersRes.data);
-        setDepartments(deptRes.data);
-    };
+    const cancelLabel = locale === 'ar' ? 'إلغاء' : 'Cancel';
+    const canAdmin = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
+
+    const queryParams = useMemo(() => ({
+        page,
+        limit,
+        ...(filters.name ? { name: filters.name } : {}),
+        ...(filters.phone ? { phone: filters.phone } : {}),
+        ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
+        ...(filters.from ? { from: filters.from } : {}),
+        ...(filters.to ? { to: filters.to } : {}),
+    }), [filters.departmentId, filters.from, filters.name, filters.phone, filters.status, filters.to, limit, page]);
+
+    const fetchAll = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [usersRes, deptRes] = await Promise.all([
+                api.get<UsersResponse>('/users', { params: queryParams }),
+                api.get('/departments'),
+            ]);
+            setEmployees(usersRes.data.items || []);
+            setTotal(usersRes.data.total || 0);
+            setTotalPages(usersRes.data.totalPages || 1);
+            setDepartments(deptRes.data);
+        } finally {
+            setLoading(false);
+        }
+    }, [queryParams]);
 
     useEffect(() => {
         if (!ready) return;
+        if (!canAdmin) {
+            router.replace(`/${locale}`);
+            return;
+        }
         fetchAll();
-    }, [ready]);
+    }, [canAdmin, locale, ready, router, fetchAll]);
 
-    if (!(user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN')) {
-        return (
-            <main className="px-6 pb-12">
-                <div className="card p-6">Access restricted to HR Admins.</div>
-            </main>
-        );
+    if (!ready || loading) {
+        return <PageLoader text={locale === 'ar' ? 'جاري تحميل الموظفين...' : 'Loading employees...'} />;
     }
+    if (!canAdmin) return null;
 
     const createEmployee = async () => {
-        await api.post('/users', {
+        const res = await api.post('/users', {
             employeeNumber: form.employeeNumber,
             fullName: form.fullName,
             fullNameAr: form.fullNameAr,
             email: form.email,
             phone: form.phone,
+            governorate: form.governorate,
             departmentId: form.departmentId,
             jobTitle: form.jobTitle,
             jobTitleAr: form.jobTitleAr,
             fingerprintId: form.fingerprintId,
             role: form.role || 'EMPLOYEE',
-            password: form.password || 'Temp@123456',
+            password: form.password || 'SPHINX@2026',
         });
+
+        const msg = locale === 'ar'
+            ? `تم إنشاء المستخدم بنجاح\nUsername: ${res.data.generatedUsername}\nPassword: ${res.data.defaultPassword}`
+            : `Employee created successfully\nUsername: ${res.data.generatedUsername}\nPassword: ${res.data.defaultPassword}`;
+        alert(msg);
+
         setForm({});
-        fetchAll();
+        setCreateOpen(false);
+        setPage(1);
+        await fetchAll();
+        router.push(`/${locale}/employees`);
+        router.refresh();
     };
 
     const toggleActive = async (emp: User) => {
@@ -64,53 +132,132 @@ export default function EmployeesClient({ locale }: { locale: string }) {
     };
 
     return (
-        <main className="px-6 pb-12 space-y-6">
+        <main className="px-4 pb-12 sm:px-6 space-y-6">
             <section className="card p-5">
-                <h2 className="text-lg font-semibold">Create Employee</h2>
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Employee #" onChange={(e) => setForm((p: any) => ({ ...p, employeeNumber: e.target.value }))} />
-                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Full Name" onChange={(e) => setForm((p: any) => ({ ...p, fullName: e.target.value }))} />
-                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Full Name (AR)" onChange={(e) => setForm((p: any) => ({ ...p, fullNameAr: e.target.value }))} />
-                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Email" onChange={(e) => setForm((p: any) => ({ ...p, email: e.target.value }))} />
-                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Phone" onChange={(e) => setForm((p: any) => ({ ...p, phone: e.target.value }))} />
-                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Job Title" onChange={(e) => setForm((p: any) => ({ ...p, jobTitle: e.target.value }))} />
-                    <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" onChange={(e) => setForm((p: any) => ({ ...p, departmentId: e.target.value }))}>
-                        <option value="">Department</option>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="text-lg font-semibold">{t('create')}</h2>
+                    <button className="btn-primary" onClick={() => setCreateOpen(true)}>{t('createCta')}</button>
+                </div>
+            </section>
+
+            <section className="card p-5">
+                <h2 className="text-lg font-semibold">{t('title')}</h2>
+
+                <div className="mt-4 grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('fullName')} value={filters.name} onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, name: e.target.value })); }} />
+                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('phone')} value={filters.phone} onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, phone: e.target.value })); }} />
+                    <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" value={filters.departmentId} onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, departmentId: e.target.value })); }}>
+                        <option value="">{t('department')}</option>
                         {departments.map((d) => (
                             <option key={d.id} value={d.id}>{d.name}</option>
                         ))}
                     </select>
-                    <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" onChange={(e) => setForm((p: any) => ({ ...p, role: e.target.value }))}>
-                        <option value="EMPLOYEE">Employee</option>
-                        <option value="MANAGER">Manager</option>
-                        <option value="HR_ADMIN">HR Admin</option>
-                        <option value="SUPER_ADMIN">Super Admin</option>
+                    <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" value={filters.status} onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, status: e.target.value })); }}>
+                        <option value="">Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
                     </select>
-                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Fingerprint ID" onChange={(e) => setForm((p: any) => ({ ...p, fingerprintId: e.target.value }))} />
-                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Temp Password" onChange={(e) => setForm((p: any) => ({ ...p, password: e.target.value }))} />
+                    <input type="date" className="rounded-xl border border-ink/20 bg-white px-3 py-2" value={filters.from} onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, from: e.target.value })); }} />
+                    <input type="date" className="rounded-xl border border-ink/20 bg-white px-3 py-2" value={filters.to} onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, to: e.target.value })); }} />
                 </div>
-                <button className="btn-primary mt-4" onClick={createEmployee}>Create</button>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-ink/60">{total} records</p>
+                    <label className="text-sm">
+                        Rows per page:
+                        <select className="ms-2 rounded-lg border border-ink/20 px-2 py-1" value={limit} onChange={(e) => { setPage(1); setLimit(parseInt(e.target.value, 10)); }}>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div className="mt-4 overflow-x-auto">
+                    <table className="min-w-[920px] w-full text-sm">
+                        <thead>
+                            <tr className="border-b border-ink/10 text-left">
+                                <th className="py-2">#{t('employeeNumber')}</th>
+                                <th className="py-2">Username</th>
+                                <th className="py-2">{t('fullName')}</th>
+                                <th className="py-2">{t('phone')}</th>
+                                <th className="py-2">{t('department')}</th>
+                                <th className="py-2">Role</th>
+                                <th className="py-2">Status</th>
+                                <th className="py-2">Created</th>
+                                <th className="py-2">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {employees.map((emp) => (
+                                <tr key={emp.id} className="border-b border-ink/5">
+                                    <td className="py-2">{emp.employeeNumber}</td>
+                                    <td className="py-2">{emp.username || '-'}</td>
+                                    <td className="py-2">{emp.fullName}</td>
+                                    <td className="py-2">{emp.phone || '-'}</td>
+                                    <td className="py-2">{emp.department?.name || t('notAvailable')}</td>
+                                    <td className="py-2">{enumLabels.role(emp.role, locale as 'en' | 'ar')}</td>
+                                    <td className="py-2">{emp.isActive ? 'Active' : 'Inactive'}</td>
+                                    <td className="py-2">{new Date(emp.createdAt).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US')}</td>
+                                    <td className="py-2">
+                                        <button className="btn-outline" onClick={() => toggleActive(emp)}>
+                                            {emp.isActive ? t('deactivate') : t('activate')}
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between">
+                    <button className="btn-outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</button>
+                    <p className="text-sm">Page {page} / {totalPages}</p>
+                    <button className="btn-outline" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
+                </div>
             </section>
 
-            <section className="card p-5">
-                <h2 className="text-lg font-semibold">Employees</h2>
-                <div className="mt-4 space-y-3">
-                    {employees.map((emp) => (
-                        <div key={emp.id} className="rounded-xl border border-ink/10 bg-white/70 p-4 flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <p className="font-semibold">{emp.fullName} • {emp.employeeNumber}</p>
-                                <p className="text-xs text-ink/60">{emp.email} • {emp.department?.name || 'N/A'}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="pill bg-ink/10 text-ink">{emp.role}</span>
-                                <button className="btn-outline" onClick={() => toggleActive(emp)}>
-                                    {emp.isActive ? 'Deactivate' : 'Activate'}
-                                </button>
-                            </div>
+            {createOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                    <div className="card w-full max-w-4xl p-6">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold">{t('create')}</h3>
+                            <button className="btn-outline" onClick={() => setCreateOpen(false)}>×</button>
                         </div>
-                    ))}
+                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('employeeNumber')} onChange={(e) => setForm((p: any) => ({ ...p, employeeNumber: e.target.value }))} />
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('fullName')} onChange={(e) => setForm((p: any) => ({ ...p, fullName: e.target.value }))} />
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('fullNameAr')} onChange={(e) => setForm((p: any) => ({ ...p, fullNameAr: e.target.value }))} />
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('email')} onChange={(e) => setForm((p: any) => ({ ...p, email: e.target.value }))} />
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('phone')} onChange={(e) => setForm((p: any) => ({ ...p, phone: e.target.value }))} />
+                            <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" onChange={(e) => setForm((p: any) => ({ ...p, governorate: e.target.value }))}>
+                                <option value="">{t('governorate')}</option>
+                                <option value="CAIRO">{t('govCairo')}</option>
+                                <option value="ALEXANDRIA">{t('govAlexandria')}</option>
+                            </select>
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('jobTitle')} onChange={(e) => setForm((p: any) => ({ ...p, jobTitle: e.target.value }))} />
+                            <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" onChange={(e) => setForm((p: any) => ({ ...p, departmentId: e.target.value }))}>
+                                <option value="">{t('department')}</option>
+                                {departments.map((d) => (
+                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                            </select>
+                            <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" onChange={(e) => setForm((p: any) => ({ ...p, role: e.target.value }))}>
+                                <option value="EMPLOYEE">{t('roles.employee')}</option>
+                                <option value="MANAGER">{t('roles.manager')}</option>
+                                <option value="HR_ADMIN">{t('roles.hrAdmin')}</option>
+                                <option value="SUPER_ADMIN">{t('roles.superAdmin')}</option>
+                            </select>
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('fingerprintId')} onChange={(e) => setForm((p: any) => ({ ...p, fingerprintId: e.target.value }))} />
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Default Password (SPHINX@2026)" onChange={(e) => setForm((p: any) => ({ ...p, password: e.target.value }))} />
+                        </div>
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button className="btn-outline" onClick={() => setCreateOpen(false)}>{cancelLabel}</button>
+                            <button className="btn-primary" onClick={createEmployee}>{t('createCta')}</button>
+                        </div>
+                    </div>
                 </div>
-            </section>
+            )}
         </main>
     );
 }

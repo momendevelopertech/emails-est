@@ -1,8 +1,7 @@
-import {
+﻿import {
     Injectable,
     NotFoundException,
     ConflictException,
-    ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -25,29 +24,44 @@ export class UsersService {
         fullNameAr?: string;
         email: string;
         phone?: string;
-        password: string;
+        password?: string;
         role?: any;
+        governorate?: any;
         departmentId?: string;
         jobTitle?: string;
         jobTitleAr?: string;
         fingerprintId?: string;
     }, createdById?: string) {
-        const existing = await this.prisma.user.findFirst({
-            where: { OR: [{ email: data.email }, { employeeNumber: data.employeeNumber }] },
-        });
-        if (existing) throw new ConflictException('Employee with this email or employee number already exists');
+        const defaultPassword = 'SPHINX@2026';
+        const password = data.password || defaultPassword;
+        const phoneLast4 = (data.phone || '').replace(/\D/g, '').slice(-4) || '0000';
+        const baseName = (data.fullName || 'user').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || 'user';
+        const generatedUsername = `${baseName}${phoneLast4}`.toLowerCase();
 
-        const passwordHash = await bcrypt.hash(data.password, 12);
+        const existing = await this.prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email: data.email },
+                    { employeeNumber: data.employeeNumber },
+                    { username: generatedUsername },
+                ],
+            },
+        });
+        if (existing) throw new ConflictException('Employee with this email, employee number, or username already exists');
+
+        const passwordHash = await bcrypt.hash(password, 12);
 
         const user = await this.prisma.user.create({
             data: {
                 employeeNumber: data.employeeNumber,
+                username: generatedUsername,
                 fullName: data.fullName,
                 fullNameAr: data.fullNameAr,
                 email: data.email,
                 phone: data.phone,
                 passwordHash,
                 role: data.role || 'EMPLOYEE',
+                governorate: data.governorate,
                 departmentId: data.departmentId,
                 jobTitle: data.jobTitle,
                 jobTitleAr: data.jobTitleAr,
@@ -62,30 +76,29 @@ export class UsersService {
             action: 'EMPLOYEE_CREATED',
             entity: 'User',
             entityId: user.id,
-            details: { employeeNumber: user.employeeNumber, email: user.email },
+            details: { employeeNumber: user.employeeNumber, email: user.email, username: generatedUsername },
         });
 
-        // Create default leave balances for current year
         const year = new Date().getFullYear();
-        for (const leaveType of ['ANNUAL', 'EMERGENCY', 'MISSION'] as const) {
+        for (const leaveType of ['ANNUAL', 'CASUAL', 'EMERGENCY', 'MISSION'] as const) {
+            const totalDays = leaveType === 'ANNUAL' ? 21 : leaveType === 'CASUAL' ? 7 : leaveType === 'EMERGENCY' ? 3 : 10;
             await this.prisma.leaveBalance.create({
                 data: {
                     userId: user.id,
                     year,
                     leaveType,
-                    totalDays: leaveType === 'ANNUAL' ? 21 : leaveType === 'EMERGENCY' ? 3 : 10,
+                    totalDays,
                     usedDays: 0,
-                    remainingDays: leaveType === 'ANNUAL' ? 21 : leaveType === 'EMERGENCY' ? 3 : 10,
+                    remainingDays: totalDays,
                 },
             });
         }
 
-        // Send welcome notifications
         await this.notificationsService.createInApp({
             receiverId: user.id,
             type: 'ACCOUNT_CREATED',
             title: 'Welcome to SPHINX HR',
-            titleAr: 'مرحباً بك في SPHINX HR',
+            titleAr: 'مرحبًا بك في SPHINX HR',
             body: `Your account has been created. Employee #${user.employeeNumber}. Please change your password on first login.`,
             bodyAr: `تم إنشاء حسابك. رقم الموظف: ${user.employeeNumber}. يرجى تغيير كلمة المرور عند أول تسجيل دخول.`,
         });
@@ -93,56 +106,101 @@ export class UsersService {
         if (user.phone) {
             await this.notificationsService.sendWhatsApp(
                 user.phone,
-                `🎉 Welcome to SPHINX HR System!\nEmployee #: ${user.employeeNumber}\nEmail: ${user.email}\nTemporary Password: ${data.password}\nPlease login and change your password immediately: ${process.env.FRONTEND_URL}`,
+                `Welcome to SPHINX HR System!\nEmployee #: ${user.employeeNumber}\nUsername: ${generatedUsername}\nTemporary Password: ${password}\nPlease login and change your password immediately: ${process.env.FRONTEND_URL}`,
             );
         }
 
         await this.notificationsService.sendEmail({
             to: user.email,
             subject: 'Welcome to SPHINX HR System',
-            html: `<div style="font-family:sans-serif"><h2>Welcome to SPHINX HR, ${user.fullName}!</h2><p>Your account has been created.</p><ul><li>Employee #: ${user.employeeNumber}</li><li>Temporary Password: ${data.password}</li></ul><p><a href="${process.env.FRONTEND_URL}">Login here</a> and change your password immediately.</p></div>`,
+            html: `<div style="font-family:sans-serif"><h2>Welcome to SPHINX HR, ${user.fullName}!</h2><p>Your account has been created.</p><ul><li>Employee #: ${user.employeeNumber}</li><li>Username: ${generatedUsername}</li><li>Temporary Password: ${password}</li></ul><p><a href="${process.env.FRONTEND_URL}">Login here</a> and change your password immediately.</p></div>`,
         });
 
-        return user;
+        return {
+            ...user,
+            generatedUsername,
+            defaultPassword: password,
+        };
     }
 
-    async findAll(requesterId: string, requesterRole: string, departmentId?: string) {
+    async findAll(requesterId: string, requesterRole: string, params?: {
+        departmentId?: string;
+        page?: number;
+        limit?: number;
+        name?: string;
+        phone?: string;
+        status?: string;
+        from?: string;
+        to?: string;
+        search?: string;
+    }) {
         const where: any = {};
+        const page = Math.max(1, params?.page || 1);
+        const limit = Math.min(100, Math.max(1, params?.limit || 20));
+        const skip = (page - 1) * limit;
 
         if (requesterRole === 'MANAGER') {
-            // Managers only see their department employees
             const manager = await this.prisma.user.findUnique({ where: { id: requesterId } });
             where.departmentId = manager?.departmentId;
-        } else if (departmentId) {
-            where.departmentId = departmentId;
+        } else if (params?.departmentId) {
+            where.departmentId = params.departmentId;
         }
 
-        const cacheKey = `users:${requesterRole}:${requesterId}:${departmentId || 'all'}`;
-        const cached = await this.redisService.getJSON<any[]>(cacheKey);
+        if (params?.name) where.fullName = { contains: params.name, mode: 'insensitive' };
+        if (params?.phone) where.phone = { contains: params.phone, mode: 'insensitive' };
+        if (params?.status === 'active') where.isActive = true;
+        if (params?.status === 'inactive') where.isActive = false;
+        if (params?.from || params?.to) {
+            where.createdAt = {
+                ...(params?.from ? { gte: new Date(params.from) } : {}),
+                ...(params?.to ? { lte: new Date(params.to) } : {}),
+            };
+        }
+        if (params?.search) {
+            where.OR = [
+                { fullName: { contains: params.search, mode: 'insensitive' } },
+                { email: { contains: params.search, mode: 'insensitive' } },
+                { employeeNumber: { contains: params.search, mode: 'insensitive' } },
+                { username: { contains: params.search, mode: 'insensitive' } },
+                { phone: { contains: params.search, mode: 'insensitive' } },
+            ];
+        }
+
+        const cacheKey = `users:${requesterRole}:${requesterId}:${JSON.stringify(params || {})}`;
+        const cached = await this.redisService.getJSON<any>(cacheKey);
         if (cached) return cached;
 
-        const users = await this.prisma.user.findMany({
-            where,
-            select: {
-                id: true,
-                employeeNumber: true,
-                fullName: true,
-                fullNameAr: true,
-                email: true,
-                phone: true,
-                role: true,
-                jobTitle: true,
-                jobTitleAr: true,
-                isActive: true,
-                profileImage: true,
-                mustChangePass: true,
-                department: { select: { id: true, name: true, nameAr: true } },
-                createdAt: true,
-            },
-        });
+        const [items, total] = await Promise.all([
+            this.prisma.user.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { createdAt: 'desc' },
+                select: {
+                    id: true,
+                    employeeNumber: true,
+                    username: true,
+                    fullName: true,
+                    fullNameAr: true,
+                    email: true,
+                    phone: true,
+                    role: true,
+                    governorate: true,
+                    jobTitle: true,
+                    jobTitleAr: true,
+                    isActive: true,
+                    profileImage: true,
+                    mustChangePass: true,
+                    department: { select: { id: true, name: true, nameAr: true } },
+                    createdAt: true,
+                },
+            }),
+            this.prisma.user.count({ where }),
+        ]);
 
-        await this.redisService.setJSON(cacheKey, users, 30);
-        return users;
+        const payload = { items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+        await this.redisService.setJSON(cacheKey, payload, 30);
+        return payload;
     }
 
     async findById(id: string) {
@@ -165,6 +223,7 @@ export class UsersService {
                 ...(data.fullNameAr && { fullNameAr: data.fullNameAr }),
                 ...(data.phone && { phone: data.phone }),
                 ...(data.role && { role: data.role }),
+                ...(data.governorate && { governorate: data.governorate }),
                 ...(data.departmentId && { departmentId: data.departmentId }),
                 ...(data.jobTitle && { jobTitle: data.jobTitle }),
                 ...(data.jobTitleAr && { jobTitleAr: data.jobTitleAr }),

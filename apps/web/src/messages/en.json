@@ -1,44 +1,174 @@
 {
-    "app": {
-        "name": "SPHINX HR",
-        "tagline": "Enterprise HR Management System"
-    },
-    "nav": {
-        "dashboard": "Dashboard",
-        "calendar": "Calendar",
-        "requests": "Requests",
-        "notifications": "Notifications",
-        "reports": "Reports",
-        "profile": "Profile",
-        "logout": "Logout"
-    },
-    "auth": {
-        "welcome": "Welcome back",
-        "email": "Email",
-        "password": "Password",
-        "login": "Sign in",
-        "changePassword": "Change your password",
-        "reset": "Forgot password?"
-    },
-    "dashboard": {
-        "title": "Overview",
-        "leaveBalance": "Leave Balance",
-        "permissionUsed": "Permission Hours Used",
-        "permissionRemaining": "Remaining Permission Hours",
-        "pendingApprovals": "Pending Approvals",
-        "recentRequests": "Recent Requests"
-    },
-    "calendar": {
-        "title": "Team Calendar",
-        "createRequest": "Create Request",
-        "month": "Month",
-        "week": "Week",
-        "day": "Day"
-    },
-    "requests": {
-        "new": "New Request",
-        "leave": "Leave Request",
-        "permission": "Permission Request",
-        "form": "Form Submission"
+  "app": {
+    "name": "SPHINX HR",
+    "tagline": "Enterprise HR Management System"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "calendar": "Calendar",
+    "requests": "Requests",
+    "employees": "Employees",
+    "departments": "Departments",
+    "forms": "Forms",
+    "notifications": "Notifications",
+    "reports": "Reports",
+    "profile": "Profile",
+    "logout": "Logout"
+  },
+  "auth": {
+    "welcome": "Welcome back",
+    "email": "Email",
+    "password": "Password",
+    "rememberMe": "Remember me",
+    "login": "Sign in",
+    "changePassword": "Change your password",
+    "reset": "Forgot password?"
+  },
+  "dashboard": {
+    "title": "Overview",
+    "leaveBalance": "Leave Balance",
+    "permissionUsed": "Permission Hours Used",
+    "permissionRemaining": "Remaining Permission Hours",
+    "pendingApprovals": "Pending Approvals",
+    "recentRequests": "Recent Requests",
+    "days": "days",
+    "absenceDeduction": "Absence Deduction (Monthly)"
+  },
+  "calendar": {
+    "title": "Team Calendar",
+    "createRequest": "Create Request",
+    "month": "Month",
+    "week": "Week",
+    "day": "Day"
+  },
+  "requests": {
+    "new": "New Request",
+    "leave": "Leave Request",
+    "permission": "Permission Request",
+    "form": "Form Submission"
+  },
+  "requestModal": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "submit": "Submit",
+    "saving": "Saving...",
+    "choose": "Choose...",
+    "leaveType": "Leave Type",
+    "leaveAnnual": "Annual",
+    "leaveCasual": "Casual",
+    "leaveEmergency": "Emergency",
+    "leaveMission": "Mission",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "reason": "Reason",
+    "permissionType": "Permission Type",
+    "permissionLate": "Late Arrival",
+    "permissionEarly": "Early Leave",
+    "arrivalTime": "Arrival Time",
+    "leaveTime": "Leave Time",
+    "selectForm": "Select Form",
+    "selectedDate": "Selected Date",
+    "personalPermission": "Personal Permission",
+    "leaveRequest": "Leave Request",
+    "absenceRequest": "Absence With Permission",
+    "missionRequest": "Mission",
+    "missionType": "Mission Type",
+    "missionType_MORNING": "Morning",
+    "missionType_DURING_DAY": "During Day",
+    "missionType_EVENING": "Evening",
+    "missionType_ALL_DAY": "All Day",
+    "missionTo": "Mission To",
+    "missionPurpose": "Mission Purpose"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "new": "new",
+    "allCaughtUp": "All caught up.",
+    "markAllRead": "Mark all read"
+  },
+  "changePassword": {
+    "title": "Change Password",
+    "subtitle": "First login requires a password change.",
+    "currentPassword": "Current Password",
+    "newPassword": "New Password",
+    "saving": "Saving...",
+    "update": "Update Password"
+  },
+  "employees": {
+    "title": "Employees",
+    "create": "Create Employee",
+    "createCta": "Create",
+    "employeeNumber": "Employee #",
+    "fullName": "Full Name",
+    "fullNameAr": "Full Name (AR)",
+    "email": "Email",
+    "phone": "Phone",
+    "governorate": "Governorate",
+    "govCairo": "Cairo",
+    "govAlexandria": "Alexandria",
+    "jobTitle": "Job Title",
+    "department": "Department",
+    "fingerprintId": "Fingerprint ID",
+    "tempPassword": "Temp Password",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "notAvailable": "N/A",
+    "roles": {
+      "employee": "Employee",
+      "manager": "Manager",
+      "hrAdmin": "HR Admin",
+      "superAdmin": "Super Admin"
     }
+  },
+  "departments": {
+    "title": "Departments",
+    "create": "Create Department",
+    "createCta": "Create",
+    "name": "Name",
+    "nameAr": "Name (AR)",
+    "description": "Description",
+    "delete": "Delete"
+  },
+  "formsBuilder": {
+    "create": "Create Dynamic Form",
+    "createCta": "Create Form",
+    "formName": "Form Name",
+    "formNameAr": "Form Name (AR)",
+    "description": "Description",
+    "descriptionAr": "Description (AR)",
+    "allDepartments": "Visible to All",
+    "label": "Label",
+    "labelAr": "Label (AR)",
+    "required": "Required",
+    "addField": "Add Field",
+    "existing": "Existing Forms",
+    "deactivate": "Deactivate",
+    "fieldTypes": {
+      "text": "Text",
+      "textarea": "Textarea",
+      "number": "Number",
+      "date": "Date",
+      "time": "Time",
+      "select": "Select",
+      "checkbox": "Checkbox",
+      "file": "File"
+    }
+  },
+  "reports": {
+    "leaveTitle": "Leave Report",
+    "permissionTitle": "Permission Report",
+    "employeeTitle": "Employee Report",
+    "exportExcel": "Export Excel"
+  },
+  "requestsPage": {
+    "leaveRequests": "Leave Requests",
+    "permissionRequests": "Permission Requests",
+    "formSubmissions": "Form Submissions",
+    "printPdf": "Print PDF",
+    "duplicate": "Duplicate",
+    "cancel": "Cancel",
+    "approve": "Approve",
+    "reject": "Reject",
+    "delete": "Delete"
+  }
 }

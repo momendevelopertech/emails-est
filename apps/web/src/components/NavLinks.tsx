@@ -3,17 +3,25 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useAuthStore } from '@/stores/auth-store';
 
 export default function NavLinks({ locale }: { locale: string }) {
     const t = useTranslations('nav');
     const pathname = usePathname();
+    const { user } = useAuthStore();
+    const canAdminPages = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
+
     const links = [
         { href: `/${locale}`, label: t('dashboard') },
         { href: `/${locale}/requests`, label: t('requests') },
-        { href: `/${locale}/employees`, label: 'Employees' },
-        { href: `/${locale}/departments`, label: 'Departments' },
-        { href: `/${locale}/forms`, label: 'Forms' },
-        { href: `/${locale}/reports`, label: t('reports') },
+        ...(canAdminPages
+            ? [
+                { href: `/${locale}/employees`, label: t('employees') },
+                { href: `/${locale}/departments`, label: t('departments') },
+                { href: `/${locale}/forms`, label: t('forms') },
+                { href: `/${locale}/reports`, label: t('reports') },
+            ]
+            : []),
         { href: `/${locale}/notifications`, label: t('notifications') },
     ];
 

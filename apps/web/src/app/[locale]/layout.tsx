@@ -4,10 +4,18 @@ import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { defaultLocale, locales } from '@/i18n/routing';
-import { Cairo, Manrope } from 'next/font/google';
+import { Noto_Kufi_Arabic, Sora } from 'next/font/google';
 
-const cairo = Cairo({ subsets: ['arabic'], variable: '--font-cairo', weight: ['400', '600', '700'] });
-const manrope = Manrope({ subsets: ['latin'], variable: '--font-manrope', weight: ['400', '600', '700'] });
+const notoKufiArabic = Noto_Kufi_Arabic({
+    subsets: ['arabic'],
+    variable: '--font-arabic-primary',
+    weight: ['400', '500', '600', '700'],
+});
+const sora = Sora({
+    subsets: ['latin'],
+    variable: '--font-latin-primary',
+    weight: ['400', '500', '600', '700'],
+});
 
 export const metadata = {
     title: 'SPHINX HR',
@@ -27,7 +35,7 @@ export default async function LocaleLayout({
     if (!locale) notFound();
     const messages = await getMessages();
     const dir = locale === 'ar' ? 'rtl' : 'ltr';
-    const fontClass = locale === 'ar' ? cairo.variable : manrope.variable;
+    const fontClass = locale === 'ar' ? notoKufiArabic.variable : sora.variable;
 
     return (
         <html lang={locale} dir={dir} className={fontClass}>

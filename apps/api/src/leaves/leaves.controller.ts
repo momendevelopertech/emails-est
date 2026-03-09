@@ -16,6 +16,11 @@ export class LeavesController {
         return this.leavesService.getBalances(req.user.id);
     }
 
+    @Get('absence-deductions')
+    getAbsenceDeductions(@Req() req: any, @Query('month') month?: string) {
+        return this.leavesService.getMonthlyAbsenceDeduction(req.user.id, req.user.role, month);
+    }
+
     @Get()
     findAll(@Req() req: any, @Query('status') status?: string, @Query('userId') userId?: string) {
         return this.leavesService.findAll(req.user.id, req.user.role, { status: status as any, userId });

@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
+import BrandLogo from './BrandLogo';
 
 export default function TopNav({ locale }: { locale: string }) {
     const t = useTranslations('nav');
@@ -26,9 +27,7 @@ export default function TopNav({ locale }: { locale: string }) {
     return (
         <header className="flex items-center justify-between px-6 py-5">
             <div className="flex items-center gap-4">
-                <div className="h-11 w-11 rounded-2xl bg-ink text-sand flex items-center justify-center font-bold">
-                    S
-                </div>
+                <BrandLogo locale={locale} compact />
                 <div>
                     <p className="text-sm uppercase tracking-[0.2em] text-ink/60">SPHINX HR</p>
                     <p className="text-lg font-semibold text-ink">{t('dashboard')}</p>
@@ -43,7 +42,7 @@ export default function TopNav({ locale }: { locale: string }) {
                         {user?.fullName?.slice(0, 1) || 'U'}
                     </div>
                     <div>
-                        <p className="text-sm font-semibold">{user?.fullName || 'User'}</p>
+                        <p className="text-sm font-semibold">{user?.fullName || t('profile')}</p>
                         <p className="text-xs text-ink/60">{user?.role || ''}</p>
                     </div>
                 </div>

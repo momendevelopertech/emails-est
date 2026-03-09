@@ -21,8 +21,29 @@ export class UsersController {
     }
 
     @Get()
-    findAll(@Req() req: any, @Query('departmentId') departmentId?: string) {
-        return this.usersService.findAll(req.user.id, req.user.role, departmentId);
+    findAll(
+        @Req() req: any,
+        @Query('departmentId') departmentId?: string,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string,
+        @Query('name') name?: string,
+        @Query('phone') phone?: string,
+        @Query('status') status?: string,
+        @Query('from') from?: string,
+        @Query('to') to?: string,
+        @Query('search') search?: string,
+    ) {
+        return this.usersService.findAll(req.user.id, req.user.role, {
+            departmentId,
+            page: page ? parseInt(page, 10) : 1,
+            limit: limit ? parseInt(limit, 10) : 20,
+            name,
+            phone,
+            status,
+            from,
+            to,
+            search,
+        });
     }
 
     @Get(':id')

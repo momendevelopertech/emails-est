@@ -30,19 +30,41 @@ Set the required variables in `.env`:
 `NEXT_PUBLIC_SOCKET_URL`  
 `CSRF_SECRET`  
 
-## Build and Run
+## Local Run (Without Docker)
+
+```bash
+npm install
+npm run db:generate
+npm run db:push
+npm run db:seed
+npm run dev
+```
+
+Frontend: `http://localhost:3000`  
+API: `http://localhost:3001/api`  
+Swagger: `http://localhost:3001/api/docs`
+
+If Redis is down locally, API will continue working with cache disabled.
+
+## Docker Run
 
 ```bash
 docker compose up --build -d
 ```
 
-## Database
+## Vercel (Frontend)
 
-```bash
-pnpm db:generate
-pnpm db:push
-pnpm db:seed
-```
+Deploy `apps/web` on Vercel.
+
+Set in Vercel project env vars:
+
+- `NEXT_PUBLIC_API_URL=https://<your-api-domain>/api`
+- `NEXT_PUBLIC_SOCKET_URL=https://<your-api-domain>`
+
+## Backend Deployment
+
+Deploy `apps/api` separately (Render/Railway/Fly.io/VM).  
+Do not deploy Nest API on the same Vercel frontend project.
 
 ## Notes
 

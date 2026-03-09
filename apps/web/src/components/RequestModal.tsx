@@ -1,23 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import api from '@/lib/api';
-import { uploadToCloudinary } from '@/lib/upload';
 import { useTranslations } from 'next-intl';
 
-type DynamicForm = {
-    id: string;
-    name: string;
-    nameAr: string;
-    fields: Array<{
-        id: string;
-        label: string;
-        labelAr: string;
-        fieldType: 'TEXT' | 'TEXTAREA' | 'NUMBER' | 'DATE' | 'TIME' | 'SELECT' | 'CHECKBOX' | 'FILE';
-        options?: string[];
-        isRequired?: boolean;
-    }>;
-};
+type RequestType = 'leave' | 'absence' | 'personal' | 'mission';
 
 type Props = {
     open: boolean;
@@ -27,29 +14,23 @@ type Props = {
     onSubmitted: () => void;
 };
 
-export default function RequestModal({ open, locale, date, onClose, onSubmitted }: Props) {
+const missionTypeOptions = ['MORNING', 'DURING_DAY', 'EVENING', 'ALL_DAY'] as const;
+
+export default function RequestModal({ open, date, onClose, onSubmitted }: Props) {
     const t = useTranslations('requests');
-    const [type, setType] = useState<'leave' | 'permission' | 'form'>('leave');
-    const [forms, setForms] = useState<DynamicForm[]>([]);
-    const [selectedForm, setSelectedForm] = useState<DynamicForm | null>(null);
+    const tm = useTranslations('requestModal');
+    const [type, setType] = useState<RequestType | null>(null);
     const [formData, setFormData] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        if (!open) return;
-        api.get('/forms').then((res) => setForms(res.data));
-    }, [open]);
-
-    useEffect(() => {
-        if (!selectedForm) setFormData({});
-    }, [selectedForm]);
 
     const dateValue = useMemo(() => (date ? date.toISOString().slice(0, 10) : ''), [date]);
 
     if (!open) return null;
 
+    const update = (key: string, value: any) => setFormData((prev) => ({ ...prev, [key]: value }));
+
     const submit = async () => {
-        if (!date) return;
+        if (!date || !type) return;
         setLoading(true);
         try {
             if (type === 'leave') {
@@ -58,33 +39,46 @@ export default function RequestModal({ open, locale, date, onClose, onSubmitted 
                     startDate: formData.startDate || dateValue,
                     endDate: formData.endDate || dateValue,
                     reason: formData.reason || '',
-                    attachmentUrl: formData.attachmentUrl,
                 });
-            } else if (type === 'permission') {
+            }
+
+            if (type === 'absence') {
+                await api.post('/leaves', {
+                    leaveType: 'ABSENCE_WITH_PERMISSION',
+                    startDate: formData.startDate || dateValue,
+                    endDate: formData.endDate || dateValue,
+                    reason: formData.reason || '',
+                });
+            }
+
+            if (type === 'personal') {
                 await api.post('/permissions', {
-                    permissionType: formData.permissionType || 'LATE_ARRIVAL',
+                    permissionType: 'PERSONAL',
                     requestDate: dateValue,
                     arrivalTime: formData.arrivalTime,
                     leaveTime: formData.leaveTime,
                     reason: formData.reason || '',
                 });
-            } else if (type === 'form' && selectedForm) {
-                await api.post(`/forms/${selectedForm.id}/submit`, { data: formData });
+            }
+
+            if (type === 'mission') {
+                const missionType = formData.missionType || 'ALL_DAY';
+                const missionTo = formData.missionTo || '';
+                const missionPurpose = formData.missionPurpose || '';
+                const payloadReason = `Mission Type: ${missionType}\nMission To: ${missionTo}\nPurpose: ${missionPurpose}`;
+
+                await api.post('/leaves', {
+                    leaveType: 'MISSION',
+                    startDate: formData.startDate || dateValue,
+                    endDate: formData.endDate || dateValue,
+                    reason: payloadReason,
+                });
             }
 
             onSubmitted();
             onClose();
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const onFileChange = async (fieldId: string, file?: File) => {
-        if (!file) return;
-        setLoading(true);
-        try {
-            const url = await uploadToCloudinary(file, 'sphinx-hr/forms');
-            setFormData((prev) => ({ ...prev, [fieldId]: url }));
+            setType(null);
+            setFormData({});
         } finally {
             setLoading(false);
         }
@@ -95,18 +89,25 @@ export default function RequestModal({ open, locale, date, onClose, onSubmitted 
             <div className="card w-full max-w-2xl p-6">
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold">{t('new')}</h2>
-                    <button className="btn-outline" onClick={onClose}>Close</button>
+                    <button className="btn-outline" onClick={onClose}>{tm('close')}</button>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
+                <p className="mt-3 text-sm text-ink/70">
+                    {tm('selectedDate')}: <span className="font-semibold">{dateValue}</span>
+                </p>
+
+                <div className="mt-4 grid gap-2 md:grid-cols-2">
+                    <button className={`btn-outline ${type === 'personal' ? 'bg-ink/10' : ''}`} onClick={() => setType('personal')}>
+                        {tm('personalPermission')}
+                    </button>
                     <button className={`btn-outline ${type === 'leave' ? 'bg-ink/10' : ''}`} onClick={() => setType('leave')}>
-                        {t('leave')}
+                        {tm('leaveRequest')}
                     </button>
-                    <button className={`btn-outline ${type === 'permission' ? 'bg-ink/10' : ''}`} onClick={() => setType('permission')}>
-                        {t('permission')}
+                    <button className={`btn-outline ${type === 'absence' ? 'bg-ink/10' : ''}`} onClick={() => setType('absence')}>
+                        {tm('absenceRequest')}
                     </button>
-                    <button className={`btn-outline ${type === 'form' ? 'bg-ink/10' : ''}`} onClick={() => setType('form')}>
-                        {t('form')}
+                    <button className={`btn-outline ${type === 'mission' ? 'bg-ink/10' : ''}`} onClick={() => setType('mission')}>
+                        {tm('missionRequest')}
                     </button>
                 </div>
 
@@ -115,179 +116,168 @@ export default function RequestModal({ open, locale, date, onClose, onSubmitted 
                         <>
                             <div className="grid gap-3 md:grid-cols-2">
                                 <label className="text-sm">
-                                    Leave Type
+                                    {tm('leaveType')}
                                     <select
                                         className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                        onChange={(e) => setFormData((p) => ({ ...p, leaveType: e.target.value }))}
+                                        value={formData.leaveType || 'ANNUAL'}
+                                        onChange={(e) => update('leaveType', e.target.value)}
                                     >
-                                        <option value="ANNUAL">Annual</option>
-                                        <option value="EMERGENCY">Emergency</option>
-                                        <option value="MISSION">Mission</option>
+                                        <option value="ANNUAL">{tm('leaveAnnual')}</option>
+                                        <option value="CASUAL">{tm('leaveCasual')}</option>
                                     </select>
                                 </label>
                                 <label className="text-sm">
-                                    Start Date
+                                    {tm('startDate')}
                                     <input
                                         type="date"
                                         defaultValue={dateValue}
                                         className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                        onChange={(e) => setFormData((p) => ({ ...p, startDate: e.target.value }))}
+                                        onChange={(e) => update('startDate', e.target.value)}
                                     />
                                 </label>
                                 <label className="text-sm">
-                                    End Date
+                                    {tm('endDate')}
                                     <input
                                         type="date"
                                         defaultValue={dateValue}
                                         className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                        onChange={(e) => setFormData((p) => ({ ...p, endDate: e.target.value }))}
+                                        onChange={(e) => update('endDate', e.target.value)}
                                     />
                                 </label>
                             </div>
                             <label className="text-sm">
-                                Reason
+                                {tm('reason')}
                                 <textarea
                                     rows={3}
                                     className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                    onChange={(e) => setFormData((p) => ({ ...p, reason: e.target.value }))}
+                                    onChange={(e) => update('reason', e.target.value)}
                                 />
                             </label>
                         </>
                     )}
 
-                    {type === 'permission' && (
+                    {type === 'absence' && (
                         <>
                             <div className="grid gap-3 md:grid-cols-2">
                                 <label className="text-sm">
-                                    Permission Type
-                                    <select
-                                        className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                        onChange={(e) => setFormData((p) => ({ ...p, permissionType: e.target.value }))}
-                                    >
-                                        <option value="LATE_ARRIVAL">Late Arrival</option>
-                                        <option value="EARLY_LEAVE">Early Leave</option>
-                                    </select>
-                                </label>
-                                <label className="text-sm">
-                                    Arrival Time
+                                    {tm('startDate')}
                                     <input
-                                        type="time"
+                                        type="date"
+                                        defaultValue={dateValue}
                                         className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                        onChange={(e) => setFormData((p) => ({ ...p, arrivalTime: e.target.value }))}
+                                        onChange={(e) => update('startDate', e.target.value)}
                                     />
                                 </label>
                                 <label className="text-sm">
-                                    Leave Time
+                                    {tm('endDate')}
                                     <input
-                                        type="time"
+                                        type="date"
+                                        defaultValue={dateValue}
                                         className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                        onChange={(e) => setFormData((p) => ({ ...p, leaveTime: e.target.value }))}
+                                        onChange={(e) => update('endDate', e.target.value)}
                                     />
                                 </label>
                             </div>
                             <label className="text-sm">
-                                Reason
+                                {tm('reason')}
                                 <textarea
                                     rows={3}
                                     className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                    onChange={(e) => setFormData((p) => ({ ...p, reason: e.target.value }))}
+                                    onChange={(e) => update('reason', e.target.value)}
                                 />
                             </label>
                         </>
                     )}
 
-                    {type === 'form' && (
+                    {type === 'personal' && (
                         <>
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <label className="text-sm">
+                                    {tm('arrivalTime')}
+                                    <input
+                                        type="time"
+                                        className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                        onChange={(e) => update('arrivalTime', e.target.value)}
+                                    />
+                                </label>
+                                <label className="text-sm">
+                                    {tm('leaveTime')}
+                                    <input
+                                        type="time"
+                                        className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                        onChange={(e) => update('leaveTime', e.target.value)}
+                                    />
+                                </label>
+                            </div>
                             <label className="text-sm">
-                                Select Form
-                                <select
+                                {tm('reason')}
+                                <textarea
+                                    rows={3}
                                     className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                    onChange={(e) => {
-                                        const form = forms.find((f) => f.id === e.target.value) || null;
-                                        setSelectedForm(form);
-                                    }}
-                                >
-                                    <option value="">Choose...</option>
-                                    {forms.map((form) => (
-                                        <option key={form.id} value={form.id}>
-                                            {locale === 'ar' ? form.nameAr : form.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(e) => update('reason', e.target.value)}
+                                />
                             </label>
-                            {selectedForm?.fields.map((field) => {
-                                const label = locale === 'ar' ? field.labelAr : field.label;
-                                const commonClass = 'mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2';
-                                if (field.fieldType === 'TEXTAREA') {
-                                    return (
-                                        <label key={field.id} className="text-sm">
-                                            {label}
-                                            <textarea
-                                                rows={3}
-                                                className={commonClass}
-                                                onChange={(e) => setFormData((p) => ({ ...p, [field.id]: e.target.value }))}
-                                            />
-                                        </label>
-                                    );
-                                }
-                                if (field.fieldType === 'SELECT') {
-                                    return (
-                                        <label key={field.id} className="text-sm">
-                                            {label}
-                                            <select
-                                                className={commonClass}
-                                                onChange={(e) => setFormData((p) => ({ ...p, [field.id]: e.target.value }))}
-                                            >
-                                                <option value="">Choose...</option>
-                                                {(field.options || []).map((opt) => (
-                                                    <option key={opt} value={opt}>{opt}</option>
-                                                ))}
-                                            </select>
-                                        </label>
-                                    );
-                                }
-                                if (field.fieldType === 'CHECKBOX') {
-                                    return (
-                                        <label key={field.id} className="flex items-center gap-2 text-sm">
-                                            <input
-                                                type="checkbox"
-                                                onChange={(e) => setFormData((p) => ({ ...p, [field.id]: e.target.checked }))}
-                                            />
-                                            {label}
-                                        </label>
-                                    );
-                                }
-                                if (field.fieldType === 'FILE') {
-                                    return (
-                                        <label key={field.id} className="text-sm">
-                                            {label}
-                                            <input
-                                                type="file"
-                                                className="mt-1 w-full"
-                                                onChange={(e) => onFileChange(field.id, e.target.files?.[0])}
-                                            />
-                                        </label>
-                                    );
-                                }
-                                return (
-                                    <label key={field.id} className="text-sm">
-                                        {label}
-                                        <input
-                                            type={field.fieldType === 'NUMBER' ? 'number' : field.fieldType === 'DATE' ? 'date' : field.fieldType === 'TIME' ? 'time' : 'text'}
-                                            className={commonClass}
-                                            onChange={(e) => setFormData((p) => ({ ...p, [field.id]: e.target.value }))}
-                                        />
-                                    </label>
-                                );
-                            })}
+                        </>
+                    )}
+
+                    {type === 'mission' && (
+                        <>
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <label className="text-sm">
+                                    {tm('missionType')}
+                                    <select
+                                        className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                        value={formData.missionType || 'ALL_DAY'}
+                                        onChange={(e) => update('missionType', e.target.value)}
+                                    >
+                                        {missionTypeOptions.map((opt) => (
+                                            <option key={opt} value={opt}>{tm(`missionType_${opt}`)}</option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label className="text-sm">
+                                    {tm('startDate')}
+                                    <input
+                                        type="date"
+                                        defaultValue={dateValue}
+                                        className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                        onChange={(e) => update('startDate', e.target.value)}
+                                    />
+                                </label>
+                                <label className="text-sm">
+                                    {tm('endDate')}
+                                    <input
+                                        type="date"
+                                        defaultValue={dateValue}
+                                        className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                        onChange={(e) => update('endDate', e.target.value)}
+                                    />
+                                </label>
+                            </div>
+                            <label className="text-sm">
+                                {tm('missionTo')}
+                                <textarea
+                                    rows={2}
+                                    className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                    onChange={(e) => update('missionTo', e.target.value)}
+                                />
+                            </label>
+                            <label className="text-sm">
+                                {tm('missionPurpose')}
+                                <textarea
+                                    rows={3}
+                                    className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                    onChange={(e) => update('missionPurpose', e.target.value)}
+                                />
+                            </label>
                         </>
                     )}
                 </div>
 
                 <div className="mt-6 flex justify-end gap-2">
-                    <button className="btn-outline" onClick={onClose}>Cancel</button>
-                    <button className="btn-primary" onClick={submit} disabled={loading}>
-                        {loading ? 'Saving...' : 'Submit'}
+                    <button className="btn-outline" onClick={onClose}>{tm('cancel')}</button>
+                    <button className="btn-primary" onClick={submit} disabled={loading || !type}>
+                        {loading ? tm('saving') : tm('submit')}
                     </button>
                 </div>
             </div>

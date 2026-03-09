@@ -17,6 +17,11 @@ enum Role {
   EMPLOYEE
 }
 
+enum Governorate {
+  CAIRO
+  ALEXANDRIA
+}
+
 enum RequestStatus {
   DRAFT
   PENDING
@@ -28,11 +33,14 @@ enum RequestStatus {
 
 enum LeaveType {
   ANNUAL
+  CASUAL
   EMERGENCY
   MISSION
+  ABSENCE_WITH_PERMISSION
 }
 
 enum PermissionType {
+  PERSONAL
   LATE_ARRIVAL
   EARLY_LEAVE
 }
@@ -108,12 +116,14 @@ model Department {
 model User {
   id               String    @id @default(cuid())
   employeeNumber   String    @unique
+  username         String?   @unique
   fullName         String
   fullNameAr       String?
   email            String    @unique
   phone            String?
   passwordHash     String
   role             Role      @default(EMPLOYEE)
+  governorate      Governorate?
   departmentId     String?
   jobTitle         String?
   jobTitleAr       String?
@@ -138,6 +148,11 @@ model User {
   auditLogs             AuditLog[]
   managedRequests       LeaveRequest[]  @relation("ManagerApproved")
   managedPermissions    PermissionRequest[] @relation("ManagerApprovedPerm")
+
+  @@index([fullName])
+  @@index([phone])
+  @@index([departmentId, isActive])
+  @@index([createdAt])
 }
 
 model RefreshToken {
@@ -309,6 +324,10 @@ model Notification {
 
   receiver User  @relation("NotificationReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
   sender   User? @relation("NotificationSender", fields: [senderId], references: [id])
+
+  @@index([receiverId, createdAt])
+  @@index([receiverId, isRead])
+  @@index([type, createdAt])
 }
 
 // ─── AUDIT LOGS ──────────────────────────────────────────────────────────────

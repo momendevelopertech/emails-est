@@ -201,10 +201,8 @@ export class FormsService {
     async cancelSubmission(id: string, actorId: string, role: string) {
         const submission = await this.prisma.formSubmission.findUnique({ where: { id } });
         if (!submission) throw new NotFoundException('Not found');
-        if (role === 'EMPLOYEE') {
-            if (submission.userId !== actorId) throw new ForbiddenException();
-            if (submission.status !== 'PENDING') throw new BadRequestException('Can only cancel pending submissions');
-        }
+        if (submission.userId !== actorId) throw new ForbiddenException('Only submission owner can cancel');
+        if (submission.status !== 'PENDING') throw new BadRequestException('Can only cancel pending submissions');
         await this.prisma.formSubmission.update({ where: { id }, data: { status: 'CANCELLED' } });
         await this.auditService.log({ userId: actorId, action: 'REQUEST_EDITED', entity: 'FormSubmission', entityId: id });
         return { message: 'Cancelled' };

@@ -1,44 +1,174 @@
 {
-    "app": {
-        "name": "SPHINX HR",
-        "tagline": "نظام إدارة الموارد البشرية"
-    },
-    "nav": {
-        "dashboard": "لوحة التحكم",
-        "calendar": "التقويم",
-        "requests": "الطلبات",
-        "notifications": "الإشعارات",
-        "reports": "التقارير",
-        "profile": "الملف الشخصي",
-        "logout": "تسجيل الخروج"
-    },
-    "auth": {
-        "welcome": "مرحباً بعودتك",
-        "email": "البريد الإلكتروني",
-        "password": "كلمة المرور",
-        "login": "تسجيل الدخول",
-        "changePassword": "تغيير كلمة المرور",
-        "reset": "نسيت كلمة المرور؟"
-    },
-    "dashboard": {
-        "title": "نظرة عامة",
-        "leaveBalance": "رصيد الإجازات",
-        "permissionUsed": "ساعات الإذن المستخدمة",
-        "permissionRemaining": "ساعات الإذن المتبقية",
-        "pendingApprovals": "طلبات بانتظار الموافقة",
-        "recentRequests": "أحدث الطلبات"
-    },
-    "calendar": {
-        "title": "تقويم الفريق",
-        "createRequest": "إنشاء طلب",
-        "month": "شهر",
-        "week": "أسبوع",
-        "day": "يوم"
-    },
-    "requests": {
-        "new": "طلب جديد",
-        "leave": "طلب إجازة",
-        "permission": "طلب إذن",
-        "form": "نماذج"
+  "app": {
+    "name": "SPHINX HR",
+    "tagline": "نظام إدارة الموارد البشرية"
+  },
+  "nav": {
+    "dashboard": "لوحة التحكم",
+    "calendar": "التقويم",
+    "requests": "الطلبات",
+    "employees": "الموظفون",
+    "departments": "الأقسام",
+    "forms": "النماذج",
+    "notifications": "الإشعارات",
+    "reports": "التقارير",
+    "profile": "الملف الشخصي",
+    "logout": "تسجيل الخروج"
+  },
+  "auth": {
+    "welcome": "مرحبًا بعودتك",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "rememberMe": "تذكرني",
+    "login": "تسجيل الدخول",
+    "changePassword": "قم بتغيير كلمة المرور",
+    "reset": "نسيت كلمة المرور؟"
+  },
+  "dashboard": {
+    "title": "نظرة عامة",
+    "leaveBalance": "رصيد الإجازات",
+    "permissionUsed": "ساعات الإذن المستخدمة",
+    "permissionRemaining": "ساعات الإذن المتبقية",
+    "pendingApprovals": "طلبات بانتظار الموافقة",
+    "recentRequests": "أحدث الطلبات",
+    "days": "يوم",
+    "absenceDeduction": "خصم الغياب بإذن (شهري)"
+  },
+  "calendar": {
+    "title": "تقويم الفريق",
+    "createRequest": "إنشاء طلب",
+    "month": "شهر",
+    "week": "أسبوع",
+    "day": "يوم"
+  },
+  "requests": {
+    "new": "طلب جديد",
+    "leave": "طلب إجازة",
+    "permission": "طلب إذن",
+    "form": "نموذج"
+  },
+  "requestModal": {
+    "close": "إغلاق",
+    "cancel": "إلغاء",
+    "submit": "إرسال",
+    "saving": "جارٍ الحفظ...",
+    "choose": "اختر...",
+    "leaveType": "نوع الإجازة",
+    "leaveAnnual": "سنوية",
+    "leaveCasual": "عارضة",
+    "leaveEmergency": "طارئة",
+    "leaveMission": "مأمورية",
+    "startDate": "تاريخ البداية",
+    "endDate": "تاريخ النهاية",
+    "reason": "السبب",
+    "permissionType": "نوع الإذن",
+    "permissionLate": "تأخير حضور",
+    "permissionEarly": "انصراف مبكر",
+    "arrivalTime": "وقت الحضور",
+    "leaveTime": "وقت الانصراف",
+    "selectForm": "اختر نموذجًا",
+    "selectedDate": "التاريخ المختار",
+    "personalPermission": "إذن شخصي",
+    "leaveRequest": "طلب إجازة",
+    "absenceRequest": "طلب غياب بإذن",
+    "missionRequest": "مأمورية",
+    "missionType": "نوع المأمورية",
+    "missionType_MORNING": "صباحية",
+    "missionType_DURING_DAY": "خلال اليوم",
+    "missionType_EVENING": "مسائية",
+    "missionType_ALL_DAY": "طوال اليوم",
+    "missionTo": "مأمورية إلى",
+    "missionPurpose": "الغرض من المأمورية"
+  },
+  "notifications": {
+    "title": "الإشعارات",
+    "new": "جديد",
+    "allCaughtUp": "لا توجد إشعارات جديدة.",
+    "markAllRead": "تحديد الكل كمقروء"
+  },
+  "changePassword": {
+    "title": "تغيير كلمة المرور",
+    "subtitle": "أول تسجيل دخول يتطلب تغيير كلمة المرور.",
+    "currentPassword": "كلمة المرور الحالية",
+    "newPassword": "كلمة المرور الجديدة",
+    "saving": "جارٍ الحفظ...",
+    "update": "تحديث كلمة المرور"
+  },
+  "employees": {
+    "title": "الموظفون",
+    "create": "إضافة موظف",
+    "createCta": "إضافة",
+    "employeeNumber": "رقم الموظف",
+    "fullName": "الاسم الكامل",
+    "fullNameAr": "الاسم الكامل (عربي)",
+    "email": "البريد الإلكتروني",
+    "phone": "الهاتف",
+    "governorate": "المحافظة",
+    "govCairo": "القاهرة",
+    "govAlexandria": "الإسكندرية",
+    "jobTitle": "المسمى الوظيفي",
+    "department": "القسم",
+    "fingerprintId": "رقم البصمة",
+    "tempPassword": "كلمة مرور مؤقتة",
+    "activate": "تفعيل",
+    "deactivate": "تعطيل",
+    "notAvailable": "غير متاح",
+    "roles": {
+      "employee": "موظف",
+      "manager": "مدير",
+      "hrAdmin": "مسؤول الموارد البشرية",
+      "superAdmin": "مشرف عام"
     }
+  },
+  "departments": {
+    "title": "الأقسام",
+    "create": "إضافة قسم",
+    "createCta": "إضافة",
+    "name": "اسم القسم",
+    "nameAr": "اسم القسم (عربي)",
+    "description": "الوصف",
+    "delete": "حذف"
+  },
+  "formsBuilder": {
+    "create": "إنشاء نموذج ديناميكي",
+    "createCta": "إنشاء نموذج",
+    "formName": "اسم النموذج",
+    "formNameAr": "اسم النموذج (عربي)",
+    "description": "الوصف",
+    "descriptionAr": "الوصف (عربي)",
+    "allDepartments": "متاح لكل الأقسام",
+    "label": "الاسم",
+    "labelAr": "الاسم (عربي)",
+    "required": "إلزامي",
+    "addField": "إضافة حقل",
+    "existing": "النماذج الحالية",
+    "deactivate": "تعطيل",
+    "fieldTypes": {
+      "text": "نص",
+      "textarea": "مساحة نص",
+      "number": "رقم",
+      "date": "تاريخ",
+      "time": "وقت",
+      "select": "قائمة اختيار",
+      "checkbox": "اختيار",
+      "file": "ملف"
+    }
+  },
+  "reports": {
+    "leaveTitle": "تقرير الإجازات",
+    "permissionTitle": "تقرير الأذونات",
+    "employeeTitle": "تقرير الموظفين",
+    "exportExcel": "تصدير Excel"
+  },
+  "requestsPage": {
+    "leaveRequests": "طلبات الإجازة",
+    "permissionRequests": "طلبات الأذونات",
+    "formSubmissions": "طلبات النماذج",
+    "printPdf": "طباعة PDF",
+    "duplicate": "نسخ",
+    "cancel": "إلغاء",
+    "approve": "موافقة",
+    "reject": "رفض",
+    "delete": "حذف"
+  }
 }

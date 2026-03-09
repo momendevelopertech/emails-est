@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
+import PageLoader from './PageLoader';
 
 type Department = { id: string; name: string };
 type FormField = {
@@ -14,30 +17,43 @@ type FormField = {
 };
 
 export default function FormsBuilderClient({ locale }: { locale: string }) {
+    const t = useTranslations('formsBuilder');
+    const router = useRouter();
     const { user, ready } = useRequireAuth(locale);
     const [departments, setDepartments] = useState<Department[]>([]);
     const [forms, setForms] = useState<any[]>([]);
     const [form, setForm] = useState<any>({});
     const [fields, setFields] = useState<FormField[]>([]);
+    const [createOpen, setCreateOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const cancelLabel = locale === 'ar' ? 'إلغاء' : 'Cancel';
+
+    const canAdmin = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
 
     const fetchAll = async () => {
-        const [deptRes, formsRes] = await Promise.all([api.get('/departments'), api.get('/forms')]);
-        setDepartments(deptRes.data);
-        setForms(formsRes.data);
+        setLoading(true);
+        try {
+            const [deptRes, formsRes] = await Promise.all([api.get('/departments'), api.get('/forms')]);
+            setDepartments(deptRes.data);
+            setForms(formsRes.data);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
         if (!ready) return;
+        if (!canAdmin) {
+            router.replace(`/${locale}`);
+            return;
+        }
         fetchAll();
-    }, [ready]);
+    }, [canAdmin, locale, ready, router]);
 
-    if (!(user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN')) {
-        return (
-            <main className="px-6 pb-12">
-                <div className="card p-6">Access restricted to HR Admins.</div>
-            </main>
-        );
+    if (!ready || loading) {
+        return <PageLoader text={locale === 'ar' ? 'جاري تحميل النماذج...' : 'Loading forms...'} />;
     }
+    if (!canAdmin) return null;
 
     const addField = () => {
         setFields((prev) => [...prev, { label: '', labelAr: '', fieldType: 'TEXT', isRequired: false }]);
@@ -59,6 +75,9 @@ export default function FormsBuilderClient({ locale }: { locale: string }) {
         setForm({});
         setFields([]);
         fetchAll();
+        setCreateOpen(false);
+        router.push(`/${locale}/forms`);
+        router.refresh();
     };
 
     const deactivateForm = async (id: string) => {
@@ -69,63 +88,79 @@ export default function FormsBuilderClient({ locale }: { locale: string }) {
     return (
         <main className="px-6 pb-12 space-y-6">
             <section className="card p-5">
-                <h2 className="text-lg font-semibold">Create Dynamic Form</h2>
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Form Name" onChange={(e) => setForm((p: any) => ({ ...p, name: e.target.value }))} />
-                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Form Name (AR)" onChange={(e) => setForm((p: any) => ({ ...p, nameAr: e.target.value }))} />
-                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Description" onChange={(e) => setForm((p: any) => ({ ...p, description: e.target.value }))} />
-                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Description (AR)" onChange={(e) => setForm((p: any) => ({ ...p, descriptionAr: e.target.value }))} />
-                    <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" onChange={(e) => setForm((p: any) => ({ ...p, departmentId: e.target.value }))}>
-                        <option value="">Visible to All</option>
-                        {departments.map((d) => (
-                            <option key={d.id} value={d.id}>{d.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="mt-4 space-y-3">
-                    {fields.map((field, index) => (
-                        <div key={index} className="grid gap-2 md:grid-cols-4">
-                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Label" onChange={(e) => updateField(index, { label: e.target.value })} />
-                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Label (AR)" onChange={(e) => updateField(index, { labelAr: e.target.value })} />
-                            <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" onChange={(e) => updateField(index, { fieldType: e.target.value })}>
-                                <option value="TEXT">Text</option>
-                                <option value="TEXTAREA">Textarea</option>
-                                <option value="NUMBER">Number</option>
-                                <option value="DATE">Date</option>
-                                <option value="TIME">Time</option>
-                                <option value="SELECT">Select</option>
-                                <option value="CHECKBOX">Checkbox</option>
-                                <option value="FILE">File</option>
-                            </select>
-                            <label className="flex items-center gap-2 text-sm">
-                                <input type="checkbox" onChange={(e) => updateField(index, { isRequired: e.target.checked })} />
-                                Required
-                            </label>
-                        </div>
-                    ))}
-                </div>
-
-                <div className="mt-4 flex gap-2">
-                    <button className="btn-outline" onClick={addField}>Add Field</button>
-                    <button className="btn-primary" onClick={createForm}>Create Form</button>
+                <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-lg font-semibold">{t('create')}</h2>
+                    <button className="btn-primary" onClick={() => setCreateOpen(true)}>{t('createCta')}</button>
                 </div>
             </section>
 
             <section className="card p-5">
-                <h2 className="text-lg font-semibold">Existing Forms</h2>
+                <h2 className="text-lg font-semibold">{t('existing')}</h2>
                 <div className="mt-4 space-y-3">
-                    {forms.map((form) => (
-                        <div key={form.id} className="rounded-xl border border-ink/10 bg-white/70 p-4 flex items-center justify-between">
+                    {forms.map((currentForm) => (
+                        <div key={currentForm.id} className="rounded-xl border border-ink/10 bg-white/70 p-4 flex items-center justify-between">
                             <div>
-                                <p className="font-semibold">{form.name}</p>
-                                <p className="text-xs text-ink/60">{form.department?.name || 'All Departments'}</p>
+                                <p className="font-semibold">{currentForm.name}</p>
+                                <p className="text-xs text-ink/60">{currentForm.department?.name || t('allDepartments')}</p>
                             </div>
-                            <button className="btn-outline" onClick={() => deactivateForm(form.id)}>Deactivate</button>
+                            <button className="btn-outline" onClick={() => deactivateForm(currentForm.id)}>{t('deactivate')}</button>
                         </div>
                     ))}
                 </div>
             </section>
+
+            {createOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                    <div className="card max-h-[90vh] w-full max-w-5xl overflow-y-auto p-6">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold">{t('create')}</h3>
+                            <button className="btn-outline" onClick={() => setCreateOpen(false)}>×</button>
+                        </div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('formName')} onChange={(e) => setForm((p: any) => ({ ...p, name: e.target.value }))} />
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('formNameAr')} onChange={(e) => setForm((p: any) => ({ ...p, nameAr: e.target.value }))} />
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('description')} onChange={(e) => setForm((p: any) => ({ ...p, description: e.target.value }))} />
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('descriptionAr')} onChange={(e) => setForm((p: any) => ({ ...p, descriptionAr: e.target.value }))} />
+                            <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" onChange={(e) => setForm((p: any) => ({ ...p, departmentId: e.target.value }))}>
+                                <option value="">{t('allDepartments')}</option>
+                                {departments.map((d) => (
+                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="mt-4 space-y-3">
+                            {fields.map((field, index) => (
+                                <div key={index} className="grid gap-2 md:grid-cols-4">
+                                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('label')} onChange={(e) => updateField(index, { label: e.target.value })} />
+                                    <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('labelAr')} onChange={(e) => updateField(index, { labelAr: e.target.value })} />
+                                    <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" onChange={(e) => updateField(index, { fieldType: e.target.value })}>
+                                        <option value="TEXT">{t('fieldTypes.text')}</option>
+                                        <option value="TEXTAREA">{t('fieldTypes.textarea')}</option>
+                                        <option value="NUMBER">{t('fieldTypes.number')}</option>
+                                        <option value="DATE">{t('fieldTypes.date')}</option>
+                                        <option value="TIME">{t('fieldTypes.time')}</option>
+                                        <option value="SELECT">{t('fieldTypes.select')}</option>
+                                        <option value="CHECKBOX">{t('fieldTypes.checkbox')}</option>
+                                        <option value="FILE">{t('fieldTypes.file')}</option>
+                                    </select>
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <input type="checkbox" onChange={(e) => updateField(index, { isRequired: e.target.checked })} />
+                                        {t('required')}
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button className="btn-outline" onClick={addField}>{t('addField')}</button>
+                            <button className="btn-outline" onClick={() => setCreateOpen(false)}>{cancelLabel}</button>
+                            <button className="btn-primary" onClick={createForm}>{t('createCta')}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }
+

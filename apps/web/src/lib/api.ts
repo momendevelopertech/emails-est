@@ -9,6 +9,7 @@ export const setCsrfToken = (token: string) => {
 const api = axios.create({
     baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
     withCredentials: true,
+    timeout: 15000,
 });
 
 api.interceptors.request.use((config) => {
@@ -24,6 +25,24 @@ api.interceptors.response.use((response) => {
         setCsrfToken(response.data.csrfToken);
     }
     return response;
+}, async (error) => {
+    const original = error?.config as any;
+    const status = error?.response?.status;
+
+    if (
+        status === 401 &&
+        original &&
+        !original._retry &&
+        !original.url?.includes('/auth/login') &&
+        !original.url?.includes('/auth/refresh') &&
+        !original.url?.includes('/auth/csrf')
+    ) {
+        original._retry = true;
+        await api.post('/auth/refresh', {});
+        return api(original);
+    }
+
+    return Promise.reject(error);
 });
 
 export default api;

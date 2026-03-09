@@ -25,9 +25,14 @@ export class AuthService {
         private auditService: AuditService,
     ) { }
 
-    async login(email: string, password: string, ipAddress?: string, userAgent?: string) {
-        const user = await this.prisma.user.findUnique({
-            where: { email },
+    async login(identifier: string, password: string, rememberMe = false, ipAddress?: string, userAgent?: string) {
+        const user = await this.prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email: identifier },
+                    { username: identifier.toLowerCase() },
+                ],
+            },
             include: { department: true },
         });
 
@@ -97,7 +102,12 @@ export class AuthService {
             userAgent,
         });
 
-        const tokens = await this.generateTokens(user.id, user.email, user.role);
+        const tokens = await this.generateTokens(
+            user.id,
+            user.email,
+            user.role,
+            rememberMe ? this.getRememberMeRefreshDays() : undefined,
+        );
 
         return {
             accessToken: tokens.accessToken,
@@ -105,6 +115,7 @@ export class AuthService {
             user: {
                 id: user.id,
                 email: user.email,
+                username: user.username,
                 fullName: user.fullName,
                 fullNameAr: user.fullNameAr,
                 role: user.role,
@@ -125,7 +136,7 @@ export class AuthService {
         await this.auditService.log({ userId, action: 'LOGOUT' });
     }
 
-    async refreshTokens(refreshToken: string) {
+    async refreshTokens(refreshToken: string, rememberMe = false) {
         const stored = await this.prisma.refreshToken.findUnique({
             where: { token: refreshToken },
             include: { user: true },
@@ -141,7 +152,12 @@ export class AuthService {
             data: { isRevoked: true },
         });
 
-        const tokens = await this.generateTokens(stored.user.id, stored.user.email, stored.user.role);
+        const tokens = await this.generateTokens(
+            stored.user.id,
+            stored.user.email,
+            stored.user.role,
+            rememberMe ? this.getRememberMeRefreshDays() : undefined,
+        );
         return tokens;
     }
 
@@ -215,7 +231,12 @@ export class AuthService {
         await this.auditService.log({ userId: stored.userId, action: 'PASSWORD_RESET' });
     }
 
-    private async generateTokens(userId: string, email: string, role: string) {
+    private getRememberMeRefreshDays() {
+        const rememberDays = parseInt(process.env.REMEMBER_ME_REFRESH_DAYS || '30', 10);
+        return Number.isNaN(rememberDays) ? 30 : rememberDays;
+    }
+
+    private async generateTokens(userId: string, email: string, role: string, refreshDaysOverride?: number) {
         const payload = { sub: userId, email, role };
         const keys = getJwtKeys();
 
@@ -226,7 +247,7 @@ export class AuthService {
         });
 
         const refreshToken = uuidv4();
-        const refreshDays = parseInt((process.env.JWT_REFRESH_EXPIRES || '7d').replace('d', ''), 10);
+        const refreshDays = refreshDaysOverride ?? parseInt((process.env.JWT_REFRESH_EXPIRES || '7d').replace('d', ''), 10);
         await this.prisma.refreshToken.create({
             data: {
                 token: refreshToken,

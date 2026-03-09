@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../events/events.gateway';
 import axios from 'axios';
@@ -15,7 +15,7 @@ export class NotificationsService {
     ) {
         this.transporter = nodemailer.createTransport({
             host: process.env.MAIL_HOST,
-            port: parseInt(process.env.MAIL_PORT || '587'),
+            port: parseInt(process.env.MAIL_PORT || '587', 10),
             secure: false,
             auth: {
                 user: process.env.MAIL_USER,
@@ -35,10 +35,7 @@ export class NotificationsService {
         metadata?: any;
     }) {
         const notification = await this.prisma.notification.create({ data });
-
-        // Emit via WebSocket
         this.eventsGateway.sendToUser(data.receiverId, 'notification', notification);
-
         return notification;
     }
 
@@ -50,12 +47,64 @@ export class NotificationsService {
         });
     }
 
-    async getAll(userId: string) {
-        return this.prisma.notification.findMany({
-            where: { receiverId: userId },
-            orderBy: { createdAt: 'desc' },
-            take: 100,
-        });
+    async getAll(userId: string, params?: {
+        page?: number;
+        limit?: number;
+        type?: string;
+        status?: string;
+        search?: string;
+        from?: string;
+        to?: string;
+    }) {
+        const page = Math.max(1, params?.page || 1);
+        const limit = Math.min(100, Math.max(1, params?.limit || 20));
+        const skip = (page - 1) * limit;
+
+        const where: any = {
+            receiverId: userId,
+            ...(params?.type ? { type: params.type as any } : {}),
+            ...(params?.status === 'read'
+                ? { isRead: true }
+                : params?.status === 'unread'
+                    ? { isRead: false }
+                    : {}),
+            ...(params?.search
+                ? {
+                    OR: [
+                        { title: { contains: params.search, mode: 'insensitive' } },
+                        { titleAr: { contains: params.search, mode: 'insensitive' } },
+                        { body: { contains: params.search, mode: 'insensitive' } },
+                        { bodyAr: { contains: params.search, mode: 'insensitive' } },
+                    ],
+                }
+                : {}),
+            ...(params?.from || params?.to
+                ? {
+                    createdAt: {
+                        ...(params?.from ? { gte: new Date(params.from) } : {}),
+                        ...(params?.to ? { lte: new Date(params.to) } : {}),
+                    },
+                }
+                : {}),
+        };
+
+        const [items, total] = await Promise.all([
+            this.prisma.notification.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: limit,
+            }),
+            this.prisma.notification.count({ where }),
+        ]);
+
+        return {
+            items,
+            total,
+            page,
+            limit,
+            totalPages: Math.max(1, Math.ceil(total / limit)),
+        };
     }
 
     async markRead(id: string, userId: string) {
@@ -79,15 +128,10 @@ export class NotificationsService {
         }
 
         try {
-            // Format phone: ensure it starts with country code
             const formattedPhone = phone.startsWith('+') ? phone.slice(1) : phone;
-
             await axios.post(
                 `${process.env.WHAPI_BASE_URL || 'https://gate.whapi.cloud/'}messages/text`,
-                {
-                    to: `${formattedPhone}@s.whatsapp.net`,
-                    body: message,
-                },
+                { to: `${formattedPhone}@s.whatsapp.net`, body: message },
                 {
                     headers: {
                         Authorization: `Bearer ${process.env.WHAPI_TOKEN}`,
@@ -96,7 +140,7 @@ export class NotificationsService {
                 },
             );
             this.logger.log(`WhatsApp sent to ${formattedPhone}`);
-        } catch (err) {
+        } catch (err: any) {
             this.logger.error(`WhatsApp send failed: ${err.message}`);
         }
     }
@@ -113,19 +157,19 @@ export class NotificationsService {
                 ...options,
             });
             this.logger.log(`Email sent to ${options.to}`);
-        } catch (err) {
+        } catch (err: any) {
             this.logger.error(`Email send failed: ${err.message}`);
         }
     }
 
-    async notifyLeaveAction(leaveRequest: any, action: 'submitted' | 'approved' | 'rejected', actor?: any) {
+    async notifyLeaveAction(leaveRequest: any, action: 'submitted' | 'approved' | 'rejected') {
         const user = await this.prisma.user.findUnique({ where: { id: leaveRequest.userId } });
         if (!user) return;
 
         const titles = {
             submitted: { en: 'Leave Request Submitted', ar: 'تم تقديم طلب الإجازة' },
-            approved: { en: 'Leave Request Approved ✅', ar: 'تمت الموافقة على طلب الإجازة ✅' },
-            rejected: { en: 'Leave Request Rejected ❌', ar: 'تم رفض طلب الإجازة ❌' },
+            approved: { en: 'Leave Request Approved', ar: 'تمت الموافقة على طلب الإجازة' },
+            rejected: { en: 'Leave Request Rejected', ar: 'تم رفض طلب الإجازة' },
         };
 
         const bodies = {
@@ -154,7 +198,7 @@ export class NotificationsService {
         });
 
         if (user.phone) {
-            await this.sendWhatsApp(user.phone, `📋 SPHINX HR: ${titles[action].en}\n${bodies[action].en}`);
+            await this.sendWhatsApp(user.phone, `SPHINX HR: ${titles[action].en}\n${bodies[action].en}`);
         }
 
         await this.sendEmail({

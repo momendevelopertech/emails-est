@@ -7,10 +7,16 @@ import { useAuthStore } from '@/stores/auth-store';
 
 export function useRequireAuth(locale: string) {
     const router = useRouter();
-    const { user, setUser, setLoading } = useAuthStore();
+    const { user, bootstrapped, setUser, setLoading, setBootstrapped } = useAuthStore();
     const [ready, setReady] = useState(false);
 
     useEffect(() => {
+        if (bootstrapped && user) {
+            setReady(true);
+            setLoading(false);
+            return;
+        }
+
         let active = true;
         const boot = async () => {
             try {
@@ -18,6 +24,7 @@ export function useRequireAuth(locale: string) {
                 const res = await api.get('/auth/me');
                 if (!active) return;
                 setUser(res.data);
+                setBootstrapped(true);
                 setReady(true);
             } catch {
                 router.push(`/${locale}/login`);
@@ -30,7 +37,7 @@ export function useRequireAuth(locale: string) {
         return () => {
             active = false;
         };
-    }, [locale, router, setLoading, setUser]);
+    }, [bootstrapped, locale, router, setBootstrapped, setLoading, setUser, user]);
 
     return { user, ready };
 }

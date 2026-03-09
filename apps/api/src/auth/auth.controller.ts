@@ -21,31 +21,57 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 export class AuthController {
     constructor(private authService: AuthService) { }
 
+    private getCookieAges(rememberMe = false) {
+        const accessMs = 15 * 60 * 1000; // 15m
+        const rememberDays = parseInt(process.env.REMEMBER_ME_REFRESH_DAYS || '30', 10);
+        const rememberMs = (Number.isNaN(rememberDays) ? 30 : rememberDays) * 24 * 60 * 60 * 1000;
+        const defaultRefreshMs = 7 * 24 * 60 * 60 * 1000;
+
+        return {
+            accessMs,
+            refreshMs: rememberMe ? rememberMs : defaultRefreshMs,
+        };
+    }
+
     @Post('login')
     @UseGuards(ThrottlerGuard)
     @HttpCode(HttpStatus.OK)
     async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+        const rememberMe = !!dto.rememberMe;
         const result = await this.authService.login(
-            dto.email,
+            dto.identifier,
             dto.password,
+            rememberMe,
             req.ip,
             req.headers['user-agent'],
         );
+        const ages = this.getCookieAges(rememberMe);
 
         // Set HttpOnly cookies
         res.cookie('access_token', result.accessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 15 * 60 * 1000, // 15 minutes
+            maxAge: ages.accessMs,
         });
 
         res.cookie('refresh_token', result.refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            maxAge: ages.refreshMs,
         });
+
+        if (rememberMe) {
+            res.cookie('remember_me', '1', {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: ages.refreshMs,
+            });
+        } else {
+            res.clearCookie('remember_me');
+        }
 
         return { user: result.user };
     }
@@ -59,6 +85,7 @@ export class AuthController {
 
         res.clearCookie('access_token');
         res.clearCookie('refresh_token');
+        res.clearCookie('remember_me');
 
         return { message: 'Logged out successfully' };
     }
@@ -67,20 +94,22 @@ export class AuthController {
     @HttpCode(HttpStatus.OK)
     async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
         const refreshToken = req.cookies?.refresh_token;
-        const tokens = await this.authService.refreshTokens(refreshToken);
+        const rememberMe = req.cookies?.remember_me === '1';
+        const tokens = await this.authService.refreshTokens(refreshToken, rememberMe);
+        const ages = this.getCookieAges(rememberMe);
 
         res.cookie('access_token', tokens.accessToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 15 * 60 * 1000,
+            maxAge: ages.accessMs,
         });
 
         res.cookie('refresh_token', tokens.refreshToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'lax',
-            maxAge: 7 * 24 * 60 * 60 * 1000,
+            maxAge: ages.refreshMs,
         });
 
         return { success: true };
@@ -119,9 +148,11 @@ export class AuthController {
         return {
             id: user.id,
             email: user.email,
+            username: user.username,
             fullName: user.fullName,
             fullNameAr: user.fullNameAr,
             role: user.role,
+            governorate: user.governorate,
             mustChangePass: user.mustChangePass,
             department: user.department,
             profileImage: user.profileImage,
