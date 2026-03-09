@@ -22,6 +22,14 @@ export const metadata = {
     description: 'Enterprise HR Management System',
     manifest: '/manifest.json',
     themeColor: '#1f3a52',
+    icons: {
+        icon: [
+            { url: '/icons/icon.svg', type: 'image/svg+xml' },
+            { url: '/brand/sphinx-head.svg', type: 'image/svg+xml' },
+        ],
+        apple: [{ url: '/icons/icon.svg', type: 'image/svg+xml' }],
+        shortcut: ['/icons/icon.svg'],
+    },
 };
 
 export default async function LocaleLayout({

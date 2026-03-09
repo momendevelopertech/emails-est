@@ -40,7 +40,9 @@
     "createRequest": "إنشاء طلب",
     "month": "شهر",
     "week": "أسبوع",
-    "day": "يوم"
+    "day": "يوم",
+    "previous": "السابق",
+    "next": "التالي"
   },
   "requests": {
     "new": "طلب جديد",
@@ -162,14 +164,35 @@
     "exportExcel": "تصدير Excel"
   },
   "requestsPage": {
-    "leaveRequests": "طلبات الإجازة",
-    "permissionRequests": "طلبات الأذونات",
-    "formSubmissions": "طلبات النماذج",
+    "title": "الطلبات",
+    "tabAll": "الكل",
+    "tabLeave": "الإجازات",
+    "tabPermission": "الأذونات",
+    "tabForm": "النماذج",
+    "rowsPerPage": "عدد الصفوف:",
+    "search": "بحث بالموظف أو نوع الطلب",
+    "allStatuses": "كل الحالات",
+    "resetFilters": "إعادة ضبط الفلاتر",
+    "employee": "الموظف",
+    "requestType": "نوع الطلب",
+    "details": "التفاصيل",
+    "date": "التاريخ",
+    "status": "الحالة",
+    "actions": "الإجراءات",
+    "formRequest": "طلب نموذج",
     "printPdf": "طباعة PDF",
-    "duplicate": "نسخ",
     "cancel": "إلغاء",
     "approve": "موافقة",
     "reject": "رفض",
-    "delete": "حذف"
+    "delete": "حذف",
+    "noResults": "لا توجد طلبات مطابقة",
+    "records": "عدد السجلات: {count}",
+    "prev": "السابق",
+    "next": "التالي",
+    "pageIndicator": "صفحة {page} / {totalPages}",
+    "leaveRequests": "طلبات الإجازات",
+    "permissionRequests": "طلبات الأذونات",
+    "formSubmissions": "طلبات النماذج",
+    "duplicate": "نسخ"
   }
 }

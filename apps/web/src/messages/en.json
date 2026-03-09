@@ -40,7 +40,9 @@
     "createRequest": "Create Request",
     "month": "Month",
     "week": "Week",
-    "day": "Day"
+    "day": "Day",
+    "previous": "Previous",
+    "next": "Next"
   },
   "requests": {
     "new": "New Request",
@@ -162,14 +164,35 @@
     "exportExcel": "Export Excel"
   },
   "requestsPage": {
-    "leaveRequests": "Leave Requests",
-    "permissionRequests": "Permission Requests",
-    "formSubmissions": "Form Submissions",
+    "title": "Requests",
+    "tabAll": "All",
+    "tabLeave": "Leave",
+    "tabPermission": "Permission",
+    "tabForm": "Forms",
+    "rowsPerPage": "Rows per page:",
+    "search": "Search by employee or request",
+    "allStatuses": "All statuses",
+    "resetFilters": "Reset filters",
+    "employee": "Employee",
+    "requestType": "Request type",
+    "details": "Details",
+    "date": "Date",
+    "status": "Status",
+    "actions": "Actions",
+    "formRequest": "Form request",
     "printPdf": "Print PDF",
-    "duplicate": "Duplicate",
     "cancel": "Cancel",
     "approve": "Approve",
     "reject": "Reject",
-    "delete": "Delete"
+    "delete": "Delete",
+    "noResults": "No requests found",
+    "records": "{count} records",
+    "prev": "Prev",
+    "next": "Next",
+    "pageIndicator": "Page {page} / {totalPages}",
+    "leaveRequests": "Leave Requests",
+    "permissionRequests": "Permission Requests",
+    "formSubmissions": "Form Submissions",
+    "duplicate": "Duplicate"
   }
 }

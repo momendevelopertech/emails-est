@@ -10,8 +10,8 @@ export default function BrandLogo({
     locale: string;
     compact?: boolean;
 }) {
-    const width = compact ? 170 : 220;
-    const height = compact ? 48 : 60;
+    const width = compact ? 170 : 280;
+    const height = compact ? 68 : 112;
 
     return (
         <Link href={`/${locale}`} className="inline-flex items-center" aria-label="SPHINX Home">

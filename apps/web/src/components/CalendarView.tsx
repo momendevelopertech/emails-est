@@ -1,7 +1,7 @@
 'use client';
 
 import { Calendar, dateFnsLocalizer, View } from 'react-big-calendar';
-import { format, parse, startOfWeek, getDay, isSameDay } from 'date-fns';
+import { format, parse, startOfWeek, getDay, isSameDay, addMonths, addWeeks, addDays, endOfWeek } from 'date-fns';
 import { enUS, arSA } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { useMemo, useState } from 'react';
@@ -43,6 +43,7 @@ export default function CalendarView({
     );
 
     const [view, setView] = useState<View>('month');
+    const [currentDate, setCurrentDate] = useState<Date>(new Date());
     const weekdayFormat = (date: Date) =>
         format(date, locale === 'ar' ? 'EEEE' : 'EEEE', { locale: locale === 'ar' ? arSA : enUS });
 
@@ -56,14 +57,47 @@ export default function CalendarView({
         return { style: { backgroundColor: '#475569', borderColor: '#475569' } };
     };
 
+    const title = useMemo(() => {
+        const dateLocale = locale === 'ar' ? arSA : enUS;
+        if (view === 'month') {
+            return format(currentDate, 'MMMM yyyy', { locale: dateLocale });
+        }
+        if (view === 'week') {
+            const start = startOfWeek(currentDate, { weekStartsOn: 6 });
+            const end = endOfWeek(currentDate, { weekStartsOn: 6 });
+            return `${format(start, 'd MMM', { locale: dateLocale })} - ${format(end, 'd MMM yyyy', { locale: dateLocale })}`;
+        }
+        return format(currentDate, 'PPPP', { locale: dateLocale });
+    }, [currentDate, locale, view]);
+
+    const navigate = (direction: 'prev' | 'next') => {
+        const multiplier = direction === 'next' ? 1 : -1;
+        if (view === 'month') {
+            setCurrentDate((prev) => addMonths(prev, multiplier));
+            return;
+        }
+        if (view === 'week') {
+            setCurrentDate((prev) => addWeeks(prev, multiplier));
+            return;
+        }
+        setCurrentDate((prev) => addDays(prev, multiplier));
+    };
+
     return (
         <div className="card p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
+                <div className="space-y-1">
                     <p className="text-xs uppercase tracking-[0.2em] text-ink/50">{t('title')}</p>
                     <p className="text-lg font-semibold text-ink">{t('createRequest')}</p>
+                    <p className="text-sm text-ink/70">{title}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    <button className="btn-outline" onClick={() => navigate('prev')}>
+                        {t('previous')}
+                    </button>
+                    <button className="btn-outline" onClick={() => navigate('next')}>
+                        {t('next')}
+                    </button>
                     <button className={`btn-outline ${view === 'month' ? 'bg-ink/10' : ''}`} onClick={() => setView('month')}>
                         {t('month')}
                     </button>
@@ -80,6 +114,10 @@ export default function CalendarView({
                 culture={locale}
                 events={events}
                 view={view}
+                views={['month', 'week', 'day']}
+                toolbar={false}
+                date={currentDate}
+                onNavigate={(date) => setCurrentDate(date)}
                 onView={setView}
                 selectable
                 onSelectSlot={(slot) => {
