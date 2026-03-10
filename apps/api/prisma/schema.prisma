@@ -108,7 +108,7 @@ model Department {
   name        String   @unique
   nameAr      String
   description String?
-  managerId   String?
+  managerId   String?  @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
