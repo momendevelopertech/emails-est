@@ -5,8 +5,26 @@ let cached: { privateKey: string; publicKey: string } | null = null;
 export function getJwtKeys() {
     if (cached) return cached;
 
-    const privateKeyEnv = process.env.JWT_PRIVATE_KEY?.replace(/\\n/g, '\n');
-    const publicKeyEnv = process.env.JWT_PUBLIC_KEY?.replace(/\\n/g, '\n');
+    const decodePem = (value?: string) => {
+        if (!value) return null;
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        if (trimmed.includes('BEGIN')) {
+            return trimmed.replace(/\\n/g, '\n');
+        }
+        try {
+            const decoded = Buffer.from(trimmed, 'base64').toString('utf8');
+            if (decoded.includes('BEGIN')) {
+                return decoded;
+            }
+        } catch {
+            // ignore decode errors
+        }
+        return trimmed.replace(/\\n/g, '\n');
+    };
+
+    const privateKeyEnv = decodePem(process.env.JWT_PRIVATE_KEY_B64) ?? decodePem(process.env.JWT_PRIVATE_KEY);
+    const publicKeyEnv = decodePem(process.env.JWT_PUBLIC_KEY_B64) ?? decodePem(process.env.JWT_PUBLIC_KEY);
 
     if (privateKeyEnv && publicKeyEnv) {
         cached = { privateKey: privateKeyEnv, publicKey: publicKeyEnv };
