@@ -24,7 +24,11 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
     const [formData, setFormData] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(false);
 
-    const dateValue = useMemo(() => (date ? date.toISOString().slice(0, 10) : ''), [date]);
+    const dateValue = useMemo(() => {
+        if (!date) return '';
+        const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+        return localDate.toISOString().slice(0, 10);
+    }, [date]);
 
     if (!open) return null;
 

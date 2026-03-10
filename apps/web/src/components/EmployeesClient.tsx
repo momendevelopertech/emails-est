@@ -71,6 +71,9 @@ export default function EmployeesClient({ locale }: { locale: string }) {
     const canAdmin = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
     const canViewEmployees = canAdmin || user?.role === 'MANAGER' || user?.role === 'BRANCH_SECRETARY';
 
+    const normalizePhone = (value: string) => value.replace(/\D/g, '').slice(0, 11);
+    const isValidPhone = (value?: string) => !value || /^\d{11}$/.test(value);
+
     const queryParams = useMemo(() => ({
         page,
         limit,
@@ -113,6 +116,10 @@ export default function EmployeesClient({ locale }: { locale: string }) {
     if (!canViewEmployees) return null;
 
     const createEmployee = async () => {
+        if (!isValidPhone(form.phone)) {
+            alert(locale === 'ar' ? 'رقم الهاتف يجب أن يكون 11 رقمًا.' : 'Phone number must be exactly 11 digits.');
+            return;
+        }
         const res = await api.post('/users', {
             employeeNumber: form.employeeNumber,
             fullName: form.fullName,
@@ -162,6 +169,10 @@ export default function EmployeesClient({ locale }: { locale: string }) {
 
     const saveEdit = async () => {
         if (!editingUser) return;
+        if (!isValidPhone(editForm.phone)) {
+            alert(locale === 'ar' ? 'رقم الهاتف يجب أن يكون 11 رقمًا.' : 'Phone number must be exactly 11 digits.');
+            return;
+        }
         setSavingEdit(true);
         try {
             await api.patch(`/users/${editingUser.id}`, {
@@ -332,7 +343,11 @@ export default function EmployeesClient({ locale }: { locale: string }) {
                             <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('fullNameEn')} onChange={(e) => setForm((p: any) => ({ ...p, fullName: e.target.value }))} />
                             <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('fullNameArLabel')} onChange={(e) => setForm((p: any) => ({ ...p, fullNameAr: e.target.value }))} />
                             <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('email')} onChange={(e) => setForm((p: any) => ({ ...p, email: e.target.value }))} />
-                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('phone')} onChange={(e) => setForm((p: any) => ({ ...p, phone: e.target.value }))} />
+                            <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('phone')}
+                                inputMode="numeric"
+                                maxLength={11}
+                                value={form.phone || ''}
+                                onChange={(e) => setForm((p: any) => ({ ...p, phone: normalizePhone(e.target.value) }))} />
                             <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" onChange={(e) => setForm((p: any) => ({ ...p, governorate: e.target.value }))}>
                                 <option value="">{t('governorate')}</option>
                                 <option value="CAIRO">{t('govCairo')}</option>
@@ -392,8 +407,10 @@ export default function EmployeesClient({ locale }: { locale: string }) {
                             <input
                                 className="rounded-xl border border-ink/20 bg-white px-3 py-2"
                                 placeholder={t('phone')}
+                                inputMode="numeric"
+                                maxLength={11}
                                 value={editForm.phone || ''}
-                                onChange={(e) => setEditForm((p: any) => ({ ...p, phone: e.target.value }))}
+                                onChange={(e) => setEditForm((p: any) => ({ ...p, phone: normalizePhone(e.target.value) }))}
                             />
                             <select
                                 className="rounded-xl border border-ink/20 bg-white px-3 py-2"
