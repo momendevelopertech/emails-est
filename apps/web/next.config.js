@@ -14,6 +14,24 @@ const nextConfig = {
     images: {
         domains: ['res.cloudinary.com', 'lh3.googleusercontent.com'],
     },
+    async rewrites() {
+        const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || '';
+        const normalizedApiUrl = rawApiUrl
+            .trim()
+            .replace(/\/$/, '')
+            .replace(/\/api$/, '');
+
+        if (!normalizedApiUrl || normalizedApiUrl.startsWith('/')) {
+            return [];
+        }
+
+        return [
+            {
+                source: '/api/:path*',
+                destination: `${normalizedApiUrl}/api/:path*`,
+            },
+        ];
+    },
     async headers() {
         return [
             {
