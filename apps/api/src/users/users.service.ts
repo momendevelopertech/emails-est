@@ -49,7 +49,6 @@ export class UsersService {
             },
         });
         if (existing) throw new ConflictException('Employee with this email, employee number, or username already exists');
-    ForbiddenException,
 
         const passwordHash = await bcrypt.hash(password, 12);
 
