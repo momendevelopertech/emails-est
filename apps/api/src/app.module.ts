@@ -17,6 +17,7 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { EventsGateway } from './events/events.gateway';
 import { RedisModule } from './redis/redis.module';
 import { ChatModule } from './chat/chat.module';
+import { RootController } from './root.controller';
 
 @Module({
     imports: [
@@ -41,6 +42,7 @@ import { ChatModule } from './chat/chat.module';
         RedisModule,
         ChatModule,
     ],
+    controllers: [RootController],
     providers: [EventsGateway],
 })
 export class AppModule { }
