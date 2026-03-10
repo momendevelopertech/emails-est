@@ -9,15 +9,17 @@ export default function NavLinks({ locale }: { locale: string }) {
     const t = useTranslations('nav');
     const pathname = usePathname();
     const { user } = useAuthStore();
-    const canAdminPages = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
+    const isAdmin = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
+    const canManageEmployees = isAdmin || user?.role === 'MANAGER' || user?.role === 'BRANCH_SECRETARY';
 
     const links = [
         { href: `/${locale}`, label: t('dashboard') },
         { href: `/${locale}/requests`, label: t('requests') },
         { href: `/${locale}/chat`, label: t('chat') },
-        ...(canAdminPages
+        { href: `/${locale}/support`, label: t('support') },
+        ...(canManageEmployees ? [{ href: `/${locale}/employees`, label: t('employees') }] : []),
+        ...(isAdmin
             ? [
-                { href: `/${locale}/employees`, label: t('employees') },
                 { href: `/${locale}/departments`, label: t('departments') },
                 { href: `/${locale}/forms`, label: t('forms') },
                 { href: `/${locale}/reports`, label: t('reports') },

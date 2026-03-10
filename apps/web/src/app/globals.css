@@ -71,3 +71,84 @@ body {
     text-overflow: clip;
     min-height: 42px;
 }
+
+.rbc-event-clickable {
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.rbc-event-clickable:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.08);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+    --bg-1: #0b1220;
+    --bg-2: #0f172a;
+    --bg-3: #111827;
+    --text-1: #e2e8f0;
+    --text-2: #cbd5f5;
+    --accent-1: #4f8f82;
+    --accent-2: #e07a4f;
+}
+
+:root[data-theme='dark'] body {
+    background: radial-gradient(1100px 700px at 10% -10%, #0b1220 0%, #0f172a 45%, #111827 100%);
+    color: var(--text-1);
+}
+
+:root[data-theme='dark'] .card {
+    background: rgba(15, 23, 42, 0.7);
+    border-color: rgba(148, 163, 184, 0.2);
+    box-shadow: 0 10px 30px rgba(2, 6, 23, 0.35);
+}
+
+:root[data-theme='dark'] .btn-outline {
+    border-color: rgba(148, 163, 184, 0.35);
+    color: #e2e8f0;
+}
+
+:root[data-theme='dark'] .btn-outline:hover {
+    background: rgba(148, 163, 184, 0.1);
+}
+
+:root[data-theme='dark'] .btn-secondary {
+    background: #1f2937;
+    color: #e2e8f0;
+}
+
+:root[data-theme='dark'] input,
+:root[data-theme='dark'] select,
+:root[data-theme='dark'] textarea {
+    background-color: #0f172a;
+    color: #e2e8f0;
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+:root[data-theme='dark'] .bg-white,
+:root[data-theme='dark'] .bg-white\\/70,
+:root[data-theme='dark'] .bg-white\\/80 {
+    background-color: rgba(15, 23, 42, 0.85) !important;
+}
+
+:root[data-theme='dark'] .text-ink {
+    color: #e2e8f0 !important;
+}
+
+:root[data-theme='dark'] .text-ink\\/60 {
+    color: rgba(226, 232, 240, 0.6) !important;
+}
+
+:root[data-theme='dark'] .text-ink\\/50 {
+    color: rgba(226, 232, 240, 0.5) !important;
+}
+
+:root[data-theme='dark'] .text-ink\\/40 {
+    color: rgba(226, 232, 240, 0.4) !important;
+}
+
+:root[data-theme='dark'] .text-ink\\/70 {
+    color: rgba(226, 232, 240, 0.7) !important;
+}

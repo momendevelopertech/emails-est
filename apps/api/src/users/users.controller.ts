@@ -21,6 +21,8 @@ export class UsersController {
     }
 
     @Get()
+    @UseGuards(RolesGuard)
+    @Roles('SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'BRANCH_SECRETARY')
     findAll(
         @Req() req: any,
         @Query('departmentId') departmentId?: string,
@@ -49,6 +51,13 @@ export class UsersController {
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.usersService.findById(id);
+    }
+
+    @Get(':id/stats')
+    @UseGuards(RolesGuard)
+    @Roles('SUPER_ADMIN', 'HR_ADMIN', 'MANAGER', 'BRANCH_SECRETARY', 'EMPLOYEE')
+    getStats(@Param('id') id: string, @Req() req: any) {
+        return this.usersService.getStats(id, req.user.id, req.user.role);
     }
 
     @Patch(':id')

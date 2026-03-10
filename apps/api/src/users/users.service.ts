@@ -1,7 +1,8 @@
-﻿import {
+import {
     Injectable,
     NotFoundException,
     ConflictException,
+    ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -48,6 +49,7 @@ export class UsersService {
             },
         });
         if (existing) throw new ConflictException('Employee with this email, employee number, or username already exists');
+    ForbiddenException,
 
         const passwordHash = await bcrypt.hash(password, 12);
 
@@ -98,9 +100,9 @@ export class UsersService {
             receiverId: user.id,
             type: 'ACCOUNT_CREATED',
             title: 'Welcome to SPHINX HR',
-            titleAr: 'مرحبًا بك في SPHINX HR',
+            titleAr: '?????? ?? ?? SPHINX HR',
             body: `Your account has been created. Employee #${user.employeeNumber}. Please change your password on first login.`,
-            bodyAr: `تم إنشاء حسابك. رقم الموظف: ${user.employeeNumber}. يرجى تغيير كلمة المرور عند أول تسجيل دخول.`,
+            bodyAr: `?? ????? ?????. ??? ??????: ${user.employeeNumber}. ???? ????? ???? ?????? ??? ??? ????? ????.`,
         });
 
         if (user.phone) {
@@ -142,6 +144,11 @@ export class UsersService {
         if (requesterRole === 'MANAGER') {
             const manager = await this.prisma.user.findUnique({ where: { id: requesterId } });
             where.departmentId = manager?.departmentId;
+        } else if (requesterRole === 'BRANCH_SECRETARY') {
+            const secretary = await this.prisma.user.findUnique({ where: { id: requesterId } });
+            if (secretary?.governorate) {
+                where.governorate = secretary.governorate;
+            }
         } else if (params?.departmentId) {
             where.departmentId = params.departmentId;
         }
@@ -191,7 +198,7 @@ export class UsersService {
                     isActive: true,
                     profileImage: true,
                     mustChangePass: true,
-                    department: { select: { id: true, name: true, nameAr: true } },
+                    department: { select: { id: true, name: true, nameAr: true, managerId: true } },
                     createdAt: true,
                 },
             }),
@@ -207,7 +214,11 @@ export class UsersService {
         const user = await this.prisma.user.findUnique({
             where: { id },
             include: {
-                department: true,
+                department: {
+                    include: {
+                        manager: { select: { id: true, fullName: true, email: true } },
+                    },
+                },
                 leaveBalances: { where: { year: new Date().getFullYear() } },
             },
         });
@@ -264,4 +275,64 @@ export class UsersService {
             },
         });
     }
+
+    async getStats(targetUserId: string, requesterId: string, requesterRole: string) {
+        if (requesterRole === 'MANAGER') {
+            const manager = await this.prisma.user.findUnique({ where: { id: requesterId } });
+            const target = await this.prisma.user.findUnique({ where: { id: targetUserId } });
+            if (!manager || !target || manager.departmentId !== target.departmentId) {
+                throw new ForbiddenException();
+            }
+        } else if (requesterRole === 'BRANCH_SECRETARY') {
+            const secretary = await this.prisma.user.findUnique({ where: { id: requesterId } });
+            const target = await this.prisma.user.findUnique({ where: { id: targetUserId } });
+            if (!secretary || !target || secretary.governorate !== target.governorate) {
+                throw new ForbiddenException();
+            }
+        } else if (requesterRole === 'EMPLOYEE' && requesterId !== targetUserId) {
+            throw new ForbiddenException();
+        }
+
+        const year = new Date().getFullYear();
+        const [balances, leaves, permissions] = await Promise.all([
+            this.prisma.leaveBalance.findMany({ where: { userId: targetUserId, year } }),
+            this.prisma.leaveRequest.findMany({
+                where: { userId: targetUserId },
+                orderBy: { createdAt: 'desc' },
+            }),
+            this.prisma.permissionRequest.findMany({
+                where: { userId: targetUserId },
+                orderBy: { createdAt: 'desc' },
+            }),
+        ]);
+
+        const leaveApproved = leaves.filter((l) => l.status === 'HR_APPROVED').length;
+        const leavePending = leaves.filter((l) => l.status === 'PENDING' || l.status === 'MANAGER_APPROVED').length;
+        const permissionApproved = permissions.filter((p) => p.status === 'HR_APPROVED').length;
+        const permissionPending = permissions.filter((p) => p.status === 'PENDING' || p.status === 'MANAGER_APPROVED').length;
+        const absences = leaves.filter((l) => l.leaveType === 'ABSENCE_WITH_PERMISSION').length;
+        const annual = balances.find((b) => b.leaveType === 'ANNUAL');
+
+        return {
+            leaveBalances: balances,
+            leaveCounts: {
+                total: leaves.length,
+                approved: leaveApproved,
+                pending: leavePending,
+            },
+            permissionCounts: {
+                total: permissions.length,
+                approved: permissionApproved,
+                pending: permissionPending,
+            },
+            absences,
+            remainingAnnual: annual?.remainingDays ?? 0,
+            requests: {
+                leaves,
+                permissions,
+            },
+        };
+    }
 }
+
+

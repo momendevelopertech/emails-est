@@ -57,6 +57,35 @@ export class PermissionsService {
         return diff;
     }
 
+    private formatTime(hours: number, minutes: number) {
+        const h = String(Math.max(0, Math.min(23, hours))).padStart(2, '0');
+        const m = String(Math.max(0, Math.min(59, minutes))).padStart(2, '0');
+        return `${h}:${m}`;
+    }
+
+    private buildTimesFromScope(scope: 'ARRIVAL' | 'DEPARTURE', durationHours: number) {
+        const startMinutes = 9 * 60;
+        const endMinutes = 17 * 60;
+        const durationMinutes = Math.round(durationHours * 60);
+        if (durationMinutes <= 0) {
+            throw new BadRequestException('Permission duration must be greater than zero');
+        }
+
+        if (scope === 'ARRIVAL') {
+            const arrival = startMinutes + durationMinutes;
+            return {
+                arrivalTime: this.formatTime(Math.floor(arrival / 60), arrival % 60),
+                leaveTime: this.formatTime(Math.floor(endMinutes / 60), endMinutes % 60),
+            };
+        }
+
+        const leave = endMinutes - durationMinutes;
+        return {
+            arrivalTime: this.formatTime(Math.floor(startMinutes / 60), startMinutes % 60),
+            leaveTime: this.formatTime(Math.floor(leave / 60), leave % 60),
+        };
+    }
+
     private async getReservedHoursInCycle(cycleId: string, excludeRequestId?: string) {
         const result = await this.prisma.permissionRequest.aggregate({
             _sum: { hoursUsed: true },
@@ -102,13 +131,30 @@ export class PermissionsService {
         requestDate: Date;
         arrivalTime?: string;
         leaveTime?: string;
+        permissionScope?: 'ARRIVAL' | 'DEPARTURE';
+        durationMinutes?: number;
         reason?: string;
     }) {
         const cycle = await this.getOrCreateCycle(userId);
 
         let hoursUsed = this.parseHours(data.arrivalTime, data.leaveTime);
+        let arrivalTime = data.arrivalTime;
+        let leaveTime = data.leaveTime;
+        let permissionType = data.permissionType;
+
+        if (data.permissionScope) {
+            if (!data.durationMinutes || data.durationMinutes <= 0) {
+                throw new BadRequestException('Permission duration is required');
+            }
+            const durationHours = data.durationMinutes / 60;
+            const times = this.buildTimesFromScope(data.permissionScope, durationHours);
+            hoursUsed = durationHours;
+            arrivalTime = times.arrivalTime;
+            leaveTime = times.leaveTime;
+            permissionType = data.permissionScope === 'ARRIVAL' ? 'LATE_ARRIVAL' : 'EARLY_LEAVE';
+        }
         if (!hoursUsed) {
-            if (data.permissionType === 'PERSONAL') {
+            if (permissionType === 'PERSONAL') {
                 throw new BadRequestException('Personal permission requires start and end time');
             }
             hoursUsed = 2;
@@ -126,10 +172,10 @@ export class PermissionsService {
             data: {
                 userId,
                 cycleId: cycle.id,
-                permissionType: data.permissionType,
+                permissionType,
                 requestDate: new Date(data.requestDate),
-                arrivalTime: data.arrivalTime,
-                leaveTime: data.leaveTime,
+                arrivalTime,
+                leaveTime,
                 hoursUsed,
                 reason: data.reason,
                 status: 'PENDING',
@@ -176,6 +222,15 @@ export class PermissionsService {
             const manager = await this.prisma.user.findUnique({ where: { id: userId } });
             const employees = await this.prisma.user.findMany({ where: { departmentId: manager.departmentId }, select: { id: true } });
             where.userId = { in: employees.map((e) => e.id) };
+        } else if (role === 'BRANCH_SECRETARY') {
+            const secretary = await this.prisma.user.findUnique({ where: { id: userId } });
+            if (secretary?.governorate) {
+                const employees = await this.prisma.user.findMany({ where: { governorate: secretary.governorate }, select: { id: true } });
+                where.userId = { in: employees.map((e) => e.id) };
+            }
+        }
+        if (!where.userId && !(role === 'HR_ADMIN' || role === 'SUPER_ADMIN')) {
+            where.userId = userId;
         }
 
         return this.prisma.permissionRequest.findMany({
@@ -262,11 +317,22 @@ export class PermissionsService {
         }
 
         const cycle = await this.getOrCreateCycle(request.userId);
-        const arrivalTime = data.arrivalTime ?? request.arrivalTime;
-        const leaveTime = data.leaveTime ?? request.leaveTime;
-        const permissionType = data.permissionType ?? request.permissionType;
+        let arrivalTime = data.arrivalTime ?? request.arrivalTime;
+        let leaveTime = data.leaveTime ?? request.leaveTime;
+        let permissionType = data.permissionType ?? request.permissionType;
 
         let hoursUsed = this.parseHours(arrivalTime, leaveTime);
+        if (data.permissionScope) {
+            if (!data.durationMinutes || data.durationMinutes <= 0) {
+                throw new BadRequestException('Permission duration is required');
+            }
+            const durationHours = data.durationMinutes / 60;
+            const times = this.buildTimesFromScope(data.permissionScope, durationHours);
+            hoursUsed = durationHours;
+            arrivalTime = times.arrivalTime;
+            leaveTime = times.leaveTime;
+            permissionType = data.permissionScope === 'ARRIVAL' ? 'LATE_ARRIVAL' : 'EARLY_LEAVE';
+        }
         if (!hoursUsed) {
             if (permissionType === 'PERSONAL') {
                 throw new BadRequestException('Personal permission requires start and end time');

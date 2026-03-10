@@ -41,10 +41,17 @@ export class ChatService {
         return { success: true };
     }
 
-    async getEmployeeChats(employeeId: string) {
+    async getEmployeeChats(employeeId: string, roleFilter?: string) {
+        const where: any = {
+            isActive: true,
+            id: { not: employeeId },
+        };
+        if (roleFilter) {
+            where.role = roleFilter as any;
+        }
         const [employees, unreadGrouped] = await Promise.all([
             this.prisma.user.findMany({
-                where: { isActive: true, id: { not: employeeId } },
+                where,
                 select: {
                     id: true,
                     fullName: true,
@@ -71,11 +78,12 @@ export class ChatService {
         }));
     }
 
-    async getEmployees(employeeId: string, search?: string) {
+    async getEmployees(employeeId: string, search?: string, roleFilter?: string) {
         return this.prisma.user.findMany({
             where: {
                 isActive: true,
                 id: { not: employeeId },
+                ...(roleFilter ? { role: roleFilter as any } : {}),
                 ...(search
                     ? {
                         OR: [

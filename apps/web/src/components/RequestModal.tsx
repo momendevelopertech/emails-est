@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import api from '@/lib/api';
 import { useTranslations } from 'next-intl';
 
-type RequestType = 'leave' | 'absence' | 'personal' | 'mission';
+type RequestType = 'leave' | 'absence' | 'permission' | 'mission';
 
 type Props = {
     open: boolean;
@@ -16,7 +16,7 @@ type Props = {
 
 const missionTypeOptions = ['MORNING', 'DURING_DAY', 'EVENING', 'ALL_DAY'] as const;
 
-export default function RequestModal({ open, date, onClose, onSubmitted }: Props) {
+export default function RequestModal({ open, date, onClose, onSubmitted, locale }: Props) {
     const t = useTranslations('requests');
     const tm = useTranslations('requestModal');
     const [type, setType] = useState<RequestType | null>(null);
@@ -51,12 +51,22 @@ export default function RequestModal({ open, date, onClose, onSubmitted }: Props
                 });
             }
 
-            if (type === 'personal') {
+            if (type === 'permission') {
+                const durationMinutes = Math.max(
+                    0,
+                    (Number(formData.durationHours) || 0) * 60 + (Number(formData.durationMinutes) || 0),
+                );
+                if (durationMinutes <= 0) {
+                    alert(locale === 'ar' ? 'يرجى إدخال مدة الإذن' : 'Please enter a permission duration.');
+                    setLoading(false);
+                    return;
+                }
+                const permissionScope = formData.permissionScope || 'ARRIVAL';
                 await api.post('/permissions', {
-                    permissionType: 'PERSONAL',
+                    permissionScope,
+                    durationMinutes,
+                    permissionType: permissionScope === 'ARRIVAL' ? 'LATE_ARRIVAL' : 'EARLY_LEAVE',
                     requestDate: dateValue,
-                    arrivalTime: formData.arrivalTime,
-                    leaveTime: formData.leaveTime,
                     reason: formData.reason || '',
                 });
             }
@@ -97,7 +107,7 @@ export default function RequestModal({ open, date, onClose, onSubmitted }: Props
                 </p>
 
                 <div className="mt-4 grid gap-2 md:grid-cols-2">
-                    <button className={`btn-outline ${type === 'personal' ? 'bg-ink/10' : ''}`} onClick={() => setType('personal')}>
+                    <button className={`btn-outline ${type === 'permission' ? 'bg-ink/10' : ''}`} onClick={() => setType('permission')}>
                         {tm('personalPermission')}
                     </button>
                     <button className={`btn-outline ${type === 'leave' ? 'bg-ink/10' : ''}`} onClick={() => setType('leave')}>
@@ -189,24 +199,41 @@ export default function RequestModal({ open, date, onClose, onSubmitted }: Props
                         </>
                     )}
 
-                    {type === 'personal' && (
+                    {type === 'permission' && (
                         <>
                             <div className="grid gap-3 md:grid-cols-2">
                                 <label className="text-sm">
-                                    {tm('arrivalTime')}
-                                    <input
-                                        type="time"
+                                    {tm('permissionScope')}
+                                    <select
                                         className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                        onChange={(e) => update('arrivalTime', e.target.value)}
-                                    />
+                                        value={formData.permissionScope || 'ARRIVAL'}
+                                        onChange={(e) => update('permissionScope', e.target.value)}
+                                    >
+                                        <option value="ARRIVAL">{tm('permissionArrival')}</option>
+                                        <option value="DEPARTURE">{tm('permissionDeparture')}</option>
+                                    </select>
                                 </label>
                                 <label className="text-sm">
-                                    {tm('leaveTime')}
-                                    <input
-                                        type="time"
-                                        className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                        onChange={(e) => update('leaveTime', e.target.value)}
-                                    />
+                                    {tm('permissionDuration')}
+                                    <div className="mt-1 grid grid-cols-2 gap-2">
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            className="w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                            placeholder={tm('durationHours')}
+                                            value={formData.durationHours || ''}
+                                            onChange={(e) => update('durationHours', e.target.value)}
+                                        />
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            max={59}
+                                            className="w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                            placeholder={tm('durationMinutes')}
+                                            value={formData.durationMinutes || ''}
+                                            onChange={(e) => update('durationMinutes', e.target.value)}
+                                        />
+                                    </div>
                                 </label>
                             </div>
                             <label className="text-sm">

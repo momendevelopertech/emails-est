@@ -14,7 +14,8 @@
     "reports": "Reports",
     "profile": "Profile",
     "logout": "Logout",
-    "chat": "Chat"
+    "chat": "Chat",
+    "support": "Support"
   },
   "auth": {
     "welcome": "Welcome back",
@@ -33,7 +34,12 @@
     "pendingApprovals": "Pending Approvals",
     "recentRequests": "Recent Requests",
     "days": "days",
-    "absenceDeduction": "Absence Deduction (Monthly)"
+    "absenceDeduction": "Absence Deduction (Monthly)",
+    "announcementTitle": "Announcement",
+    "announcementBody": "Announcement message",
+    "sendAnnouncement": "Send Announcement",
+    "payrollTitle": "Payroll",
+    "payrollButton": "Pay Salaries"
   },
   "calendar": {
     "title": "Team Calendar",
@@ -67,11 +73,17 @@
     "permissionType": "Permission Type",
     "permissionLate": "Late Arrival",
     "permissionEarly": "Early Leave",
+    "permissionScope": "Permission Scope",
+    "permissionArrival": "Arrival (Late)",
+    "permissionDeparture": "Departure (Early)",
+    "permissionDuration": "Permission Duration",
+    "durationHours": "Hours",
+    "durationMinutes": "Minutes",
     "arrivalTime": "Arrival Time",
     "leaveTime": "Leave Time",
     "selectForm": "Select Form",
     "selectedDate": "Selected Date",
-    "personalPermission": "Personal Permission",
+    "personalPermission": "Permission Request",
     "leaveRequest": "Leave Request",
     "absenceRequest": "Absence With Permission",
     "missionRequest": "Mission",
@@ -120,7 +132,9 @@
       "employee": "Employee",
       "manager": "Manager",
       "hrAdmin": "HR Admin",
-      "superAdmin": "Super Admin"
+      "superAdmin": "Super Admin",
+      "branchSecretary": "Branch Secretary",
+      "support": "Support"
     }
   },
   "departments": {

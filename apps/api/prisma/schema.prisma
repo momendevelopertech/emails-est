@@ -14,6 +14,8 @@ enum Role {
   SUPER_ADMIN
   HR_ADMIN
   MANAGER
+  BRANCH_SECRETARY
+  SUPPORT
   EMPLOYEE
 }
 
@@ -106,11 +108,13 @@ model Department {
   name        String   @unique
   nameAr      String
   description String?
+  managerId   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   employees   User[]
   forms       DynamicForm[]
+  manager     User? @relation("DepartmentManager", fields: [managerId], references: [id])
 }
 
 model User {
@@ -137,6 +141,7 @@ model User {
   updatedAt        DateTime  @updatedAt
 
   department        Department?       @relation(fields: [departmentId], references: [id])
+  managedDepartment Department?       @relation("DepartmentManager")
   refreshTokens     RefreshToken[]
   leaveBalances     LeaveBalance[]
   leaveRequests     LeaveRequest[]

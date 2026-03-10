@@ -49,12 +49,13 @@ export default function CalendarView({
 
     const eventPropGetter = (event: CalendarEvent) => {
         const key = event.resource?.key;
-        if (key === 'leave') return { style: { backgroundColor: '#2f6b5f', borderColor: '#2f6b5f' } };
-        if (key === 'absence') return { style: { backgroundColor: '#b45309', borderColor: '#b45309' } };
-        if (key === 'mission') return { style: { backgroundColor: '#0f766e', borderColor: '#0f766e' } };
-        if (key === 'personal') return { style: { backgroundColor: '#1f3a52', borderColor: '#1f3a52' } };
-        if (key === 'form') return { style: { backgroundColor: '#6b7280', borderColor: '#6b7280' } };
-        return { style: { backgroundColor: '#475569', borderColor: '#475569' } };
+        const base = { className: 'rbc-event-clickable' };
+        if (key === 'leave') return { ...base, style: { backgroundColor: '#2f6b5f', borderColor: '#2f6b5f' } };
+        if (key === 'absence') return { ...base, style: { backgroundColor: '#b45309', borderColor: '#b45309' } };
+        if (key === 'mission') return { ...base, style: { backgroundColor: '#0f766e', borderColor: '#0f766e' } };
+        if (key === 'personal') return { ...base, style: { backgroundColor: '#1f3a52', borderColor: '#1f3a52' } };
+        if (key === 'form') return { ...base, style: { backgroundColor: '#6b7280', borderColor: '#6b7280' } };
+        return { ...base, style: { backgroundColor: '#475569', borderColor: '#475569' } };
     };
 
     const title = useMemo(() => {
@@ -122,6 +123,11 @@ export default function CalendarView({
                 selectable
                 onSelectSlot={(slot) => {
                     const selected = slot.start as Date;
+                    if (selected.getDay() === 5) return;
+                    onSelectSlot(selected);
+                }}
+                onSelectEvent={(event) => {
+                    const selected = event.start as Date;
                     if (selected.getDay() === 5) return;
                     onSelectSlot(selected);
                 }}

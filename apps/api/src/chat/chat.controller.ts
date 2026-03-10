@@ -9,13 +9,13 @@ export class ChatController {
     constructor(private chatService: ChatService) { }
 
     @Get('employees')
-    getEmployees(@Req() req: any, @Query('search') search?: string) {
-        return this.chatService.getEmployees(req.user.id, search);
+    getEmployees(@Req() req: any, @Query('search') search?: string, @Query('role') role?: string) {
+        return this.chatService.getEmployees(req.user.id, search, role);
     }
 
     @Get('chats')
-    getEmployeeChats(@Req() req: any) {
-        return this.chatService.getEmployeeChats(req.user.id);
+    getEmployeeChats(@Req() req: any, @Query('role') role?: string) {
+        return this.chatService.getEmployeeChats(req.user.id, role);
     }
 
     @Get('conversation/:employeeId')

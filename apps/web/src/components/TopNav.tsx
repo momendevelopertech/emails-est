@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
 import api from '@/lib/api';
@@ -11,6 +12,27 @@ export default function TopNav({ locale }: { locale: string }) {
     const router = useRouter();
     const pathname = usePathname();
     const { user, setUser } = useAuthStore();
+    const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+    useEffect(() => {
+        const stored = typeof window !== 'undefined' ? window.localStorage.getItem('theme') : null;
+        const next = stored === 'dark' ? 'dark' : 'light';
+        setTheme(next);
+        if (typeof document !== 'undefined') {
+            document.documentElement.dataset.theme = next;
+        }
+    }, []);
+
+    const toggleTheme = () => {
+        const next = theme === 'dark' ? 'light' : 'dark';
+        setTheme(next);
+        if (typeof document !== 'undefined') {
+            document.documentElement.dataset.theme = next;
+        }
+        if (typeof window !== 'undefined') {
+            window.localStorage.setItem('theme', next);
+        }
+    };
 
     const switchLocale = (nextLocale: string) => {
         const segments = pathname.split('/');
@@ -36,6 +58,9 @@ export default function TopNav({ locale }: { locale: string }) {
             <div className="flex items-center gap-3">
                 <button className="btn-outline" onClick={() => switchLocale(locale === 'ar' ? 'en' : 'ar')}>
                     {locale === 'ar' ? 'EN' : 'AR'}
+                </button>
+                <button className="btn-outline" onClick={toggleTheme}>
+                    {theme === 'dark' ? (locale === 'ar' ? 'فاتح' : 'Light') : (locale === 'ar' ? 'داكن' : 'Dark')}
                 </button>
                 <div className="hidden md:flex items-center gap-3 rounded-xl bg-white/70 px-4 py-2">
                     <div className="h-9 w-9 rounded-full bg-cactus/20 flex items-center justify-center font-semibold">

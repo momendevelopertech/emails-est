@@ -14,10 +14,13 @@ type ChatLayoutProps = {
         governorate?: 'CAIRO' | 'ALEXANDRIA' | null;
         role: string;
     };
+    roleFilter?: string;
+    autoStart?: boolean;
+    autoSelectFirst?: boolean;
 };
 
-export default function ChatLayout({ currentUser }: ChatLayoutProps) {
-    const [started, setStarted] = useState(false);
+export default function ChatLayout({ currentUser, roleFilter, autoStart, autoSelectFirst }: ChatLayoutProps) {
+    const [started, setStarted] = useState(!!autoStart);
     const [employees, setEmployees] = useState<ChatEmployee[]>([]);
     const [search, setSearch] = useState('');
     const [selectedEmployee, setSelectedEmployee] = useState<ChatEmployee | null>(null);
@@ -57,9 +60,13 @@ export default function ChatLayout({ currentUser }: ChatLayoutProps) {
     }, [currentUser.id, selectedEmployee]);
 
     const loadEmployees = useCallback(async () => {
+        const params = {
+            ...(search ? { search } : {}),
+            ...(roleFilter ? { role: roleFilter } : {}),
+        };
         const [employeesRes, chatsRes] = await Promise.all([
-            api.get<ChatEmployee[]>('/chat/employees', { params: search ? { search } : {} }),
-            api.get<ChatEmployee[]>('/chat/chats'),
+            api.get<ChatEmployee[]>('/chat/employees', { params }),
+            api.get<ChatEmployee[]>('/chat/chats', { params: roleFilter ? { role: roleFilter } : {} }),
         ]);
 
         const unreadMap = new Map(chatsRes.data.map((e) => [e.id, e.unreadCount || 0]));
@@ -69,21 +76,26 @@ export default function ChatLayout({ currentUser }: ChatLayoutProps) {
                 unreadCount: unreadMap.get(employee.id) ?? 0,
             })),
         );
-    }, [search]);
+    }, [roleFilter, search]);
 
-    useEffect(() => {
-        if (!started) return;
-        loadEmployees();
-    }, [loadEmployees, started]);
-
-    const openConversation = async (employee: ChatEmployee) => {
+    const openConversation = useCallback(async (employee: ChatEmployee) => {
         setSelectedEmployee(employee);
         const res = await api.get<ChatMessage[]>(`/chat/conversation/${employee.id}`);
         setMessages(res.data);
         await api.patch(`/chat/messages/read/${employee.id}`);
         setEmployees((prev) => prev.map((emp) => (emp.id === employee.id ? { ...emp, unreadCount: 0 } : emp)));
         getSocket().emit('message_read', { readerId: currentUser.id, senderId: employee.id });
-    };
+    }, [currentUser.id]);
+
+    useEffect(() => {
+        if (!started) return;
+        loadEmployees();
+    }, [loadEmployees, started]);
+
+    useEffect(() => {
+        if (!autoSelectFirst || !started || selectedEmployee || employees.length === 0) return;
+        openConversation(employees[0]);
+    }, [autoSelectFirst, employees, openConversation, selectedEmployee, started]);
 
     const sendMessage = async (messageText: string) => {
         if (!selectedEmployee) return;

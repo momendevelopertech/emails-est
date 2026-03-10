@@ -6,7 +6,7 @@ export type UserProfile = {
     username?: string;
     fullName: string;
     fullNameAr?: string;
-    role: 'SUPER_ADMIN' | 'HR_ADMIN' | 'MANAGER' | 'EMPLOYEE';
+    role: 'SUPER_ADMIN' | 'HR_ADMIN' | 'MANAGER' | 'BRANCH_SECRETARY' | 'SUPPORT' | 'EMPLOYEE';
     governorate?: 'CAIRO' | 'ALEXANDRIA' | null;
     mustChangePass?: boolean;
     department?: { id: string; name: string; nameAr?: string } | null;

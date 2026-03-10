@@ -22,6 +22,12 @@ type User = {
     createdAt: string;
     department?: Department | null;
 };
+type LeaveBalance = {
+    leaveType: string;
+    totalDays: number;
+    remainingDays: number;
+    year: number;
+};
 
 type UsersResponse = {
     items: User[];
@@ -38,6 +44,14 @@ export default function EmployeesClient({ locale }: { locale: string }) {
     const [employees, setEmployees] = useState<User[]>([]);
     const [departments, setDepartments] = useState<Department[]>([]);
     const [form, setForm] = useState<any>({});
+    const [editForm, setEditForm] = useState<any>({});
+    const [editOpen, setEditOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [statsOpen, setStatsOpen] = useState(false);
+    const [statsLoading, setStatsLoading] = useState(false);
+    const [statsUser, setStatsUser] = useState<User | null>(null);
+    const [statsData, setStatsData] = useState<any | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -55,6 +69,7 @@ export default function EmployeesClient({ locale }: { locale: string }) {
 
     const cancelLabel = locale === 'ar' ? 'إلغاء' : 'Cancel';
     const canAdmin = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
+    const canViewEmployees = canAdmin || user?.role === 'MANAGER' || user?.role === 'BRANCH_SECRETARY';
 
     const queryParams = useMemo(() => ({
         page,
@@ -85,17 +100,17 @@ export default function EmployeesClient({ locale }: { locale: string }) {
 
     useEffect(() => {
         if (!ready) return;
-        if (!canAdmin) {
+        if (!canViewEmployees) {
             router.replace(`/${locale}`);
             return;
         }
         fetchAll();
-    }, [canAdmin, locale, ready, router, fetchAll]);
+    }, [canViewEmployees, locale, ready, router, fetchAll]);
 
     if (!ready || loading) {
         return <PageLoader text={locale === 'ar' ? 'جاري تحميل الموظفين...' : 'Loading employees...'} />;
     }
-    if (!canAdmin) return null;
+    if (!canViewEmployees) return null;
 
     const createEmployee = async () => {
         const res = await api.post('/users', {
@@ -126,6 +141,71 @@ export default function EmployeesClient({ locale }: { locale: string }) {
         router.refresh();
     };
 
+    const openEdit = async (emp: User) => {
+        const res = await api.get(`/users/${emp.id}`);
+        const balances: LeaveBalance[] = res.data.leaveBalances || [];
+        const annual = balances.find((b) => b.leaveType === 'ANNUAL');
+        setEditingUser(emp);
+        setEditForm({
+            fullName: res.data.fullName,
+            fullNameAr: res.data.fullNameAr,
+            phone: res.data.phone,
+            role: res.data.role,
+            governorate: res.data.governorate,
+            departmentId: res.data.department?.id || '',
+            jobTitle: res.data.jobTitle,
+            jobTitleAr: res.data.jobTitleAr,
+            isActive: res.data.isActive,
+            annualLeaveDays: annual?.totalDays ?? 21,
+        });
+        setEditOpen(true);
+    };
+
+    const saveEdit = async () => {
+        if (!editingUser) return;
+        setSavingEdit(true);
+        try {
+            await api.patch(`/users/${editingUser.id}`, {
+                fullName: editForm.fullName,
+                fullNameAr: editForm.fullNameAr,
+                phone: editForm.phone,
+                role: editForm.role,
+                governorate: editForm.governorate,
+                departmentId: editForm.departmentId || null,
+                jobTitle: editForm.jobTitle,
+                jobTitleAr: editForm.jobTitleAr,
+                isActive: editForm.isActive,
+            });
+
+            if (editForm.annualLeaveDays !== undefined && editForm.annualLeaveDays !== '') {
+                const year = new Date().getFullYear();
+                await api.patch(`/users/${editingUser.id}/leave-balance`, {
+                    leaveType: 'ANNUAL',
+                    year,
+                    totalDays: Number(editForm.annualLeaveDays),
+                });
+            }
+            setEditOpen(false);
+            setEditingUser(null);
+            setEditForm({});
+            await fetchAll();
+        } finally {
+            setSavingEdit(false);
+        }
+    };
+
+    const openStats = async (emp: User) => {
+        setStatsUser(emp);
+        setStatsLoading(true);
+        setStatsOpen(true);
+        try {
+            const res = await api.get(`/users/${emp.id}/stats`);
+            setStatsData(res.data);
+        } finally {
+            setStatsLoading(false);
+        }
+    };
+
     const toggleActive = async (emp: User) => {
         await api.patch(`/users/${emp.id}`, { isActive: !emp.isActive });
         fetchAll();
@@ -133,12 +213,14 @@ export default function EmployeesClient({ locale }: { locale: string }) {
 
     return (
         <main className="px-4 pb-12 sm:px-6 space-y-6">
-            <section className="card p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-lg font-semibold">{t('create')}</h2>
-                    <button className="btn-primary" onClick={() => setCreateOpen(true)}>{t('createCta')}</button>
-                </div>
-            </section>
+            {canAdmin && (
+                <section className="card p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <h2 className="text-lg font-semibold">{t('create')}</h2>
+                        <button className="btn-primary" onClick={() => setCreateOpen(true)}>{t('createCta')}</button>
+                    </div>
+                </section>
+            )}
 
             <section className="card p-5">
                 <h2 className="text-lg font-semibold">{t('title')}</h2>
@@ -182,10 +264,11 @@ export default function EmployeesClient({ locale }: { locale: string }) {
                                 <th className="py-2">{t('fullName')}</th>
                                 <th className="py-2">{t('phone')}</th>
                                 <th className="py-2">{t('department')}</th>
+                                <th className="py-2">{t('governorate')}</th>
                                 <th className="py-2">Role</th>
                                 <th className="py-2">Status</th>
                                 <th className="py-2">Created</th>
-                                <th className="py-2">Action</th>
+                                {canViewEmployees && <th className="py-2">Action</th>}
                             </tr>
                         </thead>
                         <tbody>
@@ -196,14 +279,35 @@ export default function EmployeesClient({ locale }: { locale: string }) {
                                     <td className="py-2">{emp.fullName}</td>
                                     <td className="py-2">{emp.phone || '-'}</td>
                                     <td className="py-2">{emp.department?.name || t('notAvailable')}</td>
+                                    <td className="py-2">
+                                        {emp.governorate === 'CAIRO'
+                                            ? t('govCairo')
+                                            : emp.governorate === 'ALEXANDRIA'
+                                                ? t('govAlexandria')
+                                                : t('notAvailable')}
+                                    </td>
                                     <td className="py-2">{enumLabels.role(emp.role, locale as 'en' | 'ar')}</td>
                                     <td className="py-2">{emp.isActive ? 'Active' : 'Inactive'}</td>
                                     <td className="py-2">{new Date(emp.createdAt).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US')}</td>
-                                    <td className="py-2">
-                                        <button className="btn-outline" onClick={() => toggleActive(emp)}>
-                                            {emp.isActive ? t('deactivate') : t('activate')}
-                                        </button>
-                                    </td>
+                                    {canViewEmployees && (
+                                        <td className="py-2">
+                                            <div className="flex flex-wrap gap-2">
+                                                <button className="btn-outline" onClick={() => openStats(emp)}>
+                                                    {locale === 'ar' ? 'عرض' : 'View'}
+                                                </button>
+                                                {canAdmin && (
+                                                    <button className="btn-outline" onClick={() => openEdit(emp)}>
+                                                        {locale === 'ar' ? 'تعديل' : 'Edit'}
+                                                    </button>
+                                                )}
+                                                {canAdmin && (
+                                                    <button className="btn-outline" onClick={() => toggleActive(emp)}>
+                                                        {emp.isActive ? t('deactivate') : t('activate')}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>
@@ -247,6 +351,8 @@ export default function EmployeesClient({ locale }: { locale: string }) {
                                 <option value="MANAGER">{t('roles.manager')}</option>
                                 <option value="HR_ADMIN">{t('roles.hrAdmin')}</option>
                                 <option value="SUPER_ADMIN">{t('roles.superAdmin')}</option>
+                                <option value="BRANCH_SECRETARY">{t('roles.branchSecretary')}</option>
+                                <option value="SUPPORT">{t('roles.support')}</option>
                             </select>
                             <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder={t('fingerprintId')} onChange={(e) => setForm((p: any) => ({ ...p, fingerprintId: e.target.value }))} />
                             <input className="rounded-xl border border-ink/20 bg-white px-3 py-2" placeholder="Default Password (SPHINX@2026)" onChange={(e) => setForm((p: any) => ({ ...p, password: e.target.value }))} />
@@ -255,6 +361,131 @@ export default function EmployeesClient({ locale }: { locale: string }) {
                             <button className="btn-outline" onClick={() => setCreateOpen(false)}>{cancelLabel}</button>
                             <button className="btn-primary" onClick={createEmployee}>{t('createCta')}</button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {editOpen && editingUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                    <div className="card w-full max-w-4xl p-6">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold">{locale === 'ar' ? 'تعديل الموظف' : 'Edit Employee'}</h3>
+                            <button className="btn-outline" onClick={() => setEditOpen(false)}>×</button>
+                        </div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-2">
+                            <input
+                                className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                placeholder={t('fullName')}
+                                value={editForm.fullName || ''}
+                                onChange={(e) => setEditForm((p: any) => ({ ...p, fullName: e.target.value }))}
+                            />
+                            <input
+                                className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                placeholder={t('fullNameAr')}
+                                value={editForm.fullNameAr || ''}
+                                onChange={(e) => setEditForm((p: any) => ({ ...p, fullNameAr: e.target.value }))}
+                            />
+                            <input
+                                className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                placeholder={t('phone')}
+                                value={editForm.phone || ''}
+                                onChange={(e) => setEditForm((p: any) => ({ ...p, phone: e.target.value }))}
+                            />
+                            <select
+                                className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                value={editForm.governorate || ''}
+                                onChange={(e) => setEditForm((p: any) => ({ ...p, governorate: e.target.value }))}
+                            >
+                                <option value="">{t('governorate')}</option>
+                                <option value="CAIRO">{t('govCairo')}</option>
+                                <option value="ALEXANDRIA">{t('govAlexandria')}</option>
+                            </select>
+                            <input
+                                className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                placeholder={t('jobTitle')}
+                                value={editForm.jobTitle || ''}
+                                onChange={(e) => setEditForm((p: any) => ({ ...p, jobTitle: e.target.value }))}
+                            />
+                            <select
+                                className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                value={editForm.departmentId || ''}
+                                onChange={(e) => setEditForm((p: any) => ({ ...p, departmentId: e.target.value }))}
+                            >
+                                <option value="">{t('department')}</option>
+                                {departments.map((d) => (
+                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                            </select>
+                            <select
+                                className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                value={editForm.role || 'EMPLOYEE'}
+                                onChange={(e) => setEditForm((p: any) => ({ ...p, role: e.target.value }))}
+                            >
+                                <option value="EMPLOYEE">{t('roles.employee')}</option>
+                                <option value="MANAGER">{t('roles.manager')}</option>
+                                <option value="HR_ADMIN">{t('roles.hrAdmin')}</option>
+                                <option value="SUPER_ADMIN">{t('roles.superAdmin')}</option>
+                                <option value="BRANCH_SECRETARY">{t('roles.branchSecretary')}</option>
+                                <option value="SUPPORT">{t('roles.support')}</option>
+                            </select>
+                            <input
+                                type="number"
+                                min={0}
+                                className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                placeholder={locale === 'ar' ? 'رصيد الإجازات السنوية' : 'Annual leave balance'}
+                                value={editForm.annualLeaveDays ?? ''}
+                                onChange={(e) => setEditForm((p: any) => ({ ...p, annualLeaveDays: e.target.value }))}
+                            />
+                        </div>
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button className="btn-outline" onClick={() => setEditOpen(false)}>{cancelLabel}</button>
+                            <button className="btn-primary" onClick={saveEdit} disabled={savingEdit}>
+                                {savingEdit ? (locale === 'ar' ? 'جارٍ الحفظ...' : 'Saving...') : (locale === 'ar' ? 'حفظ' : 'Save')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {statsOpen && statsUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                    <div className="card w-full max-w-3xl p-6">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold">
+                                {locale === 'ar' ? 'بيانات الموظف' : 'Employee Overview'} - {statsUser.fullName}
+                            </h3>
+                            <button className="btn-outline" onClick={() => setStatsOpen(false)}>×</button>
+                        </div>
+                        {statsLoading ? (
+                            <p className="mt-4 text-sm text-ink/60">{locale === 'ar' ? 'جاري التحميل...' : 'Loading...'}</p>
+                        ) : (
+                            <div className="mt-4 space-y-4">
+                                <div className="grid gap-3 md:grid-cols-2">
+                                    <div className="rounded-xl border border-ink/10 bg-white/70 p-4">
+                                        <p className="text-sm text-ink/60">{locale === 'ar' ? 'رصيد الإجازات المتبقي' : 'Remaining Leave Balance'}</p>
+                                        <p className="text-lg font-semibold">{statsData?.remainingAnnual ?? 0}</p>
+                                    </div>
+                                    <div className="rounded-xl border border-ink/10 bg-white/70 p-4">
+                                        <p className="text-sm text-ink/60">{locale === 'ar' ? 'عدد الغيابات' : 'Absences'}</p>
+                                        <p className="text-lg font-semibold">{statsData?.absences ?? 0}</p>
+                                    </div>
+                                </div>
+                                <div className="grid gap-3 md:grid-cols-2">
+                                    <div className="rounded-xl border border-ink/10 bg-white/70 p-4">
+                                        <p className="text-sm text-ink/60">{locale === 'ar' ? 'الإجازات' : 'Leaves'}</p>
+                                        <p className="text-sm">{locale === 'ar' ? 'الإجمالي' : 'Total'}: {statsData?.leaveCounts?.total ?? 0}</p>
+                                        <p className="text-sm">{locale === 'ar' ? 'الموافق عليها' : 'Approved'}: {statsData?.leaveCounts?.approved ?? 0}</p>
+                                        <p className="text-sm">{locale === 'ar' ? 'المعلقة' : 'Pending'}: {statsData?.leaveCounts?.pending ?? 0}</p>
+                                    </div>
+                                    <div className="rounded-xl border border-ink/10 bg-white/70 p-4">
+                                        <p className="text-sm text-ink/60">{locale === 'ar' ? 'الأذونات' : 'Permissions'}</p>
+                                        <p className="text-sm">{locale === 'ar' ? 'الإجمالي' : 'Total'}: {statsData?.permissionCounts?.total ?? 0}</p>
+                                        <p className="text-sm">{locale === 'ar' ? 'الموافق عليها' : 'Approved'}: {statsData?.permissionCounts?.approved ?? 0}</p>
+                                        <p className="text-sm">{locale === 'ar' ? 'المعلقة' : 'Pending'}: {statsData?.permissionCounts?.pending ?? 0}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

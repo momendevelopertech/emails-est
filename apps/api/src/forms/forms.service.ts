@@ -133,6 +133,15 @@ export class FormsService {
             const manager = await this.prisma.user.findUnique({ where: { id: userId } });
             const employees = await this.prisma.user.findMany({ where: { departmentId: manager.departmentId }, select: { id: true } });
             where.userId = { in: employees.map((e) => e.id) };
+        } else if (role === 'BRANCH_SECRETARY') {
+            const secretary = await this.prisma.user.findUnique({ where: { id: userId } });
+            if (secretary?.governorate) {
+                const employees = await this.prisma.user.findMany({ where: { governorate: secretary.governorate }, select: { id: true } });
+                where.userId = { in: employees.map((e) => e.id) };
+            }
+        }
+        if (!where.userId && !(role === 'HR_ADMIN' || role === 'SUPER_ADMIN')) {
+            where.userId = userId;
         }
 
         return this.prisma.formSubmission.findMany({

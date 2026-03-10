@@ -1,6 +1,8 @@
-import { Controller, Get, Patch, Param, UseGuards, Req, Query } from '@nestjs/common';
+import { Controller, Get, Patch, Param, UseGuards, Req, Query, Post, Body } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiTags } from '@nestjs/swagger';
 
 @ApiTags('notifications')
@@ -44,5 +46,38 @@ export class NotificationsController {
     @Patch('read-all')
     markAllRead(@Req() req: any) {
         return this.notificationsService.markAllRead(req.user.id);
+    }
+
+    @Post('announcement')
+    @UseGuards(RolesGuard)
+    @Roles('SUPER_ADMIN', 'HR_ADMIN')
+    createAnnouncement(
+        @Req() req: any,
+        @Body() body: { title: string; titleAr?: string; body: string; bodyAr?: string },
+    ) {
+        return this.notificationsService.broadcastToAll({
+            senderId: req.user.id,
+            type: 'ANNOUNCEMENT',
+            title: body.title,
+            titleAr: body.titleAr || body.title,
+            body: body.body,
+            bodyAr: body.bodyAr || body.body,
+            metadata: { kind: 'ANNOUNCEMENT' },
+        });
+    }
+
+    @Post('payroll')
+    @UseGuards(RolesGuard)
+    @Roles('SUPER_ADMIN', 'HR_ADMIN')
+    triggerPayroll(@Req() req: any) {
+        return this.notificationsService.broadcastToAll({
+            senderId: req.user.id,
+            type: 'ANNOUNCEMENT',
+            title: 'Payroll Released',
+            titleAr: 'تم صرف الرواتب',
+            body: 'Your salary has been released. Thank you for your work!',
+            bodyAr: 'تم صرف رواتبكم. شكرًا لمجهودكم!',
+            metadata: { kind: 'PAYROLL' },
+        });
     }
 }

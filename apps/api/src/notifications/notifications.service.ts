@@ -39,6 +39,42 @@ export class NotificationsService {
         return notification;
     }
 
+    async broadcastToAll(data: {
+        senderId?: string;
+        type: any;
+        title: string;
+        titleAr: string;
+        body: string;
+        bodyAr: string;
+        metadata?: any;
+    }) {
+        const users = await this.prisma.user.findMany({
+            where: { isActive: true },
+            select: { id: true },
+        });
+
+        if (users.length === 0) return { sent: 0 };
+
+        await this.prisma.notification.createMany({
+            data: users.map((user) => ({
+                receiverId: user.id,
+                senderId: data.senderId,
+                type: data.type,
+                title: data.title,
+                titleAr: data.titleAr,
+                body: data.body,
+                bodyAr: data.bodyAr,
+                metadata: data.metadata,
+            })),
+        });
+
+        for (const user of users) {
+            this.eventsGateway.sendToUser(user.id, 'notification', { type: data.type });
+        }
+
+        return { sent: users.length };
+    }
+
     async getUnread(userId: string) {
         return this.prisma.notification.findMany({
             where: { receiverId: userId, isRead: false },
