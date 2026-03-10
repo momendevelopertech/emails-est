@@ -20,7 +20,18 @@ const normalizePublicUrl = (value: string, options: NormalizeOptions = {}) => {
 };
 
 export const getPublicApiUrl = () =>
-    normalizePublicUrl(process.env.NEXT_PUBLIC_API_URL || LOCAL_API_URL, { allowRelative: true });
+    (() => {
+        const configuredUrl = normalizePublicUrl(process.env.NEXT_PUBLIC_API_URL || LOCAL_API_URL, { allowRelative: true });
+        const isBrowser = typeof window !== 'undefined';
+        const isAbsoluteUrl = /^https?:\/\//i.test(configuredUrl);
+        const isLocalAbsolute = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(configuredUrl);
+
+        if (isBrowser && isAbsoluteUrl && !isLocalAbsolute) {
+            return '/api';
+        }
+
+        return configuredUrl;
+    })();
 
 export const getPublicSocketUrl = () =>
     normalizePublicUrl(process.env.NEXT_PUBLIC_SOCKET_URL || LOCAL_SOCKET_URL, { allowRelative: true });
