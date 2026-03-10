@@ -29,7 +29,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     handleConnection(client: Socket) {
         this.logger.log(`connect: ${client.id}`);
-        client.emit('connect', { socketId: client.id });
     }
 
     handleDisconnect(client: Socket) {

@@ -23,6 +23,7 @@ export default function ErrorState({
                     width={220}
                     height={88}
                     className="mx-auto"
+                    style={{ width: 220, height: 'auto' }}
                     priority
                 />
                 <h1 className="text-2xl font-semibold text-ink">{title}</h1>

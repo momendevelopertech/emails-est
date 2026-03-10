@@ -4,7 +4,7 @@
     "description": "SPHINX HR System - NestJS Backend API",
     "scripts": {
         "dev": "nest start --watch",
-        "build": "nest build",
+        "build": "prisma generate && nest build",
         "start": "node dist/main",
         "start:prod": "node dist/main",
         "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
