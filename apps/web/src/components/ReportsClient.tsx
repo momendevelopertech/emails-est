@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import { enumLabels } from '@/lib/enum-labels';
+import { getPublicApiUrl } from '@/lib/public-urls';
 import PageLoader from './PageLoader';
 
 type PaginatedResponse<T> = {
@@ -22,6 +23,7 @@ export default function ReportsClient({ locale }: { locale: string }) {
     const t = useTranslations('reports');
     const router = useRouter();
     const { user, ready } = useRequireAuth(locale);
+    const apiBaseUrl = getPublicApiUrl();
     const [tab, setTab] = useState<TabKey>('leaves');
     const [rows, setRows] = useState(10);
     const [page, setPage] = useState(1);
@@ -89,7 +91,7 @@ export default function ReportsClient({ locale }: { locale: string }) {
                     {(tab === 'leaves' || tab === 'permissions') && (
                         <a
                             className="btn-outline"
-                            href={`${process.env.NEXT_PUBLIC_API_URL}/reports/${tab}/excel`}
+                            href={`${apiBaseUrl}/reports/${tab}/excel`}
                             target="_blank"
                             rel="noreferrer noopener"
                         >

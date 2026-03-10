@@ -1,10 +1,11 @@
 import { io, Socket } from 'socket.io-client';
+import { getPublicSocketUrl } from './public-urls';
 
 let socket: Socket | null = null;
 
 export const getSocket = () => {
     if (!socket) {
-        socket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001', {
+        socket = io(getPublicSocketUrl(), {
             withCredentials: true,
             transports: ['websocket'],
         });

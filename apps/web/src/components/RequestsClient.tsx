@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import { enumLabels } from '@/lib/enum-labels';
+import { getPublicApiUrl } from '@/lib/public-urls';
 import PageLoader from './PageLoader';
 
 type LeaveRequest = {
@@ -48,6 +49,7 @@ type RequestRow = {
 export default function RequestsClient({ locale }: { locale: string }) {
     const t = useTranslations('requestsPage');
     const { user, ready } = useRequireAuth(locale);
+    const apiBaseUrl = getPublicApiUrl();
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
     const [permissions, setPermissions] = useState<PermissionRequest[]>([]);
     const [forms, setForms] = useState<FormSubmission[]>([]);
@@ -114,9 +116,9 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 requestDate: leave.startDate,
                 status: leave.status,
                 details: `${new Date(leave.startDate).toLocaleDateString(dateLocale)} - ${new Date(leave.endDate).toLocaleDateString(dateLocale)}`,
-                pdfUrl: `${process.env.NEXT_PUBLIC_API_URL}/pdf/leave/${leave.id}`,
+                pdfUrl: `${apiBaseUrl}/pdf/leave/${leave.id}`,
             })),
-        [dateLocale, leaves, locale],
+        [apiBaseUrl, dateLocale, leaves, locale],
     );
 
     const permissionRows = useMemo<RequestRow[]>(
@@ -130,9 +132,9 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 requestDate: perm.requestDate,
                 status: perm.status,
                 details: `${perm.hoursUsed}h`,
-                pdfUrl: `${process.env.NEXT_PUBLIC_API_URL}/pdf/permission/${perm.id}`,
+                pdfUrl: `${apiBaseUrl}/pdf/permission/${perm.id}`,
             })),
-        [locale, permissions],
+        [apiBaseUrl, locale, permissions],
     );
 
     const formRows = useMemo<RequestRow[]>(
@@ -146,9 +148,9 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 requestDate: form.createdAt,
                 status: form.status,
                 details: t('formRequest'),
-                pdfUrl: `${process.env.NEXT_PUBLIC_API_URL}/pdf/form/${form.id}`,
+                pdfUrl: `${apiBaseUrl}/pdf/form/${form.id}`,
             })),
-        [forms, locale, t],
+        [apiBaseUrl, forms, locale, t],
     );
 
     const allRows = useMemo(() => [...leaveRows, ...permissionRows, ...formRows], [formRows, leaveRows, permissionRows]);

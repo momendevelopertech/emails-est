@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getPublicApiUrl } from './public-urls';
 
 let csrfToken: string | null = null;
 
@@ -18,7 +19,7 @@ export const setCsrfToken = (token: string) => {
 };
 
 const api = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
+    baseURL: getPublicApiUrl(),
     withCredentials: true,
     timeout: 15000,
 });
