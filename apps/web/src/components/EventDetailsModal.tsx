@@ -1,6 +1,5 @@
 'use client';
 
-import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { enumLabels } from '@/lib/enum-labels';
 import type { CalendarEvent } from './CalendarView';
@@ -22,12 +21,12 @@ export default function EventDetailsModal({ open, event, locale, onClose }: Prop
     const kind = resource.kind as string | undefined;
 
     const dateLocale = locale === 'ar' ? 'ar-EG' : 'en-US';
-    const formattedDate = useMemo(() => {
+    const formattedDate = (() => {
         if (event.start && event.end && event.start.toDateString() !== event.end.toDateString()) {
             return `${event.start.toLocaleDateString(dateLocale)} - ${event.end.toLocaleDateString(dateLocale)}`;
         }
         return event.start ? event.start.toLocaleDateString(dateLocale) : '-';
-    }, [dateLocale, event.end, event.start]);
+    })();
 
     const employeeName = item.user?.fullName || item.fullName || t('notAvailable');
     const statusLabel = item.status ? enumLabels.status(item.status, locale) : '-';
