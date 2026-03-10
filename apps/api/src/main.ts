@@ -2,10 +2,10 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import * as cookieParser from 'cookie-parser';
+import cookieParser = require('cookie-parser');
 import helmet from 'helmet';
 import { IoAdapter } from '@nestjs/platform-socket.io';
-import * as csurf from 'csurf';
+import csurf = require('csurf');
 import { HttpExceptionFilter } from './shared/http-exception.filter';
 
 async function bootstrap() {
