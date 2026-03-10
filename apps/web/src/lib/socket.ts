@@ -7,9 +7,8 @@ export const getSocket = () => {
     if (!socket) {
         socket = io(getPublicSocketUrl(), {
             withCredentials: true,
-            // Start with HTTP long-polling so auth cookies are reliably attached,
-            // then allow Socket.IO to upgrade to WebSocket when available.
-            transports: ['polling', 'websocket'],
+            // Force websocket transport to avoid polling session-id errors on serverless edge deployments.
+            transports: ['websocket'],
         });
     }
     return socket;

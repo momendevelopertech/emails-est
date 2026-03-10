@@ -18,7 +18,7 @@ type ReadPayload = { readerId: string; senderId: string };
 
 @WebSocketGateway({
     cors: {
-        origin: socketCorsOrigin,
+        origin: true,
         credentials: true,
     },
 })

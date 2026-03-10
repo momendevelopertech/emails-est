@@ -12,7 +12,7 @@ import { socketCorsOrigin } from '../shared/cors-origin';
 
 @WebSocketGateway({
     cors: {
-        origin: socketCorsOrigin,
+        origin: true,
         credentials: true,
     },
     namespace: '/',
