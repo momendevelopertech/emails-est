@@ -46,7 +46,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
     const [permissions, setPermissions] = useState<PermissionRequest[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'leave' | 'absence' | 'mission' | 'permission'>('leave');
+    const [activeTab, setActiveTab] = useState<'all' | 'leave' | 'absence' | 'mission' | 'permission'>('all');
     const [page, setPage] = useState(1);
     const [limit, setLimit] = useState(20);
     const [filters, setFilters] = useState({
@@ -138,6 +138,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
 
     const rowsByTab = useMemo(
         () => ({
+            all: [...permissionRows, ...leaveOnlyRows, ...absenceRows, ...missionRows],
             leave: leaveOnlyRows,
             absence: absenceRows,
             mission: missionRows,
@@ -197,7 +198,8 @@ export default function RequestsClient({ locale }: { locale: string }) {
         return <PageLoader text={locale === 'ar' ? 'جاري تحميل الطلبات...' : 'Loading requests...'} />;
     }
 
-    const tabs: Array<{ key: 'leave' | 'permission' | 'absence' | 'mission'; label: string; count: number }> = [
+    const tabs: Array<{ key: 'all' | 'leave' | 'permission' | 'absence' | 'mission'; label: string; count: number }> = [
+        { key: 'all', label: t('tabAll'), count: rowsByTab.all.length },
         { key: 'permission', label: t('tabPermission'), count: permissionRows.length },
         { key: 'leave', label: t('tabLeave'), count: leaveOnlyRows.length },
         { key: 'absence', label: t('tabAbsence'), count: absenceRows.length },

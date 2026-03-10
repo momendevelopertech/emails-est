@@ -3,6 +3,7 @@ import {
     NotFoundException,
     ConflictException,
     ForbiddenException,
+    BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -18,6 +19,20 @@ export class UsersService {
         private auditService: AuditService,
         private redisService: RedisService,
     ) { }
+
+    private normalizePhone(phone?: string) {
+        if (!phone) return undefined;
+        return phone.replace(/\D/g, '');
+    }
+
+    private validatePhone(phone?: string) {
+        const normalizedPhone = this.normalizePhone(phone);
+        if (!normalizedPhone) return undefined;
+        if (!/^\d{11}$/.test(normalizedPhone)) {
+            throw new BadRequestException('Phone number must be exactly 11 digits');
+        }
+        return normalizedPhone;
+    }
 
     async create(data: {
         employeeNumber: string;
@@ -35,7 +50,8 @@ export class UsersService {
     }, createdById?: string) {
         const defaultPassword = 'SPHINX@2026';
         const password = data.password || defaultPassword;
-        const phoneLast4 = (data.phone || '').replace(/\D/g, '').slice(-4) || '0000';
+        const normalizedPhone = this.validatePhone(data.phone);
+        const phoneLast4 = (normalizedPhone || '').slice(-4) || '0000';
         const baseName = (data.fullName || 'user').replace(/[^a-zA-Z0-9]/g, '').slice(0, 12) || 'user';
         const generatedUsername = `${baseName}${phoneLast4}`.toLowerCase();
 
@@ -59,7 +75,7 @@ export class UsersService {
                 fullName: data.fullName,
                 fullNameAr: data.fullNameAr,
                 email: data.email,
-                phone: data.phone,
+                phone: normalizedPhone,
                 passwordHash,
                 role: data.role || 'EMPLOYEE',
                 governorate: data.governorate,
@@ -226,12 +242,14 @@ export class UsersService {
     }
 
     async update(id: string, data: any, updatedById?: string) {
+        const normalizedPhone = data.phone !== undefined ? this.validatePhone(data.phone) : undefined;
+
         const user = await this.prisma.user.update({
             where: { id },
             data: {
                 ...(data.fullName && { fullName: data.fullName }),
                 ...(data.fullNameAr && { fullNameAr: data.fullNameAr }),
-                ...(data.phone && { phone: data.phone }),
+                ...(data.phone !== undefined && { phone: normalizedPhone }),
                 ...(data.role && { role: data.role }),
                 ...(data.governorate && { governorate: data.governorate }),
                 ...(data.departmentId && { departmentId: data.departmentId }),

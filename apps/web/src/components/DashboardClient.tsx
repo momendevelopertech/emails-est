@@ -199,23 +199,14 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
             <StatsGrid stats={stats} />
             {canBroadcast && (
                 <div className="px-6 mt-6">
-                    <section className="card p-5 space-y-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <p className="text-sm uppercase tracking-[0.2em] text-ink/50">{t('announcementTitle')}</p>
-                                <p className="text-sm text-ink/70">{t('announcementBody')}</p>
-                            </div>
-                            <div className="text-sm uppercase tracking-[0.2em] text-ink/50">{t('payrollTitle')}</div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            <button className="btn-primary" onClick={() => setAnnouncementOpen(true)}>
-                                {t('sendAnnouncement')}
-                            </button>
-                            <button className="btn-outline" onClick={triggerPayroll} disabled={sendingPayroll}>
-                                {sendingPayroll ? t('payrollProcessing') : t('payrollButton')}
-                            </button>
-                        </div>
-                    </section>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button className="btn-primary" onClick={() => setAnnouncementOpen(true)}>
+                            {t('sendAnnouncement')}
+                        </button>
+                        <button className="btn-secondary" onClick={triggerPayroll} disabled={sendingPayroll}>
+                            {sendingPayroll ? t('payrollProcessing') : t('payrollButton')}
+                        </button>
+                    </div>
                 </div>
             )}
             <div className="px-6 mt-6">
