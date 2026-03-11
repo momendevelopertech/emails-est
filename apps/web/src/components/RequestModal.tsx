@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useTranslations } from 'next-intl';
@@ -26,8 +27,7 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
 
     const dateValue = useMemo(() => {
         if (!date) return '';
-        const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-        return localDate.toISOString().slice(0, 10);
+        return format(date, 'yyyy-MM-dd');
     }, [date]);
 
     if (!open) return null;
