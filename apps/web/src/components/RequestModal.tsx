@@ -1,7 +1,7 @@
-'use client';
+﻿'use client';
 
 import { useMemo, useState } from 'react';
-import { format } from 'date-fns';
+import { addMinutes, format } from 'date-fns';
 import { arSA, enUS } from 'date-fns/locale';
 import { NotebookPen } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -36,6 +36,25 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
         const dateLocale = locale === 'ar' ? arSA : enUS;
         return format(date, 'EEEE', { locale: dateLocale });
     }, [date, locale]);
+    const permissionPreview = useMemo(() => {
+        if (!date || type !== 'permission') return null;
+        const hours = Number(formData.durationHours) || 0;
+        const minutes = Number(formData.durationMinutes) || 0;
+        const totalMinutes = Math.max(0, hours * 60 + minutes);
+        if (totalMinutes <= 0) return null;
+        const scope = formData.permissionScope || 'ARRIVAL';
+        const base = new Date(date);
+        if (scope === 'ARRIVAL') {
+            base.setHours(10, 0, 0, 0);
+            const arrival = addMinutes(base, totalMinutes);
+            const time = format(arrival, 'h:mm a', { locale: locale === 'ar' ? arSA : enUS });
+            return tm('permissionConfirmArrival', { time });
+        }
+        base.setHours(17, 0, 0, 0);
+        const leave = addMinutes(base, -totalMinutes);
+        const time = format(leave, 'h:mm a', { locale: locale === 'ar' ? arSA : enUS });
+        return tm('permissionConfirmDeparture', { time });
+    }, [date, formData.durationHours, formData.durationMinutes, formData.permissionScope, locale, tm, type]);
 
     if (!open) return null;
 
@@ -50,7 +69,7 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
                     leaveType: formData.leaveType || 'ANNUAL',
                     startDate: formData.startDate || dateValue,
                     endDate: formData.endDate || dateValue,
-                    reason: formData.reason || '',
+                    reason: '',
                 });
             }
 
@@ -59,7 +78,7 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
                     leaveType: 'ABSENCE_WITH_PERMISSION',
                     startDate: formData.startDate || dateValue,
                     endDate: formData.endDate || dateValue,
-                    reason: formData.reason || '',
+                    reason: '',
                 });
             }
 
@@ -79,7 +98,7 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
                     durationMinutes,
                     permissionType: permissionScope === 'ARRIVAL' ? 'LATE_ARRIVAL' : 'EARLY_LEAVE',
                     requestDate: dateValue,
-                    reason: formData.reason || '',
+                    reason: '',
                 });
             }
 
@@ -130,34 +149,41 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
 
                 <p className="mt-3 text-sm text-ink/70">
                     {tm('selectedDate')}: <span className="font-semibold">{dateValue}</span>
-                    {dayName ? <span className="ml-2 text-ink/60">• {dayName}</span> : null}
+                    {dayName ? <span className="ml-2 text-ink/60">- {dayName}</span> : null}
                 </p>
 
-                <div className="mt-4 grid gap-2 md:grid-cols-2">
-                    <button className={`btn-outline ${type === 'permission' ? 'bg-ink/10' : ''}`} onClick={() => setType('permission')}>
-                        {tm('personalPermission')}
-                    </button>
-                    <button className={`btn-outline ${type === 'leave' ? 'bg-ink/10' : ''}`} onClick={() => setType('leave')}>
-                        {tm('leaveRequest')}
-                    </button>
-                    <button className={`btn-outline ${type === 'absence' ? 'bg-ink/10' : ''}`} onClick={() => setType('absence')}>
-                        {tm('absenceRequest')}
-                    </button>
-                    <button className={`btn-outline ${type === 'mission' ? 'bg-ink/10' : ''}`} onClick={() => setType('mission')}>
-                        {tm('missionRequest')}
-                    </button>
-                    <button
-                        className={`btn-outline md:col-span-2 ${type === 'note' ? 'bg-amber-200/60 border-amber-200 text-amber-900' : 'bg-amber-50 border-amber-200 text-amber-900 hover:bg-amber-100'}`}
-                        onClick={() => setType('note')}
-                    >
-                        <span className="inline-flex items-center justify-center gap-2">
-                            <NotebookPen className="h-4 w-4" />
-                            {tm('noteRequest')}
-                        </span>
-                    </button>
-                </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-[220px_1fr]">
+                    <div className="space-y-2">
+                        <p className="text-xs uppercase tracking-[0.2em] text-ink/50">{tm('pickTypeTitle')}</p>
+                        <button className={`btn-outline w-full ${type === 'permission' ? 'bg-ink/10' : ''}`} onClick={() => setType('permission')}>
+                            {tm('personalPermission')}
+                        </button>
+                        <button className={`btn-outline w-full ${type === 'leave' ? 'bg-ink/10' : ''}`} onClick={() => setType('leave')}>
+                            {tm('leaveRequest')}
+                        </button>
+                        <button className={`btn-outline w-full ${type === 'absence' ? 'bg-ink/10' : ''}`} onClick={() => setType('absence')}>
+                            {tm('absenceRequest')}
+                        </button>
+                        <button className={`btn-outline w-full ${type === 'mission' ? 'bg-ink/10' : ''}`} onClick={() => setType('mission')}>
+                            {tm('missionRequest')}
+                        </button>
+                        <button
+                            className={`btn-outline w-full py-3 text-base ${type === 'note' ? 'bg-amber-200/60 border-amber-200 text-amber-900' : 'bg-amber-50 border-amber-200 text-amber-900 hover:bg-amber-100'}`}
+                            onClick={() => setType('note')}
+                        >
+                            <span className="inline-flex items-center justify-center gap-2">
+                                <NotebookPen className="h-4 w-4" />
+                                {tm('noteRequest')}
+                            </span>
+                        </button>
+                    </div>
 
-                <div className="mt-5 space-y-4">
+                    <div className="rounded-2xl border border-ink/10 bg-white/70 p-4">
+                        {!type && (
+                            <p className="text-sm text-ink/60">{tm('pickTypeHint')}</p>
+                        )}
+                        {type && (
+                            <div className="space-y-4">
                     {type === 'leave' && (
                         <>
                             <div className="grid gap-3 md:grid-cols-2">
@@ -272,14 +298,11 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
                                     </div>
                                 </label>
                             </div>
-                            <label className="text-sm">
-                                {tm('reason')}
-                                <textarea
-                                    rows={3}
-                                    className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                    onChange={(e) => update('reason', e.target.value)}
-                                />
-                            </label>
+                            {permissionPreview && (
+                                <div className="rounded-xl border border-ink/10 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                    {permissionPreview}
+                                </div>
+                            )}
                         </>
                     )}
 
@@ -359,6 +382,9 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
                             </label>
                         </>
                     )}
+                        </div>
+                    )}
+                </div>
                 </div>
 
                 <div className="mt-6 flex justify-end gap-2">
@@ -371,3 +397,4 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
         </div>
     );
 }
+

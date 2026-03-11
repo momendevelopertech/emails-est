@@ -1,4 +1,4 @@
-{
+﻿{
   "app": {
     "name": "SPHINX HR",
     "tagline": "نظام إدارة الموارد البشرية"
@@ -104,6 +104,9 @@
     "leaveTime": "وقت الانصراف",
     "selectForm": "اختر نموذجًا",
     "selectedDate": "التاريخ المختار",
+    "pickTypeTitle": "نوع الطلب",
+    "pickTypeHint": "اختر نوع الطلب لعرض النموذج.",
+
     "personalPermission": "طلب إذن",
     "leaveRequest": "طلب إجازة",
     "absenceRequest": "طلب غياب بإذن",
@@ -122,6 +125,9 @@
     "durationHours": "ساعات",
     "durationMinutes": "دقائق",
     "permissionDurationError": "يرجى إدخال مدة الإذن",
+    "permissionConfirmArrival": "هتسجل حضور الساعة {time}.",
+    "permissionConfirmDeparture": "هتسجل انصراف الساعة {time}.",
+
     "pendingToast": "تم إرسال الطلب وهو قيد الانتظار لموافقة مديرك المباشر.",
     "noteRequest": "ملاحظة",
     "noteTitle": "عنوان الملاحظة",
@@ -316,3 +322,4 @@
     "duplicate": "نسخ"
   }
 }
+
