@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma, WorkScheduleMode } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-const DEFAULT_SETTINGS = {
-    activeMode: 'NORMAL',
+const DEFAULT_SETTINGS: Prisma.WorkScheduleSettingsCreateInput = {
+    activeMode: WorkScheduleMode.NORMAL,
     weekdayStart: '09:00',
     weekdayEnd: '17:00',
     saturdayStart: '09:00',
@@ -11,6 +12,19 @@ const DEFAULT_SETTINGS = {
     ramadanEnd: '14:30',
     ramadanStartDate: null,
     ramadanEndDate: null,
+};
+
+const normalizeSettingsInput = (
+    data: Prisma.WorkScheduleSettingsUpdateInput,
+): Prisma.WorkScheduleSettingsUpdateInput => {
+    const activeMode = data.activeMode;
+    if (typeof activeMode === 'string') {
+        if (activeMode === WorkScheduleMode.NORMAL || activeMode === WorkScheduleMode.RAMADAN) {
+            return { ...data, activeMode };
+        }
+        return { ...data, activeMode: WorkScheduleMode.NORMAL };
+    }
+    return data;
 };
 
 @Injectable()
@@ -27,14 +41,15 @@ export class WorkScheduleService {
         return this.ensureDefaults();
     }
 
-    async updateSettings(data: Partial<typeof DEFAULT_SETTINGS>) {
+    async updateSettings(data: Prisma.WorkScheduleSettingsUpdateInput) {
+        const normalized = normalizeSettingsInput(data);
         const existing = await this.prisma.workScheduleSettings.findFirst();
         if (!existing) {
-            return this.prisma.workScheduleSettings.create({ data: { ...DEFAULT_SETTINGS, ...data } });
+            return this.prisma.workScheduleSettings.create({ data: { ...DEFAULT_SETTINGS, ...normalized } });
         }
         return this.prisma.workScheduleSettings.update({
             where: { id: existing.id },
-            data,
+            data: normalized,
         });
     }
 }

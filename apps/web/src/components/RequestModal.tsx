@@ -20,16 +20,29 @@ type Props = {
 
 const missionTypeOptions = ['MORNING', 'DURING_DAY', 'EVENING', 'ALL_DAY'] as const;
 
-const DEFAULT_SCHEDULE = {
-    activeMode: 'NORMAL' as const,
+type WorkScheduleMode = 'NORMAL' | 'RAMADAN';
+type WorkScheduleSettings = {
+    activeMode: WorkScheduleMode;
+    weekdayStart: string;
+    weekdayEnd: string;
+    saturdayStart: string;
+    saturdayEnd: string;
+    ramadanStart: string;
+    ramadanEnd: string;
+    ramadanStartDate: string | null;
+    ramadanEndDate: string | null;
+};
+
+const DEFAULT_SCHEDULE: WorkScheduleSettings = {
+    activeMode: 'NORMAL',
     weekdayStart: '09:00',
     weekdayEnd: '17:00',
     saturdayStart: '09:00',
     saturdayEnd: '13:30',
     ramadanStart: '09:00',
     ramadanEnd: '14:30',
-    ramadanStartDate: null as string | null,
-    ramadanEndDate: null as string | null,
+    ramadanStartDate: null,
+    ramadanEndDate: null,
 };
 
 const parseDateOnly = (value?: string | null) => {
@@ -47,7 +60,7 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
     const [type, setType] = useState<RequestType | null>(null);
     const [formData, setFormData] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(false);
-    const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
+    const [schedule, setSchedule] = useState<WorkScheduleSettings>(DEFAULT_SCHEDULE);
 
     const dateValue = useMemo(() => {
         if (!date) return '';
