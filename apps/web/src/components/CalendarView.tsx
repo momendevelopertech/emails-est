@@ -116,6 +116,7 @@ export default function CalendarView({
             <Calendar
                 localizer={localizer}
                 culture={locale}
+                rtl={locale === 'ar'}
                 events={events}
                 view={view}
                 views={['month', 'week', 'day']}
