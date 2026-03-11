@@ -62,7 +62,7 @@ export default function ChatLayout({ currentUser, locale, roleFilter, autoStart,
         setMessages(res.data);
         await api.patch(`/chat/messages/read/${employee.id}`);
         setEmployees((prev) => prev.map((emp) => (emp.id === employee.id ? { ...emp, unreadCount: 0 } : emp)));
-    }, [currentUser.id]);
+    }, []);
 
     useEffect(() => {
         if (!started) return;

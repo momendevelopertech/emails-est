@@ -12,12 +12,15 @@ describe('ChatService', () => {
             findMany: jest.fn(),
         },
     };
+    const pusher = {
+        triggerToUser: jest.fn(),
+    };
 
     let service: ChatService;
 
     beforeEach(() => {
         jest.clearAllMocks();
-        service = new ChatService(prisma as any);
+        service = new ChatService(prisma as any, pusher as any);
     });
 
     it('returns previous conversation partners with latest message and unread count', async () => {
