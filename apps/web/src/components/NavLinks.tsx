@@ -56,6 +56,7 @@ export default function NavLinks({ locale }: { locale: string }) {
                 { href: `/${locale}/departments`, label: t('departments') },
                 { href: `/${locale}/forms`, label: t('forms') },
                 { href: `/${locale}/reports`, label: t('reports') },
+                { href: `/${locale}/settings`, label: t('settings') },
             ]
             : []),
         { href: `/${locale}/notifications`, label: t('notifications'), badge: unreadNotifications },

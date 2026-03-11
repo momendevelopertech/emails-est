@@ -19,6 +19,7 @@ import { EventsGateway } from './events/events.gateway';
 import { RedisModule } from './redis/redis.module';
 import { ChatModule } from './chat/chat.module';
 import { RootController } from './root.controller';
+import { SettingsModule } from './settings/settings.module';
 
 @Module({
     imports: [
@@ -40,6 +41,7 @@ import { RootController } from './root.controller';
         PdfModule,
         ReportsModule,
         AuditModule,
+        SettingsModule,
         CloudinaryModule,
         RedisModule,
         ChatModule,

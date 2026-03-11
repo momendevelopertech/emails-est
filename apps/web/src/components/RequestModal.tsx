@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { addMinutes, format } from 'date-fns';
 import { arSA, enUS } from 'date-fns/locale';
 import { NotebookPen } from 'lucide-react';
@@ -20,12 +20,34 @@ type Props = {
 
 const missionTypeOptions = ['MORNING', 'DURING_DAY', 'EVENING', 'ALL_DAY'] as const;
 
+const DEFAULT_SCHEDULE = {
+    activeMode: 'NORMAL' as const,
+    weekdayStart: '09:00',
+    weekdayEnd: '17:00',
+    saturdayStart: '09:00',
+    saturdayEnd: '13:30',
+    ramadanStart: '09:00',
+    ramadanEnd: '14:30',
+    ramadanStartDate: null as string | null,
+    ramadanEndDate: null as string | null,
+};
+
+const parseDateOnly = (value?: string | null) => {
+    if (!value) return null;
+    const [year, month, day] = value.split('-').map((part) => Number(part));
+    if (!year || !month || !day) return null;
+    return new Date(year, month - 1, day);
+};
+
+const dateOnly = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate());
+
 export default function RequestModal({ open, date, onClose, onSubmitted, locale }: Props) {
     const t = useTranslations('requests');
     const tm = useTranslations('requestModal');
     const [type, setType] = useState<RequestType | null>(null);
     const [formData, setFormData] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(false);
+    const [schedule, setSchedule] = useState(DEFAULT_SCHEDULE);
 
     const dateValue = useMemo(() => {
         if (!date) return '';
@@ -36,6 +58,13 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
         const dateLocale = locale === 'ar' ? arSA : enUS;
         return format(date, 'EEEE', { locale: dateLocale });
     }, [date, locale]);
+    useEffect(() => {
+        if (!open) return;
+        api.get('/settings/work-schedule')
+            .then((res) => setSchedule((prev) => ({ ...prev, ...res.data })))
+            .catch(() => null);
+    }, [open]);
+
     const permissionPreview = useMemo(() => {
         if (!date || type !== 'permission') return null;
         const hours = Number(formData.durationHours) || 0;
@@ -43,18 +72,41 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
         const totalMinutes = Math.max(0, hours * 60 + minutes);
         if (totalMinutes <= 0) return null;
         const scope = formData.permissionScope || 'ARRIVAL';
+        const dateLocale = locale === 'ar' ? arSA : enUS;
+        const startDate = parseDateOnly(schedule.ramadanStartDate);
+        const endDate = parseDateOnly(schedule.ramadanEndDate);
+        const current = dateOnly(date);
+        const isRamadan =
+            schedule.activeMode === 'RAMADAN' &&
+            startDate &&
+            endDate &&
+            current >= startDate &&
+            current <= endDate;
+        const isSaturday = date.getDay() === 6;
+        const startTime = isRamadan
+            ? schedule.ramadanStart
+            : isSaturday
+                ? schedule.saturdayStart
+                : schedule.weekdayStart;
+        const endTime = isRamadan
+            ? schedule.ramadanEnd
+            : isSaturday
+                ? schedule.saturdayEnd
+                : schedule.weekdayEnd;
         const base = new Date(date);
+        const [startHour, startMinute] = startTime.split(':').map((part) => Number(part));
+        const [endHour, endMinute] = endTime.split(':').map((part) => Number(part));
         if (scope === 'ARRIVAL') {
-            base.setHours(9, 0, 0, 0);
+            base.setHours(startHour || 0, startMinute || 0, 0, 0);
             const arrival = addMinutes(base, totalMinutes);
-            const time = format(arrival, 'h:mm a', { locale: locale === 'ar' ? arSA : enUS });
+            const time = format(arrival, 'h:mm a', { locale: dateLocale });
             return tm('permissionConfirmArrival', { time });
         }
-        base.setHours(17, 0, 0, 0);
+        base.setHours(endHour || 0, endMinute || 0, 0, 0);
         const leave = addMinutes(base, -totalMinutes);
-        const time = format(leave, 'h:mm a', { locale: locale === 'ar' ? arSA : enUS });
+        const time = format(leave, 'h:mm a', { locale: dateLocale });
         return tm('permissionConfirmDeparture', { time });
-    }, [date, formData.durationHours, formData.durationMinutes, formData.permissionScope, locale, tm, type]);
+    }, [date, formData.durationHours, formData.durationMinutes, formData.permissionScope, locale, schedule, tm, type]);
 
     if (!open) return null;
 

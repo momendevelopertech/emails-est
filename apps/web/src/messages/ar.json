@@ -15,7 +15,8 @@
     "profile": "الملف الشخصي",
     "logout": "تسجيل الخروج",
     "chat": "الدردشة",
-    "support": "الدعم الفني"
+    "support": "الدعم الفني",
+    "settings": "الإعدادات"
   },
   "chat": {
     "loading": "جاري تحميل المحادثات...",
@@ -320,6 +321,27 @@
     "permissionRequests": "طلبات الأذونات",
     "formSubmissions": "طلبات النماذج",
     "duplicate": "نسخ"
+  }
+  ,
+  "workSchedule": {
+    "title": "مواعيد العمل",
+    "description": "المواعيد الافتراضية للعمل للموظفين.",
+    "activeModeLabel": "الخطة المفعلة",
+    "modeNormal": "عادي",
+    "modeRamadan": "رمضان",
+    "ramadanRange": "فترة رمضان (ميلادي)",
+    "ramadanStart": "تاريخ البداية",
+    "ramadanEnd": "تاريخ النهاية",
+    "rangeHint": "سيتم تطبيقه في الكاليندر من {start} إلى {end}.",
+    "rangeMissing": "من فضلك اختر تاريخ بداية ونهاية رمضان.",
+    "weekdayHours": "مواعيد الأيام العادية",
+    "saturdayHours": "مواعيد يوم السبت",
+    "ramadanHours": "مواعيد رمضان",
+    "startTime": "وقت البداية",
+    "endTime": "وقت النهاية",
+    "save": "حفظ",
+    "saving": "جاري الحفظ...",
+    "saved": "تم تحديث الإعدادات"
   }
 }
 

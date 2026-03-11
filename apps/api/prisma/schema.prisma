@@ -73,6 +73,11 @@ enum FormFieldType {
   FILE
 }
 
+enum WorkScheduleMode {
+  NORMAL
+  RAMADAN
+}
+
 enum AuditAction {
   LOGIN
   LOGOUT
@@ -382,4 +387,19 @@ model AuditLog {
   createdAt  DateTime    @default(now())
 
   user User? @relation(fields: [userId], references: [id])
+}
+
+model WorkScheduleSettings {
+  id               String           @id @default(cuid())
+  activeMode       WorkScheduleMode @default(NORMAL)
+  weekdayStart     String           @default("09:00")
+  weekdayEnd       String           @default("17:00")
+  saturdayStart    String           @default("09:00")
+  saturdayEnd      String           @default("13:30")
+  ramadanStart     String           @default("09:00")
+  ramadanEnd       String           @default("14:30")
+  ramadanStartDate String?
+  ramadanEndDate   String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 }

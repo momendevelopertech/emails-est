@@ -15,7 +15,8 @@
     "profile": "Profile",
     "logout": "Logout",
     "chat": "Chat",
-    "support": "Support"
+    "support": "Support",
+    "settings": "Settings"
   },
   "chat": {
     "loading": "Loading chat...",
@@ -318,5 +319,26 @@
     "permissionRequests": "Permission Requests",
     "formSubmissions": "Form Submissions",
     "duplicate": "Duplicate"
+  }
+  ,
+  "workSchedule": {
+    "title": "Work Schedule",
+    "description": "Default working hours for employees.",
+    "activeModeLabel": "Active schedule",
+    "modeNormal": "Normal",
+    "modeRamadan": "Ramadan",
+    "ramadanRange": "Ramadan date range (Gregorian)",
+    "ramadanStart": "Start date",
+    "ramadanEnd": "End date",
+    "rangeHint": "Will apply in calendar from {start} to {end}.",
+    "rangeMissing": "Please choose Ramadan start and end dates.",
+    "weekdayHours": "Weekday hours",
+    "saturdayHours": "Saturday hours",
+    "ramadanHours": "Ramadan hours",
+    "startTime": "Start time",
+    "endTime": "End time",
+    "save": "Save",
+    "saving": "Saving...",
+    "saved": "Settings updated"
   }
 }
