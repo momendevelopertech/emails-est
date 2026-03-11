@@ -27,9 +27,7 @@ export default function SupportChatPageClient({ locale }: { locale: string }) {
                 governorate: user.governorate,
                 role: user.role,
             }}
-            locale={locale}
             roleFilter={roleFilter}
-            autoStart
             autoSelectFirst
         />
     );

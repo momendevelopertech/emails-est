@@ -3,6 +3,7 @@ export type ChatEmployee = {
     fullName: string;
     jobTitle?: string | null;
     governorate?: 'CAIRO' | 'ALEXANDRIA' | null;
+    role?: string;
     unreadCount?: number;
     lastMessage?: string;
     lastMessageAt?: string;

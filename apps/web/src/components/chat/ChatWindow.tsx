@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import MessageBubble from './MessageBubble';
 import MessageInput from './MessageInput';
@@ -24,6 +24,13 @@ export default function ChatWindow({
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
+    const branchLabel = useMemo(() => {
+        if (!selectedEmployee?.governorate) return t('notAvailable');
+        if (selectedEmployee.governorate === 'ALEXANDRIA') return t('branchAlexandria');
+        if (selectedEmployee.governorate === 'CAIRO') return t('branchCairo');
+        return t('notAvailable');
+    }, [selectedEmployee?.governorate, t]);
+
     return (
         <section className="flex min-h-[58vh] flex-1 flex-col md:min-h-[72vh]">
             {selectedEmployee ? (
@@ -33,6 +40,11 @@ export default function ChatWindow({
                         <p className="text-xs text-slate-500">{selectedEmployee.jobTitle || t('employeeFallback')}</p>
                     </header>
                     <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
+                        <div className="rounded-xl border border-ink/10 bg-white p-4 text-sm">
+                            <h4 className="text-base font-semibold">{t('welcome', { name: selectedEmployee.fullName })}</h4>
+                            <p className="mt-1 text-slate-600">{t('position')}: {selectedEmployee.jobTitle || t('noJobTitle')}</p>
+                            <p className="text-slate-600">{t('branch')}: {branchLabel}</p>
+                        </div>
                         {messages.map((m) => (
                             <MessageBubble key={m.id} message={m} isMine={m.senderId === currentUserId} />
                         ))}

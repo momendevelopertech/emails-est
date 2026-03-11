@@ -33,20 +33,24 @@ describe('ChatService', () => {
             { senderId: 'u3', _count: { _all: 2 } },
         ]);
         prisma.user.findMany.mockResolvedValue([
-            { id: 'u2', fullName: 'Sara', jobTitle: 'HR', governorate: 'CAIRO' },
-            { id: 'u3', fullName: 'Ali', jobTitle: 'Support', governorate: 'ALEXANDRIA' },
-            { id: 'u4', fullName: 'No Chat User', jobTitle: 'Employee', governorate: 'CAIRO' },
+            { id: 'u2', fullName: 'Sara', jobTitle: 'HR', governorate: 'CAIRO', role: 'HR_ADMIN' },
+            { id: 'u3', fullName: 'Ali', jobTitle: 'Support', governorate: 'ALEXANDRIA', role: 'EMPLOYEE' },
+            { id: 'u4', fullName: 'Tech Support', jobTitle: 'Technical Support', governorate: 'CAIRO', role: 'SUPPORT' },
         ]);
 
         const result = await service.getEmployeeChats('u1');
 
-        expect(result).toHaveLength(2);
+        expect(result).toHaveLength(3);
         expect(result[0]).toMatchObject({
+            id: 'u4',
+            fullName: 'Tech Support',
+        });
+        expect(result[1]).toMatchObject({
             id: 'u2',
             lastMessage: 'last to sara',
             unreadCount: 0,
         });
-        expect(result[1]).toMatchObject({
+        expect(result[2]).toMatchObject({
             id: 'u3',
             lastMessage: 'hello from ali',
             unreadCount: 2,

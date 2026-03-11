@@ -15,7 +15,7 @@ export default function ChatPageClient({ locale }: { locale: string }) {
 
     return (
         <main className="pb-12">
-            <ChatLayout currentUser={user} locale={locale} />
+            <ChatLayout currentUser={user} />
         </main>
     );
 }

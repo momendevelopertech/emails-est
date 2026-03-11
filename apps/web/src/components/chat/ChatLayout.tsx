@@ -1,10 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
 import { usePusherChannel } from '@/lib/use-pusher-channel';
-import { enumLabels } from '@/lib/enum-labels';
 import EmployeeList from './EmployeeList';
 import ChatWindow from './ChatWindow';
 import { ChatEmployee, ChatMessage } from './types';
@@ -16,15 +14,11 @@ type ChatLayoutProps = {
         governorate?: 'CAIRO' | 'ALEXANDRIA' | null;
         role: string;
     };
-    locale: string;
     roleFilter?: string;
-    autoStart?: boolean;
     autoSelectFirst?: boolean;
 };
 
-export default function ChatLayout({ currentUser, locale, roleFilter, autoStart, autoSelectFirst }: ChatLayoutProps) {
-    const t = useTranslations('chat');
-    const [started, setStarted] = useState(!!autoStart);
+export default function ChatLayout({ currentUser, roleFilter, autoSelectFirst }: ChatLayoutProps) {
     const [employees, setEmployees] = useState<ChatEmployee[]>([]);
     const [search, setSearch] = useState('');
     const [selectedEmployee, setSelectedEmployee] = useState<ChatEmployee | null>(null);
@@ -65,18 +59,17 @@ export default function ChatLayout({ currentUser, locale, roleFilter, autoStart,
     }, []);
 
     useEffect(() => {
-        if (!started) return;
         if (search.trim()) {
             loadEmployees();
             return;
         }
         loadChats();
-    }, [loadChats, loadEmployees, search, started]);
+    }, [loadChats, loadEmployees, search]);
 
     useEffect(() => {
-        if (!autoSelectFirst || !started || selectedEmployee || employees.length === 0) return;
+        if (!autoSelectFirst || selectedEmployee || employees.length === 0) return;
         openConversation(employees[0]);
-    }, [autoSelectFirst, employees, openConversation, selectedEmployee, started]);
+    }, [autoSelectFirst, employees, openConversation, selectedEmployee]);
 
     const handleIncomingMessage = useCallback((message: ChatMessage) => {
             const active = selectedRef.current;
@@ -136,23 +129,6 @@ export default function ChatLayout({ currentUser, locale, roleFilter, autoStart,
         });
         handleIncomingMessage(res.data);
     };
-
-    const branchLabel = useMemo(() => {
-        if (currentUser.governorate === 'ALEXANDRIA') return t('branchAlexandria');
-        if (currentUser.governorate === 'CAIRO') return t('branchCairo');
-        return t('notAvailable');
-    }, [currentUser.governorate, t]);
-
-    if (!started) {
-        return (
-            <section className="card mx-4 p-6 sm:mx-6">
-                <h2 className="text-xl font-semibold">{t('welcome', { name: currentUser.fullName })}</h2>
-                <p className="mt-1 text-slate-600">{t('position')}: {enumLabels.role(currentUser.role, locale as 'en' | 'ar')}</p>
-                <p className="text-slate-600">{t('branch')}: {branchLabel}</p>
-                <button className="btn-primary mt-4" onClick={() => setStarted(true)}>{t('start')}</button>
-            </section>
-        );
-    }
 
     return (
         <section className="mx-4 grid rounded-2xl border border-ink/10 bg-white sm:mx-6 md:grid-cols-[320px_1fr]">

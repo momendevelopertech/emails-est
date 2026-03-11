@@ -94,11 +94,12 @@ export class ChatService {
                     fullName: true,
                     jobTitle: true,
                     governorate: true,
+                    role: true,
                 },
             }),
         ]);
 
-        const userMap = new Map<string, { id: string; fullName: string; jobTitle: string | null; governorate: 'CAIRO' | 'ALEXANDRIA' | null }>(
+        const userMap = new Map<string, { id: string; fullName: string; jobTitle: string | null; governorate: 'CAIRO' | 'ALEXANDRIA' | null; role: string }>(
             users.map((user) => [user.id, user]),
         );
         const unreadMap = new Map(unreadGrouped.map((u) => [u.senderId, u._count._all]));
@@ -124,6 +125,7 @@ export class ChatService {
                     fullName: user.fullName,
                     jobTitle: user.jobTitle,
                     governorate: user.governorate,
+                    role: user.role,
                     unreadCount: unreadMap.get(partnerId) ?? 0,
                     lastMessage: latest.messageText,
                     lastMessageAt: latest.createdAt,
@@ -132,7 +134,31 @@ export class ChatService {
             .filter((chat): chat is NonNullable<typeof chat> => !!chat)
             .sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
 
-        return chatSummaries;
+        const supportExtras = users
+            .filter((user) => user.role === 'SUPPORT' && !latestByPartner.has(user.id))
+            .map((user) => ({
+                id: user.id,
+                fullName: user.fullName,
+                jobTitle: user.jobTitle,
+                governorate: user.governorate,
+                role: user.role,
+                unreadCount: 0,
+                lastMessage: undefined,
+                lastMessageAt: undefined,
+            }));
+
+        const combined = [...supportExtras, ...chatSummaries];
+
+        combined.sort((a, b) => {
+            const rankA = a.role === 'SUPPORT' ? 0 : 1;
+            const rankB = b.role === 'SUPPORT' ? 0 : 1;
+            if (rankA !== rankB) return rankA - rankB;
+            const timeA = a.lastMessageAt ? a.lastMessageAt.getTime() : 0;
+            const timeB = b.lastMessageAt ? b.lastMessageAt.getTime() : 0;
+            return timeB - timeA;
+        });
+
+        return combined;
     }
 
     async getEmployees(employeeId: string, search?: string, roleFilter?: string) {
