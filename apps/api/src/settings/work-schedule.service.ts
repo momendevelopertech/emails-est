@@ -14,17 +14,48 @@ const DEFAULT_SETTINGS: Prisma.WorkScheduleSettingsCreateInput = {
     ramadanEndDate: null,
 };
 
-const normalizeSettingsInput = (
+const getActiveMode = (
+    value: Prisma.WorkScheduleSettingsUpdateInput['activeMode'],
+): WorkScheduleMode | undefined => {
+    if (typeof value === 'string') {
+        if (value === WorkScheduleMode.NORMAL || value === WorkScheduleMode.RAMADAN) return value;
+        return WorkScheduleMode.NORMAL;
+    }
+    if (value && typeof value === 'object' && 'set' in value) {
+        const setValue = value.set;
+        if (setValue === WorkScheduleMode.NORMAL || setValue === WorkScheduleMode.RAMADAN) return setValue;
+    }
+    return undefined;
+};
+
+const normalizeSettingsUpdate = (
     data: Prisma.WorkScheduleSettingsUpdateInput,
 ): Prisma.WorkScheduleSettingsUpdateInput => {
-    const activeMode = data.activeMode;
-    if (typeof activeMode === 'string') {
-        if (activeMode === WorkScheduleMode.NORMAL || activeMode === WorkScheduleMode.RAMADAN) {
-            return { ...data, activeMode };
+    const activeMode = getActiveMode(data.activeMode);
+    return activeMode ? { ...data, activeMode } : data;
+};
+
+const toCreateInput = (
+    data: Prisma.WorkScheduleSettingsUpdateInput,
+): Prisma.WorkScheduleSettingsCreateInput => {
+    const result: Prisma.WorkScheduleSettingsCreateInput = { ...DEFAULT_SETTINGS };
+    const assignIfString = (key: keyof Prisma.WorkScheduleSettingsCreateInput) => {
+        const value = (data as Record<string, unknown>)[key];
+        if (typeof value === 'string' || value === null) {
+            (result as Record<string, unknown>)[key] = value;
         }
-        return { ...data, activeMode: WorkScheduleMode.NORMAL };
-    }
-    return data;
+    };
+    const activeMode = getActiveMode(data.activeMode);
+    if (activeMode) result.activeMode = activeMode;
+    assignIfString('weekdayStart');
+    assignIfString('weekdayEnd');
+    assignIfString('saturdayStart');
+    assignIfString('saturdayEnd');
+    assignIfString('ramadanStart');
+    assignIfString('ramadanEnd');
+    assignIfString('ramadanStartDate');
+    assignIfString('ramadanEndDate');
+    return result;
 };
 
 @Injectable()
@@ -42,10 +73,10 @@ export class WorkScheduleService {
     }
 
     async updateSettings(data: Prisma.WorkScheduleSettingsUpdateInput) {
-        const normalized = normalizeSettingsInput(data);
+        const normalized = normalizeSettingsUpdate(data);
         const existing = await this.prisma.workScheduleSettings.findFirst();
         if (!existing) {
-            return this.prisma.workScheduleSettings.create({ data: { ...DEFAULT_SETTINGS, ...normalized } });
+            return this.prisma.workScheduleSettings.create({ data: toCreateInput(normalized) });
         }
         return this.prisma.workScheduleSettings.update({
             where: { id: existing.id },
