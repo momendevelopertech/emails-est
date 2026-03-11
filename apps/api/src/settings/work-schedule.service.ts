@@ -15,6 +15,40 @@ const DEFAULT_SETTINGS: Prisma.WorkScheduleSettingsCreateInput = {
     pwaInstallEnabled: false,
 };
 
+const BASE_SELECT = {
+    id: true,
+    activeMode: true,
+    weekdayStart: true,
+    weekdayEnd: true,
+    saturdayStart: true,
+    saturdayEnd: true,
+    ramadanStart: true,
+    ramadanEnd: true,
+    ramadanStartDate: true,
+    ramadanEndDate: true,
+    createdAt: true,
+    updatedAt: true,
+};
+
+const FULL_SELECT = {
+    ...BASE_SELECT,
+    pwaInstallEnabled: true,
+};
+
+const isMissingColumnError = (error: unknown) => {
+    const err = error as { code?: string; message?: string };
+    if (err?.code === 'P2022') return true;
+    if (typeof err?.message === 'string' && err.message.includes('pwaInstallEnabled') && err.message.includes('does not exist')) {
+        return true;
+    }
+    return false;
+};
+
+const withPwaFallback = <T extends Record<string, any> | null>(data: T, value?: boolean) => {
+    if (!data) return data;
+    return { ...data, pwaInstallEnabled: value ?? false } as T & { pwaInstallEnabled: boolean };
+};
+
 const getActiveMode = (
     value: Prisma.WorkScheduleSettingsUpdateInput['activeMode'],
 ): WorkScheduleMode | undefined => {
@@ -67,10 +101,44 @@ const toCreateInput = (
 export class WorkScheduleService {
     constructor(private prisma: PrismaService) { }
 
+    private async safeFindFirst() {
+        try {
+            return await this.prisma.workScheduleSettings.findFirst({ select: FULL_SELECT });
+        } catch (error) {
+            if (!isMissingColumnError(error)) throw error;
+            const legacy = await this.prisma.workScheduleSettings.findFirst({ select: BASE_SELECT });
+            return withPwaFallback(legacy, false);
+        }
+    }
+
+    private async safeCreate(data: Prisma.WorkScheduleSettingsCreateInput) {
+        try {
+            return await this.prisma.workScheduleSettings.create({ data, select: FULL_SELECT });
+        } catch (error) {
+            if (!isMissingColumnError(error)) throw error;
+            const legacyData = { ...data } as Record<string, any>;
+            delete legacyData.pwaInstallEnabled;
+            const legacy = await this.prisma.workScheduleSettings.create({ data: legacyData, select: BASE_SELECT });
+            return withPwaFallback(legacy, false);
+        }
+    }
+
+    private async safeUpdate(id: string, data: Prisma.WorkScheduleSettingsUpdateInput) {
+        try {
+            return await this.prisma.workScheduleSettings.update({ where: { id }, data, select: FULL_SELECT });
+        } catch (error) {
+            if (!isMissingColumnError(error)) throw error;
+            const legacyData = { ...(data as Record<string, any>) };
+            delete legacyData.pwaInstallEnabled;
+            const legacy = await this.prisma.workScheduleSettings.update({ where: { id }, data: legacyData, select: BASE_SELECT });
+            return withPwaFallback(legacy, false);
+        }
+    }
+
     private async ensureDefaults() {
-        const existing = await this.prisma.workScheduleSettings.findFirst();
+        const existing = await this.safeFindFirst();
         if (existing) return existing;
-        return this.prisma.workScheduleSettings.create({ data: DEFAULT_SETTINGS });
+        return this.safeCreate(DEFAULT_SETTINGS);
     }
 
     async getSettings() {
@@ -79,13 +147,10 @@ export class WorkScheduleService {
 
     async updateSettings(data: Prisma.WorkScheduleSettingsUpdateInput) {
         const normalized = normalizeSettingsUpdate(data);
-        const existing = await this.prisma.workScheduleSettings.findFirst();
+        const existing = await this.safeFindFirst();
         if (!existing) {
-            return this.prisma.workScheduleSettings.create({ data: toCreateInput(normalized) });
+            return this.safeCreate(toCreateInput(normalized));
         }
-        return this.prisma.workScheduleSettings.update({
-            where: { id: existing.id },
-            data: normalized,
-        });
+        return this.safeUpdate(existing.id, normalized);
     }
 }
