@@ -195,7 +195,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
     };
 
     if (!ready || loading) {
-        return <PageLoader text={locale === 'ar' ? 'جاري تحميل الطلبات...' : 'Loading requests...'} />;
+        return <PageLoader text={t('loading')} />;
     }
 
     const tabs: Array<{ key: 'all' | 'leave' | 'permission' | 'absence' | 'mission'; label: string; count: number }> = [
@@ -277,9 +277,9 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 </div>
 
                 <div className="mt-4 overflow-x-auto">
-                    <table className="min-w-[980px] w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-ink/10 text-start">
+                    <table className={`min-w-[980px] w-full text-sm ${locale === 'ar' ? 'text-right' : 'text-left'}`}>
+                        <thead className={locale === 'ar' ? 'text-right' : 'text-left'}>
+                            <tr className="border-b border-ink/10">
                                 <th className="py-2">{t('employee')}</th>
                                 <th className="py-2">{t('requestType')}</th>
                                 <th className="py-2">{t('details')}</th>
@@ -288,7 +288,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                 <th className="py-2">{t('actions')}</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className={locale === 'ar' ? 'text-right' : 'text-left'}>
                             {pagedRows.map((row) => (
                                 <tr key={`${row.requestType}-${row.id}`} className="border-b border-ink/5">
                                     <td className="py-2">

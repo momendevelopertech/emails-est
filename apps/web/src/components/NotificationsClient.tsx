@@ -9,6 +9,9 @@ import PageLoader from './PageLoader';
 type NotificationItem = {
     id: string;
     title: string;
+    titleAr?: string | null;
+    body?: string | null;
+    bodyAr?: string | null;
     type: string;
     createdAt: string;
     isRead: boolean;
@@ -75,9 +78,10 @@ export default function NotificationsClient({ locale }: { locale: string }) {
     };
 
     const dateLocale = locale === 'ar' ? 'ar-EG' : 'en-US';
+    const tableAlignClass = locale === 'ar' ? 'text-right' : 'text-left';
 
     if (!ready || loading) {
-        return <PageLoader text={locale === 'ar' ? 'جاري تحميل الإشعارات...' : 'Loading notifications...'} />;
+        return <PageLoader text={t('loading')} />;
     }
 
     return (
@@ -114,19 +118,19 @@ export default function NotificationsClient({ locale }: { locale: string }) {
                 </div>
 
                 <div className="mt-4 overflow-x-auto">
-                    <table className="min-w-[760px] w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-ink/10 text-start">
+                    <table className={`min-w-[760px] w-full text-sm ${tableAlignClass}`}>
+                        <thead className={tableAlignClass}>
+                            <tr className="border-b border-ink/10">
                                 <th className="py-2">{t('titleColumn')}</th>
                                 <th className="py-2">{t('type')}</th>
                                 <th className="py-2">{t('date')}</th>
                                 <th className="py-2">{t('status')}</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className={tableAlignClass}>
                             {items.map((item) => (
                                 <tr key={item.id} className="border-b border-ink/5">
-                                    <td className="py-2">{item.title}</td>
+                                    <td className="py-2">{locale === 'ar' ? item.titleAr || item.title : item.title}</td>
                                     <td className="py-2">{typeLabels[item.type] || item.type}</td>
                                     <td className="py-2">{new Date(item.createdAt).toLocaleString(dateLocale)}</td>
                                     <td className="py-2">{item.isRead ? t('read') : t('unread')}</td>

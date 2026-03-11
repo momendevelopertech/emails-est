@@ -154,6 +154,7 @@
   },
   "notifications": {
     "title": "الإشعارات",
+    "loading": "جاري تحميل الإشعارات...",
     "new": "جديد",
     "allCaughtUp": "لا توجد إشعارات جديدة.",
     "markAllRead": "تحديد الكل كمقروء",
@@ -291,6 +292,7 @@
   },
   "requestsPage": {
     "title": "الطلبات",
+    "loading": "جاري تحميل الطلبات...",
     "tabAll": "الكل",
     "tabLeave": "الإجازات",
     "tabPermission": "الأذونات",

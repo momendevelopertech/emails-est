@@ -266,9 +266,9 @@ export default function EmployeesClient({ locale }: { locale: string }) {
                 </div>
 
                 <div className="mt-4 overflow-x-auto">
-                    <table className="min-w-[920px] w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-ink/10 text-start">
+                    <table className={`min-w-[920px] w-full text-sm ${locale === 'ar' ? 'text-right' : 'text-left'}`}>
+                        <thead className={locale === 'ar' ? 'text-right' : 'text-left'}>
+                            <tr className="border-b border-ink/10">
                                 <th className="py-2">#{t('employeeNumber')}</th>
                                 <th className="py-2">{t('username')}</th>
                                 <th className="py-2">{t('fullName')}</th>
@@ -281,7 +281,7 @@ export default function EmployeesClient({ locale }: { locale: string }) {
                                 {canViewEmployees && <th className="py-2">{t('action')}</th>}
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className={locale === 'ar' ? 'text-right' : 'text-left'}>
                             {employees.map((emp) => (
                                 <tr key={emp.id} className="border-b border-ink/5">
                                     <td className="py-2">{emp.employeeNumber}</td>

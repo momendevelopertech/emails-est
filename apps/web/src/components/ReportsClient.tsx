@@ -124,9 +124,9 @@ export default function ReportsClient({ locale }: { locale: string }) {
                 </div>
 
                 <div className="mt-4 overflow-x-auto">
-                    <table className="min-w-[920px] w-full text-sm">
-                        <thead>
-                            <tr className="border-b border-ink/10 text-start">
+                    <table className={`min-w-[920px] w-full text-sm ${locale === 'ar' ? 'text-right' : 'text-left'}`}>
+                        <thead className={locale === 'ar' ? 'text-right' : 'text-left'}>
+                            <tr className="border-b border-ink/10">
                                 <th className="py-2">{t('employee')}</th>
                                 <th className="py-2">{t('type')}</th>
                                 <th className="py-2">{t('status')}</th>
@@ -134,7 +134,7 @@ export default function ReportsClient({ locale }: { locale: string }) {
                                 <th className="py-2">{t('department')}</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className={locale === 'ar' ? 'text-right' : 'text-left'}>
                             {data.map((item) => {
                                 const employee = item.user?.fullName || item.fullName || '-';
                                 const type = item.leaveType

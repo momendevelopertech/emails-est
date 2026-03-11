@@ -6,6 +6,8 @@ type NotificationItem = {
     id: string;
     title: string;
     body: string;
+    titleAr?: string | null;
+    bodyAr?: string | null;
     createdAt: string;
     isRead: boolean;
 };
@@ -24,8 +26,8 @@ export default function NotificationsPanel({ items, locale }: { items: Notificat
                 {items.length === 0 && <p className="text-sm text-ink/60">{t('allCaughtUp')}</p>}
                 {items.slice(0, 5).map((item) => (
                     <div key={item.id} className="rounded-xl border border-ink/10 bg-white/70 p-3">
-                        <p className="text-sm font-semibold">{item.title}</p>
-                        <p className="text-xs text-ink/60">{item.body}</p>
+                        <p className="text-sm font-semibold">{locale === 'ar' ? item.titleAr || item.title : item.title}</p>
+                        <p className="text-xs text-ink/60">{locale === 'ar' ? item.bodyAr || item.body : item.body}</p>
                         <p className="mt-2 text-[11px] text-ink/40">
                             {new Date(item.createdAt).toLocaleString(dateLocale)}
                         </p>

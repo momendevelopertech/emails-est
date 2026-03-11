@@ -152,6 +152,7 @@
   },
   "notifications": {
     "title": "Notifications",
+    "loading": "Loading notifications...",
     "new": "new",
     "allCaughtUp": "All caught up.",
     "markAllRead": "Mark all read",
@@ -289,6 +290,7 @@
   },
   "requestsPage": {
     "title": "Requests",
+    "loading": "Loading requests...",
     "tabAll": "All",
     "tabLeave": "Leave",
     "tabPermission": "Permission",
