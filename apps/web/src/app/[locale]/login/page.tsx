@@ -141,6 +141,8 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
                         {params.locale === 'ar' ? 'البريد الإلكتروني / اسم المستخدم' : 'Email / Username'}
                         <input
                             type="text"
+                            name="identifier"
+                            autoComplete="username"
                             className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
                             value={identifier}
                             onChange={(e) => setIdentifier(e.target.value)}
@@ -154,6 +156,8 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
                         <div className="relative mt-1">
                             <input
                                 type={showPassword ? 'text' : 'password'}
+                                name="password"
+                                autoComplete="current-password"
                                 className="w-full rounded-xl border border-ink/20 bg-white px-3 py-2 pe-11"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
@@ -198,4 +202,3 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
         </div>
     );
 }
-

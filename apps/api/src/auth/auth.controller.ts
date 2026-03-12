@@ -9,7 +9,7 @@ import {
     HttpStatus,
     Get,
 } from '@nestjs/common';
-import { Request, Response } from 'express';
+import { CookieOptions, Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto, ChangePasswordDto, ResetPasswordRequestDto, ResetPasswordDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -34,6 +34,31 @@ export class AuthController {
         };
     }
 
+    private getHttpOnlyCookieOptions(maxAge: number): CookieOptions {
+        const { sameSite, secure, domain, path } = getCookieSettings();
+
+        return {
+            httpOnly: true,
+            secure,
+            sameSite,
+            maxAge,
+            path,
+            ...(domain ? { domain } : {}),
+        };
+    }
+
+    private getClearCookieOptions(): CookieOptions {
+        const { sameSite, secure, domain, path } = getCookieSettings();
+
+        return {
+            httpOnly: true,
+            secure,
+            sameSite,
+            path,
+            ...(domain ? { domain } : {}),
+        };
+    }
+
     @Post('login')
     @UseGuards(ThrottlerGuard)
     @HttpCode(HttpStatus.OK)
@@ -47,47 +72,30 @@ export class AuthController {
             req.headers['user-agent'],
         );
         const ages = this.getCookieAges(rememberMe);
-        const { sameSite, secure } = getCookieSettings();
 
         // Set HttpOnly cookies
-        res.cookie('access_token', result.accessToken, {
-            httpOnly: true,
-            secure,
-            sameSite,
-            maxAge: ages.accessMs,
-        });
-
-        res.cookie('refresh_token', result.refreshToken, {
-            httpOnly: true,
-            secure,
-            sameSite,
-            maxAge: ages.refreshMs,
-        });
+        res.cookie('access_token', result.accessToken, this.getHttpOnlyCookieOptions(ages.accessMs));
+        res.cookie('refresh_token', result.refreshToken, this.getHttpOnlyCookieOptions(ages.refreshMs));
 
         if (rememberMe) {
-            res.cookie('remember_me', '1', {
-                httpOnly: true,
-                secure,
-                sameSite,
-                maxAge: ages.refreshMs,
-            });
+            res.cookie('remember_me', '1', this.getHttpOnlyCookieOptions(ages.refreshMs));
         } else {
-            res.clearCookie('remember_me');
+            res.clearCookie('remember_me', this.getClearCookieOptions());
         }
 
         return { user: result.user };
     }
 
     @Post('logout')
-    @UseGuards(JwtAuthGuard)
     @HttpCode(HttpStatus.OK)
     async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
         const refreshToken = req.cookies?.refresh_token;
-        await this.authService.logout((req as any).user.id, refreshToken);
+        await this.authService.logout((req as any).user?.id, refreshToken);
 
-        res.clearCookie('access_token');
-        res.clearCookie('refresh_token');
-        res.clearCookie('remember_me');
+        const clearCookieOptions = this.getClearCookieOptions();
+        res.clearCookie('access_token', clearCookieOptions);
+        res.clearCookie('refresh_token', clearCookieOptions);
+        res.clearCookie('remember_me', clearCookieOptions);
 
         return { message: 'Logged out successfully' };
     }
@@ -99,21 +107,9 @@ export class AuthController {
         const rememberMe = req.cookies?.remember_me === '1';
         const tokens = await this.authService.refreshTokens(refreshToken, rememberMe);
         const ages = this.getCookieAges(rememberMe);
-        const { sameSite, secure } = getCookieSettings();
 
-        res.cookie('access_token', tokens.accessToken, {
-            httpOnly: true,
-            secure,
-            sameSite,
-            maxAge: ages.accessMs,
-        });
-
-        res.cookie('refresh_token', tokens.refreshToken, {
-            httpOnly: true,
-            secure,
-            sameSite,
-            maxAge: ages.refreshMs,
-        });
+        res.cookie('access_token', tokens.accessToken, this.getHttpOnlyCookieOptions(ages.accessMs));
+        res.cookie('refresh_token', tokens.refreshToken, this.getHttpOnlyCookieOptions(ages.refreshMs));
 
         return { success: true };
     }

@@ -18,17 +18,32 @@ async function bootstrap() {
     app.use(cookieParser(process.env.CSRF_SECRET || 'sphinx-csrf'));
     const frontendOrigin = getFrontendOrigin();
     const allowedOrigins = getAllowedOrigins();
-    const { sameSite, secure } = getCookieSettings();
+    const { sameSite, secure, domain, path } = getCookieSettings();
 
-    app.use(
-        csurf({
-            cookie: {
-                httpOnly: true,
-                secure,
-                sameSite,
-            },
-        }),
-    );
+    const csrfProtection = csurf({
+        cookie: {
+            key: 'csrf_secret',
+            httpOnly: true,
+            secure,
+            sameSite,
+            path,
+            ...(domain ? { domain } : {}),
+        },
+    });
+
+    app.use((req, res, next) => {
+        const method = (req.method || '').toUpperCase();
+        const path = req.path || '';
+        const shouldSkipCsrf =
+            method === 'POST' &&
+            (path === '/api/auth/refresh' || path === '/api/auth/logout');
+
+        if (shouldSkipCsrf) {
+            return next();
+        }
+
+        return csrfProtection(req, res, next);
+    });
 
     app.use((err, req, res, next) => {
         if (err && err.code === 'EBADCSRFTOKEN') {

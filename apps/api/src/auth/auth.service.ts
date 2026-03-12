@@ -127,16 +127,27 @@ export class AuthService {
         };
     }
 
-    async logout(userId: string, refreshToken: string) {
-        await this.prisma.refreshToken.updateMany({
-            where: { userId, token: refreshToken },
-            data: { isRevoked: true },
-        });
+    async logout(userId: string | undefined, refreshToken: string | undefined) {
+        if (refreshToken) {
+            await this.prisma.refreshToken.updateMany({
+                where: {
+                    token: refreshToken,
+                    ...(userId ? { userId } : {}),
+                },
+                data: { isRevoked: true },
+            });
+        }
 
-        await this.auditService.log({ userId, action: 'LOGOUT' });
+        if (userId) {
+            await this.auditService.log({ userId, action: 'LOGOUT' });
+        }
     }
 
     async refreshTokens(refreshToken: string, rememberMe = false) {
+        if (!refreshToken) {
+            throw new UnauthorizedException('Missing refresh token');
+        }
+
         const stored = await this.prisma.refreshToken.findUnique({
             where: { token: refreshToken },
             include: { user: true },
