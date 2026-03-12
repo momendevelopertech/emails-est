@@ -48,6 +48,8 @@ export const clearApiCache = () => {
     responseCache.clear();
 };
 
+const defaultAdapter = axios.getAdapter(axios.defaults.adapter);
+
 api.defaults.adapter = async (config) => {
     const method = (config.method || 'get').toLowerCase();
     const skipCache = config.headers?.['x-no-cache'];
@@ -67,8 +69,11 @@ api.defaults.adapter = async (config) => {
         }
     }
 
-    const adapter = axios.getAdapter(config.adapter || axios.defaults.adapter);
-    const response = await adapter(config);
+    const requestAdapter =
+        config.adapter && config.adapter !== api.defaults.adapter
+            ? axios.getAdapter(config.adapter)
+            : defaultAdapter;
+    const response = await requestAdapter(config);
 
     if (method === 'get' && !skipCache) {
         const key = getCacheKey(config);
