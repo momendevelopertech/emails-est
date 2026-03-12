@@ -24,6 +24,15 @@ export const getPublicApiUrl = () =>
         const isBrowser = typeof window !== 'undefined';
         const isAbsoluteUrl = /^https?:\/\//i.test(configuredUrl);
         const isLocalAbsolute = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(configuredUrl);
+        const isCurrentHostLocal = isBrowser
+            ? /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname)
+            : false;
+
+        // On deployed environments, fallback local URLs break login and other auth calls.
+        // Route browser traffic through Next.js rewrites instead.
+        if (isBrowser && isLocalAbsolute && !isCurrentHostLocal) {
+            return '/api';
+        }
 
         if (isBrowser && isAbsoluteUrl && !isLocalAbsolute) {
             return '/api';
@@ -31,4 +40,3 @@ export const getPublicApiUrl = () =>
 
         return configuredUrl;
     })();
-
