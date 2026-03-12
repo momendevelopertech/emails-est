@@ -64,8 +64,9 @@ export default function CalendarView({
     const [view, setView] = useState<View>('month');
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
     const [isMobile, setIsMobile] = useState(false);
-    const weekdayFormat = (date: Date) =>
-        format(date, locale === 'ar' ? 'EEEE' : 'EEEE', { locale: locale === 'ar' ? arSA : enUS });
+    const calendarLocale = locale === 'ar' ? arSA : enUS;
+    const weekdayFormat = (date: Date) => format(date, locale === 'ar' ? 'EEE' : 'EEEEEE', { locale: calendarLocale });
+    const dayFormat = (date: Date) => format(date, locale === 'ar' ? 'EEE d/M' : 'EEE M/d', { locale: calendarLocale });
 
     const eventPropGetter = (event: CalendarEvent) => {
         const key = event.resource?.key;
@@ -80,17 +81,16 @@ export default function CalendarView({
     };
 
     const title = useMemo(() => {
-        const dateLocale = locale === 'ar' ? arSA : enUS;
         if (view === 'month') {
-            return format(currentDate, 'MMMM yyyy', { locale: dateLocale });
+            return format(currentDate, 'MMMM yyyy', { locale: calendarLocale });
         }
         if (view === 'week') {
             const start = startOfWeek(currentDate, { weekStartsOn: 6 });
             const end = endOfWeek(currentDate, { weekStartsOn: 6 });
-            return `${format(start, 'd MMM', { locale: dateLocale })} - ${format(end, 'd MMM yyyy', { locale: dateLocale })}`;
+            return `${format(start, 'd MMM', { locale: calendarLocale })} - ${format(end, 'd MMM yyyy', { locale: calendarLocale })}`;
         }
-        return format(currentDate, 'PPPP', { locale: dateLocale });
-    }, [currentDate, locale, view]);
+        return format(currentDate, 'PPPP', { locale: calendarLocale });
+    }, [calendarLocale, currentDate, view]);
 
     const navigate = (direction: 'prev' | 'next') => {
         const multiplier = direction === 'next' ? 1 : -1;
@@ -184,7 +184,7 @@ export default function CalendarView({
                 startAccessor="start"
                 endAccessor="end"
                 eventPropGetter={eventPropGetter}
-                formats={{ weekdayFormat }}
+                formats={{ weekdayFormat, dayFormat }}
                 className="rbc-sphinx"
                 style={{ height: isMobile ? 420 : 520 }}
                 dayPropGetter={(date) => {
