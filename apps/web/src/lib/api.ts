@@ -3,6 +3,7 @@ import { getPublicApiUrl } from './public-urls';
 
 let csrfToken: string | null = null;
 let refreshPromise: Promise<void> | null = null;
+let refreshDisabled = false;
 
 export class AppApiError extends Error {
     constructor(
@@ -17,6 +18,10 @@ export class AppApiError extends Error {
 
 export const setCsrfToken = (token: string) => {
     csrfToken = token;
+};
+
+const resetRefreshState = () => {
+    refreshDisabled = false;
 };
 
 const api = axios.create({
@@ -52,6 +57,7 @@ export const clearApiCache = () => {
 export const clearBrowserRuntimeCache = async () => {
     clearApiCache();
     csrfToken = null;
+    refreshDisabled = false;
 
     if (typeof window === 'undefined') return;
 
@@ -110,9 +116,21 @@ api.defaults.adapter = async (config) => {
 };
 
 const ensureRefresh = async () => {
+    if (refreshDisabled) {
+        throw new AppApiError(401, 'Session expired. Please sign in again.');
+    }
+
     if (!refreshPromise) {
-        refreshPromise = api.post('/auth/refresh', {})
-            .then(() => undefined)
+        refreshPromise = (async () => {
+            if (!csrfToken) {
+                await api.get('/auth/csrf');
+            }
+
+            await api.post('/auth/refresh', {});
+        })()
+            .then(() => {
+                refreshDisabled = false;
+            })
             .finally(() => {
                 refreshPromise = null;
             });
@@ -137,7 +155,12 @@ api.interceptors.response.use((response) => {
         response.config.url?.includes('/auth/login') ||
         response.config.url?.includes('/auth/logout')
     ) {
+        resetRefreshState();
         clearApiCache();
+    }
+
+    if (response.config.url?.includes('/auth/refresh')) {
+        resetRefreshState();
     }
 
     return response;
@@ -167,8 +190,17 @@ api.interceptors.response.use((response) => {
         !original.url?.includes('/auth/csrf')
     ) {
         original._retry = true;
-        await ensureRefresh();
-        return api(original);
+        try {
+            await ensureRefresh();
+            return api(original);
+        } catch (refreshError: any) {
+            const refreshStatus = refreshError?.response?.status;
+            if (refreshStatus === 401 || refreshStatus === 403 || refreshStatus === 500) {
+                refreshDisabled = true;
+                csrfToken = null;
+            }
+            return Promise.reject(refreshError);
+        }
     }
 
     if (error?.code === 'ECONNABORTED') {
