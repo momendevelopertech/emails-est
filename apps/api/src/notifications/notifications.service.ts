@@ -201,20 +201,33 @@ export class NotificationsService {
         }
     }
 
-    async notifyLeaveAction(leaveRequest: any, action: 'submitted' | 'approved' | 'rejected') {
+    async notifyLeaveAction(
+        leaveRequest: any,
+        action: 'submitted' | 'verified' | 'managerApproved' | 'approved' | 'rejected',
+    ) {
         const user = await this.prisma.user.findUnique({ where: { id: leaveRequest.userId } });
         if (!user) return;
 
         const titles = {
             submitted: { en: 'Leave Request Submitted', ar: 'تم تقديم طلب الإجازة' },
+            verified: { en: 'Leave Request Verified', ar: 'تم التحقق من طلب الإجازة' },
+            managerApproved: { en: 'Leave Approved by Manager', ar: 'موافقة المدير على طلب الإجازة' },
             approved: { en: 'Leave Request Approved', ar: 'تمت الموافقة على طلب الإجازة' },
             rejected: { en: 'Leave Request Rejected', ar: 'تم رفض طلب الإجازة' },
         };
 
         const bodies = {
             submitted: {
-                en: `Your ${leaveRequest.leaveType} leave request has been submitted and is pending approval.`,
-                ar: `تم تقديم طلب إجازتك وهو في انتظار الموافقة.`,
+                en: `Your ${leaveRequest.leaveType} leave request has been submitted and sent to the secretary.`,
+                ar: `تم إرسال طلب الإجازة إلى السكرتارية.`,
+            },
+            verified: {
+                en: 'Your leave request was verified and sent to your manager.',
+                ar: 'تم التحقق من طلب إجازتك وإرساله إلى المدير.',
+            },
+            managerApproved: {
+                en: 'Your leave request was approved by your manager and sent to HR.',
+                ar: 'تمت موافقة المدير على طلب الإجازة وتم إرساله إلى الموارد البشرية.',
             },
             approved: {
                 en: `Your leave request from ${leaveRequest.startDate?.toLocaleDateString()} has been approved.`,
@@ -226,9 +239,17 @@ export class NotificationsService {
             },
         };
 
+        const typeMap: Record<typeof action, string> = {
+            submitted: 'LEAVE_REQUEST',
+            verified: 'LEAVE_REQUEST',
+            managerApproved: 'LEAVE_REQUEST',
+            approved: 'LEAVE_APPROVED',
+            rejected: 'LEAVE_REJECTED',
+        };
+
         await this.createInApp({
             receiverId: user.id,
-            type: action === 'submitted' ? 'LEAVE_REQUEST' : action === 'approved' ? 'LEAVE_APPROVED' : 'LEAVE_REJECTED',
+            type: typeMap[action],
             title: titles[action].en,
             titleAr: titles[action].ar,
             body: bodies[action].en,
@@ -236,14 +257,82 @@ export class NotificationsService {
             metadata: { leaveRequestId: leaveRequest.id },
         });
 
-        if (user.phone) {
-            await this.sendWhatsApp(user.phone, `SPHINX HR: ${titles[action].en}\n${bodies[action].en}`);
-        }
+        if (['submitted', 'approved', 'rejected'].includes(action)) {
+            if (user.phone) {
+                await this.sendWhatsApp(user.phone, `SPHINX HR: ${titles[action].en}\n${bodies[action].en}`);
+            }
 
-        await this.sendEmail({
-            to: user.email,
-            subject: `SPHINX HR - ${titles[action].en}`,
-            html: `<div style="font-family:sans-serif;max-width:600px"><h2>${titles[action].en}</h2><p>${bodies[action].en}</p><p>Login to SPHINX HR for details.</p></div>`,
+            await this.sendEmail({
+                to: user.email,
+                subject: `SPHINX HR - ${titles[action].en}`,
+                html: `<div style="font-family:sans-serif;max-width:600px"><h2>${titles[action].en}</h2><p>${bodies[action].en}</p><p>Login to SPHINX HR for details.</p></div>`,
+            });
+        }
+    }
+
+    async notifyPermissionAction(
+        permissionRequest: any,
+        action: 'submitted' | 'verified' | 'managerApproved' | 'approved' | 'rejected',
+        options?: { comment?: string; sendExternal?: boolean },
+    ) {
+        const user = permissionRequest.user
+            || (await this.prisma.user.findUnique({ where: { id: permissionRequest.userId } }));
+        if (!user) return;
+
+        const titles = {
+            submitted: { en: 'Permission Request Submitted', ar: 'تم إرسال طلب الإذن' },
+            verified: { en: 'Permission Request Verified', ar: 'تم التحقق من طلب الإذن' },
+            managerApproved: { en: 'Permission Approved by Manager', ar: 'موافقة المدير على طلب الإذن' },
+            approved: { en: 'Permission Approved', ar: 'تمت الموافقة على طلب الإذن' },
+            rejected: { en: 'Permission Rejected', ar: 'تم رفض طلب الإذن' },
+        };
+
+        const bodies = {
+            submitted: {
+                en: 'Your permission request has been submitted and sent to the secretary.',
+                ar: 'تم إرسال طلب الإذن إلى السكرتارية.',
+            },
+            verified: {
+                en: 'Your permission request was verified and sent to your manager.',
+                ar: 'تم التحقق من طلب الإذن وإرساله إلى المدير.',
+            },
+            managerApproved: {
+                en: 'Your permission request was approved by your manager and sent to HR.',
+                ar: 'تمت موافقة المدير على طلب الإذن وتم إرساله إلى الموارد البشرية.',
+            },
+            approved: {
+                en: 'Your permission request has been approved.',
+                ar: 'تمت الموافقة على طلب الإذن.',
+            },
+            rejected: {
+                en: 'Your permission request has been rejected. Please contact your manager.',
+                ar: 'تم رفض طلب الإذن. يرجى التواصل مع مديرك.',
+            },
+        };
+
+        const typeMap: Record<typeof action, string> = {
+            submitted: 'PERMISSION_REQUEST',
+            verified: 'PERMISSION_REQUEST',
+            managerApproved: 'PERMISSION_REQUEST',
+            approved: 'PERMISSION_APPROVED',
+            rejected: 'PERMISSION_REJECTED',
+        };
+
+        const body = options?.comment?.trim() ? options.comment : bodies[action].en;
+        const bodyAr = options?.comment?.trim() ? options.comment : bodies[action].ar;
+
+        await this.createInApp({
+            receiverId: user.id,
+            type: typeMap[action],
+            title: titles[action].en,
+            titleAr: titles[action].ar,
+            body,
+            bodyAr,
+            metadata: { permissionRequestId: permissionRequest.id },
         });
+
+        if (options?.sendExternal && user.phone) {
+            await this.sendWhatsApp(user.phone, `SPHINX HR: ${titles[action].en}\n${body}`);
+        }
     }
 }

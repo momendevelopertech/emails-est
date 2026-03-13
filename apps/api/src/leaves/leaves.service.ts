@@ -224,7 +224,15 @@ export class LeavesService {
         return this.prisma.leaveRequest.findMany({
             where,
             include: {
-                user: { select: { fullName: true, fullNameAr: true, employeeNumber: true, department: true } },
+                user: {
+                    select: {
+                        fullName: true,
+                        fullNameAr: true,
+                        employeeNumber: true,
+                        governorate: true,
+                        department: { select: { id: true, name: true, nameAr: true } },
+                    },
+                },
             },
             orderBy: { createdAt: 'desc' },
         });
@@ -312,9 +320,35 @@ export class LeavesService {
             entityId: id,
         });
 
-        await this.notificationsService.notifyLeaveAction(request, action === 'approve' ? 'approved' : 'rejected');
+        if (action === 'reject') {
+            await this.notificationsService.notifyLeaveAction(request, 'rejected');
+            return updated;
+        }
 
-        if (newStatus === 'MANAGER_APPROVED' && updateData.approvedByMgrId) {
+        if (role === 'BRANCH_SECRETARY') {
+            await this.notificationsService.notifyLeaveAction(request, 'verified');
+
+            if (request.user.departmentId) {
+                const managers = await this.prisma.user.findMany({
+                    where: { role: 'MANAGER', departmentId: request.user.departmentId },
+                });
+
+                for (const manager of managers) {
+                    await this.notificationsService.createInApp({
+                        receiverId: manager.id,
+                        senderId: actorId,
+                        type: 'LEAVE_REQUEST',
+                        title: 'Leave Request Needs Approval',
+                        titleAr: 'Leave Request Needs Approval',
+                        body: `${request.user.fullName} has a leave request verified by the secretary.`,
+                        bodyAr: `${request.user.fullName} has a leave request verified by the secretary.`,
+                        metadata: { leaveRequestId: id },
+                    });
+                }
+            }
+        } else if (role === 'MANAGER') {
+            await this.notificationsService.notifyLeaveAction(request, 'managerApproved');
+
             const hrAdmins = await this.prisma.user.findMany({
                 where: { role: { in: ['HR_ADMIN', 'SUPER_ADMIN'] } },
             });
@@ -329,6 +363,8 @@ export class LeavesService {
                     metadata: { leaveRequestId: id },
                 });
             }
+        } else if (role === 'HR_ADMIN' || role === 'SUPER_ADMIN') {
+            await this.notificationsService.notifyLeaveAction(request, 'approved');
         }
 
         return updated;

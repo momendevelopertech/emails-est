@@ -6,7 +6,17 @@ import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import { enumLabels } from '@/lib/enum-labels';
+import { usePusherChannel } from '@/lib/use-pusher-channel';
 import PageLoader from './PageLoader';
+
+type Department = { id: string; name: string; nameAr?: string | null };
+type RequestUser = {
+    fullName: string;
+    fullNameAr?: string | null;
+    employeeNumber: string;
+    governorate?: 'CAIRO' | 'ALEXANDRIA' | null;
+    department?: Department | null;
+};
 
 type LeaveRequest = {
     id: string;
@@ -16,7 +26,7 @@ type LeaveRequest = {
     createdAt: string;
     status: string;
     approvedByMgrId?: string | null;
-    user: { fullName: string; employeeNumber: string };
+    user: RequestUser;
 };
 
 type PermissionRequest = {
@@ -27,7 +37,7 @@ type PermissionRequest = {
     hoursUsed: number;
     status: string;
     approvedByMgrId?: string | null;
-    user: { fullName: string; employeeNumber: string };
+    user: RequestUser;
 };
 
 type RequestRow = {
@@ -43,6 +53,8 @@ type RequestRow = {
     details: string;
     printUrl: string;
     approvedByMgrId?: string | null;
+    employeeGovernorate?: 'CAIRO' | 'ALEXANDRIA' | null;
+    employeeDepartmentId?: string | null;
 };
 
 type LatenessItem = {
@@ -64,9 +76,17 @@ type LatenessResponse = {
 
 export default function RequestsClient({ locale }: { locale: string }) {
     const t = useTranslations('requestsPage');
+    const tEmployees = useTranslations('employees');
     const { user, ready } = useRequireAuth(locale);
+    const role = user?.role;
+    const isSecretary = role === 'BRANCH_SECRETARY';
+    const isManager = role === 'MANAGER';
+    const isHr = role === 'HR_ADMIN' || role === 'SUPER_ADMIN';
+    const canManage = isHr || isManager || isSecretary;
+    const canAdmin = isHr;
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
     const [permissions, setPermissions] = useState<PermissionRequest[]>([]);
+    const [departments, setDepartments] = useState<Department[]>([]);
     const [latenessItems, setLatenessItems] = useState<LatenessItem[]>([]);
     const [latenessSummary, setLatenessSummary] = useState({
         totalCount: 0,
@@ -86,6 +106,8 @@ export default function RequestsClient({ locale }: { locale: string }) {
         search: '',
         from: '',
         to: '',
+        governorate: '',
+        departmentId: '',
     });
     const [salary, setSalary] = useState('');
 
@@ -109,6 +131,33 @@ export default function RequestsClient({ locale }: { locale: string }) {
         if (!ready) return;
         fetchAll();
     }, [fetchAll, ready]);
+
+    const fetchDepartments = useCallback(async () => {
+        if (!canAdmin) return;
+        const res = await api.get('/departments');
+        const items = Array.isArray(res.data)
+            ? res.data.map((dept: Department) => ({
+                id: dept.id,
+                name: dept.name,
+                nameAr: dept.nameAr ?? null,
+            }))
+            : [];
+        setDepartments(items);
+    }, [canAdmin]);
+
+    useEffect(() => {
+        if (!ready || !canAdmin) return;
+        fetchDepartments();
+    }, [canAdmin, fetchDepartments, ready]);
+
+    const notificationHandlers = useMemo(
+        () => ({
+            notification: () => fetchAll(),
+        }),
+        [fetchAll],
+    );
+
+    usePusherChannel(user ? `user-${user.id}` : null, notificationHandlers);
 
     const formatDateOnly = (value: Date) => {
         const year = value.getFullYear();
@@ -166,13 +215,6 @@ export default function RequestsClient({ locale }: { locale: string }) {
         await fetchLateness();
     };
 
-    const role = user?.role;
-    const isSecretary = role === 'BRANCH_SECRETARY';
-    const isManager = role === 'MANAGER';
-    const isHr = role === 'HR_ADMIN' || role === 'SUPER_ADMIN';
-    const canManage = isHr || isManager || isSecretary;
-    const canAdmin = isHr;
-
     const approveLeave = (id: string) => api.patch(`/leaves/${id}/approve`).then(fetchAll);
     const rejectLeave = (id: string) => api.patch(`/leaves/${id}/reject`).then(fetchAll);
     const cancelLeave = (id: string) => api.patch(`/leaves/${id}/cancel`).then(fetchAll);
@@ -190,7 +232,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 requestType: 'leave',
                 leaveType: leave.leaveType,
                 subtype: enumLabels.leaveType(leave.leaveType, locale as 'en' | 'ar'),
-                employeeName: leave.user.fullName,
+                employeeName: locale === 'ar' ? leave.user.fullNameAr || leave.user.fullName : leave.user.fullName,
                 employeeNumber: leave.user.employeeNumber,
                 requestDate: leave.startDate,
                 createdAt: leave.createdAt,
@@ -198,6 +240,8 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 details: `${new Date(leave.startDate).toLocaleDateString(dateLocale)} - ${new Date(leave.endDate).toLocaleDateString(dateLocale)}`,
                 printUrl: `/${locale}/requests/print/leave/${leave.id}`,
                 approvedByMgrId: leave.approvedByMgrId,
+                employeeGovernorate: leave.user.governorate ?? null,
+                employeeDepartmentId: leave.user.department?.id ?? null,
             })),
         [dateLocale, leaves, locale],
     );
@@ -208,7 +252,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 id: perm.id,
                 requestType: 'permission',
                 subtype: enumLabels.permissionType(perm.permissionType, locale as 'en' | 'ar'),
-                employeeName: perm.user.fullName,
+                employeeName: locale === 'ar' ? perm.user.fullNameAr || perm.user.fullName : perm.user.fullName,
                 employeeNumber: perm.user.employeeNumber,
                 requestDate: perm.requestDate,
                 createdAt: perm.createdAt,
@@ -216,6 +260,8 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 details: `${perm.hoursUsed}h`,
                 printUrl: `/${locale}/requests/print/permission/${perm.id}`,
                 approvedByMgrId: perm.approvedByMgrId,
+                employeeGovernorate: perm.user.governorate ?? null,
+                employeeDepartmentId: perm.user.department?.id ?? null,
             })),
         [locale, permissions],
     );
@@ -252,9 +298,11 @@ export default function RequestsClient({ locale }: { locale: string }) {
             const searchOk = !filters.search || searchValue.includes(filters.search.toLowerCase());
             const fromOk = !filters.from || new Date(row.requestDate) >= new Date(filters.from);
             const toOk = !filters.to || new Date(row.requestDate) <= new Date(`${filters.to}T23:59:59`);
-            return statusOk && searchOk && fromOk && toOk;
+            const governorateOk = !filters.governorate || row.employeeGovernorate === filters.governorate;
+            const departmentOk = !filters.departmentId || row.employeeDepartmentId === filters.departmentId;
+            return statusOk && searchOk && fromOk && toOk && governorateOk && departmentOk;
         });
-    }, [filters.from, filters.search, filters.status, filters.to]);
+    }, [filters.departmentId, filters.from, filters.governorate, filters.search, filters.status, filters.to]);
 
     const filteredRows = useMemo(() => {
         const rows = applyFilters(rowsByTab[activeTab] || []);
@@ -267,7 +315,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
 
     useEffect(() => {
         setPage(1);
-    }, [activeTab, filters.from, filters.search, filters.status, filters.to, limit]);
+    }, [activeTab, filters.departmentId, filters.from, filters.governorate, filters.search, filters.status, filters.to, limit]);
 
     useEffect(() => {
         if (page > totalPages) {
@@ -363,7 +411,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 </div>
 
                 {activeTab !== 'lateness' && (
-                    <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+                    <div className={`mt-4 grid gap-2 md:grid-cols-2 ${canAdmin ? 'xl:grid-cols-7' : 'xl:grid-cols-5'}`}>
                         <input
                             className="rounded-xl border border-ink/20 bg-white px-3 py-2"
                             placeholder={t('search')}
@@ -382,6 +430,31 @@ export default function RequestsClient({ locale }: { locale: string }) {
                             <option value="REJECTED">{enumLabels.status('REJECTED', locale as 'en' | 'ar')}</option>
                             <option value="CANCELLED">{enumLabels.status('CANCELLED', locale as 'en' | 'ar')}</option>
                         </select>
+                        {canAdmin && (
+                            <select
+                                className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                value={filters.governorate}
+                                onChange={(e) => setFilters((prev) => ({ ...prev, governorate: e.target.value }))}
+                            >
+                                <option value="">{t('allBranches')}</option>
+                                <option value="CAIRO">{tEmployees('govCairo')}</option>
+                                <option value="ALEXANDRIA">{tEmployees('govAlexandria')}</option>
+                            </select>
+                        )}
+                        {canAdmin && (
+                            <select
+                                className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                value={filters.departmentId}
+                                onChange={(e) => setFilters((prev) => ({ ...prev, departmentId: e.target.value }))}
+                            >
+                                <option value="">{t('allDepartments')}</option>
+                                {departments.map((dept) => (
+                                    <option key={dept.id} value={dept.id}>
+                                        {locale === 'ar' ? dept.nameAr || dept.name : dept.name}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
                         <input
                             type="date"
                             className="rounded-xl border border-ink/20 bg-white px-3 py-2"
@@ -396,7 +469,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
                         />
                         <button
                             className="btn-outline"
-                            onClick={() => setFilters({ status: '', search: '', from: '', to: '' })}
+                            onClick={() => setFilters({ status: '', search: '', from: '', to: '', governorate: '', departmentId: '' })}
                         >
                             {t('resetFilters')}
                         </button>

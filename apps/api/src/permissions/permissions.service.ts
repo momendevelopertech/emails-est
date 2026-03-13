@@ -190,6 +190,8 @@ export class PermissionsService {
             entityId: request.id,
         });
 
+        await this.notificationsService.notifyPermissionAction(request, 'submitted');
+
         if (request.user.governorate) {
             const managers = await this.prisma.user.findMany({
                 where: {
@@ -243,7 +245,18 @@ export class PermissionsService {
 
         return this.prisma.permissionRequest.findMany({
             where,
-            include: { user: { select: { fullName: true, fullNameAr: true, employeeNumber: true } }, cycle: true },
+            include: {
+                user: {
+                    select: {
+                        fullName: true,
+                        fullNameAr: true,
+                        employeeNumber: true,
+                        governorate: true,
+                        department: { select: { id: true, name: true, nameAr: true } },
+                    },
+                },
+                cycle: true,
+            },
             orderBy: { createdAt: 'desc' },
         });
     }
@@ -252,7 +265,15 @@ export class PermissionsService {
         return this.prisma.permissionRequest.findUnique({
             where: { id },
             include: {
-                user: { select: { fullName: true, fullNameAr: true, employeeNumber: true } },
+                user: {
+                    select: {
+                        fullName: true,
+                        fullNameAr: true,
+                        employeeNumber: true,
+                        governorate: true,
+                        department: { select: { id: true, name: true, nameAr: true } },
+                    },
+                },
                 cycle: true,
                 approvedByMgr: { select: { fullName: true, fullNameAr: true } },
             },
@@ -319,21 +340,52 @@ export class PermissionsService {
             entityId: id,
         });
 
-        await this.notificationsService.createInApp({
-            receiverId: request.userId,
-            type: action === 'approve' ? 'PERMISSION_APPROVED' : 'PERMISSION_REJECTED',
-            title: action === 'approve' ? 'Permission Approved' : 'Permission Rejected',
-            titleAr: action === 'approve' ? 'Permission Approved' : 'Permission Rejected',
-            body: comment || (action === 'approve' ? 'Your permission has been approved.' : 'Your permission has been rejected.'),
-            bodyAr: comment || (action === 'approve' ? 'Your permission has been approved.' : 'Your permission has been rejected.'),
-            metadata: { permissionRequestId: id },
-        });
+        if (action === 'reject') {
+            await this.notificationsService.notifyPermissionAction(request, 'rejected', { comment, sendExternal: true });
+            return updated;
+        }
 
-        if (request.user.phone) {
-            await this.notificationsService.sendWhatsApp(
-                request.user.phone,
-                `SPHINX HR: Permission ${action === 'approve' ? 'Approved' : 'Rejected'}\n${comment || ''}`,
-            );
+        if (role === 'BRANCH_SECRETARY') {
+            await this.notificationsService.notifyPermissionAction(request, 'verified');
+
+            if (request.user.departmentId) {
+                const managers = await this.prisma.user.findMany({
+                    where: { role: 'MANAGER', departmentId: request.user.departmentId },
+                });
+
+                for (const manager of managers) {
+                    await this.notificationsService.createInApp({
+                        receiverId: manager.id,
+                        senderId: actorId,
+                        type: 'PERMISSION_REQUEST',
+                        title: 'Permission Request Needs Approval',
+                        titleAr: 'Permission Request Needs Approval',
+                        body: `${request.user.fullName} has a permission request verified by the secretary.`,
+                        bodyAr: `${request.user.fullName} has a permission request verified by the secretary.`,
+                        metadata: { permissionRequestId: id },
+                    });
+                }
+            }
+        } else if (role === 'MANAGER') {
+            await this.notificationsService.notifyPermissionAction(request, 'managerApproved');
+
+            const hrAdmins = await this.prisma.user.findMany({
+                where: { role: { in: ['HR_ADMIN', 'SUPER_ADMIN'] } },
+            });
+
+            for (const hr of hrAdmins) {
+                await this.notificationsService.createInApp({
+                    receiverId: hr.id,
+                    type: 'PERMISSION_REQUEST',
+                    title: 'Permission Pending HR Approval',
+                    titleAr: 'Permission Pending HR Approval',
+                    body: `${request.user.fullName}'s permission has been approved by manager. Awaiting HR decision.`,
+                    bodyAr: `${request.user.fullName} permission approved by manager. Awaiting HR decision.`,
+                    metadata: { permissionRequestId: id },
+                });
+            }
+        } else {
+            await this.notificationsService.notifyPermissionAction(request, 'approved', { comment, sendExternal: true });
         }
 
         return updated;
