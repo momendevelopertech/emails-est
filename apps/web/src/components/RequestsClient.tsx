@@ -13,7 +13,9 @@ type LeaveRequest = {
     leaveType: string;
     startDate: string;
     endDate: string;
+    createdAt: string;
     status: string;
+    approvedByMgrId?: string | null;
     user: { fullName: string; employeeNumber: string };
 };
 
@@ -21,8 +23,10 @@ type PermissionRequest = {
     id: string;
     permissionType: string;
     requestDate: string;
+    createdAt: string;
     hoursUsed: number;
     status: string;
+    approvedByMgrId?: string | null;
     user: { fullName: string; employeeNumber: string };
 };
 
@@ -34,9 +38,11 @@ type RequestRow = {
     employeeName: string;
     employeeNumber: string;
     requestDate: string;
+    createdAt: string;
     status: string;
     details: string;
     printUrl: string;
+    approvedByMgrId?: string | null;
 };
 
 type LatenessItem = {
@@ -187,9 +193,11 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 employeeName: leave.user.fullName,
                 employeeNumber: leave.user.employeeNumber,
                 requestDate: leave.startDate,
+                createdAt: leave.createdAt,
                 status: leave.status,
                 details: `${new Date(leave.startDate).toLocaleDateString(dateLocale)} - ${new Date(leave.endDate).toLocaleDateString(dateLocale)}`,
                 printUrl: `/${locale}/requests/print/leave/${leave.id}`,
+                approvedByMgrId: leave.approvedByMgrId,
             })),
         [dateLocale, leaves, locale],
     );
@@ -203,9 +211,11 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 employeeName: perm.user.fullName,
                 employeeNumber: perm.user.employeeNumber,
                 requestDate: perm.requestDate,
+                createdAt: perm.createdAt,
                 status: perm.status,
                 details: `${perm.hoursUsed}h`,
                 printUrl: `/${locale}/requests/print/permission/${perm.id}`,
+                approvedByMgrId: perm.approvedByMgrId,
             })),
         [locale, permissions],
     );
@@ -246,7 +256,10 @@ export default function RequestsClient({ locale }: { locale: string }) {
         });
     }, [filters.from, filters.search, filters.status, filters.to]);
 
-    const filteredRows = useMemo(() => applyFilters(rowsByTab[activeTab] || []), [activeTab, applyFilters, rowsByTab]);
+    const filteredRows = useMemo(() => {
+        const rows = applyFilters(rowsByTab[activeTab] || []);
+        return rows.slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }, [activeTab, applyFilters, rowsByTab]);
 
     const total = filteredRows.length;
     const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -441,13 +454,15 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                                 {canManage && (
                                                     <>
                                                         {((isSecretary && row.status === 'PENDING') ||
-                                                            ((isManager || isHr) && row.status === 'MANAGER_APPROVED')) && (
+                                                            (isManager && row.status === 'MANAGER_APPROVED' && !row.approvedByMgrId) ||
+                                                            (isHr && row.status === 'MANAGER_APPROVED' && !!row.approvedByMgrId)) && (
                                                             <button className="btn-primary" onClick={() => onApprove(row)}>
                                                                 {isSecretary ? t('verify') : t('approve')}
                                                             </button>
                                                         )}
                                                         {((isSecretary && row.status === 'PENDING') ||
-                                                            ((isManager || isHr) && row.status === 'MANAGER_APPROVED')) && (
+                                                            (isManager && row.status === 'MANAGER_APPROVED' && !row.approvedByMgrId) ||
+                                                            (isHr && row.status === 'MANAGER_APPROVED' && !!row.approvedByMgrId)) && (
                                                             <button className="btn-secondary" onClick={() => onReject(row)}>
                                                                 {t('reject')}
                                                             </button>
