@@ -177,11 +177,6 @@ export default function ReportsClient({ locale }: { locale: string }) {
         setPage(1);
     }, [tab, filters.departmentId, filters.employee, filters.from, filters.governorate, filters.leaveType, filters.permissionType, filters.reportType, filters.status, filters.to, rows]);
 
-    if (!ready || loading) {
-        return <PageLoader text={locale === 'ar' ? '???? ????? ????????...' : 'Loading reports...'} />;
-    }
-    if (!canViewReports) return null;
-
     const tableAlignClass = locale === 'ar' ? 'text-right' : 'text-left';
     const showEmergency = useMemo(
         () => data.some((item) => (item?.counts?.emergency ?? 0) > 0),
@@ -224,6 +219,11 @@ export default function ReportsClient({ locale }: { locale: string }) {
         if (stage === 'WAITING_HR') return t('stageHr');
         return t('stageUnknown');
     };
+
+    if (!ready || loading) {
+        return <PageLoader text={locale === 'ar' ? 'جاري تحميل التقارير...' : 'Loading reports...'} />;
+    }
+    if (!canViewReports) return null;
 
     return (
         <main className="px-4 pb-12 sm:px-6 space-y-6">

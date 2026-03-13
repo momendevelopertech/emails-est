@@ -41,7 +41,7 @@ export default function EmployeeHistoryModal({ open, user, locale, onClose }: Pr
         return () => {
             active = false;
         };
-    }, [open, user?.id]);
+    }, [open, user]);
 
     const formatCycleLabel = (value?: string) => {
         if (!value) return '';
