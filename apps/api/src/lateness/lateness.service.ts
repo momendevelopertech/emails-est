@@ -65,8 +65,15 @@ export class LatenessService {
         let rangeEnd: Date;
 
         if (filters?.from || filters?.to) {
-            rangeStart = filters?.from ? startOfDay(this.normalizeDate(filters.from)) : startOfDay(new Date(0));
-            rangeEnd = filters?.to ? endOfDay(this.normalizeDate(filters.to)) : endOfDay(new Date());
+            if (filters.from && filters.to) {
+                rangeStart = startOfDay(this.normalizeDate(filters.from));
+                rangeEnd = endOfDay(this.normalizeDate(filters.to));
+            } else {
+                const base = this.normalizeDate(filters.from || filters.to || '');
+                const cycle = this.getCycleForDate(base);
+                rangeStart = cycle.start;
+                rangeEnd = cycle.end;
+            }
         } else {
             const cycle = this.getCycleForDate(new Date());
             rangeStart = cycle.start;
