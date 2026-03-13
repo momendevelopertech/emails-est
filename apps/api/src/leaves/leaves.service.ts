@@ -17,6 +17,48 @@ export class LeavesService {
         private auditService: AuditService,
     ) { }
 
+    private async getWorkflowUserIds(
+        requestUserId: string,
+        requestUser: { governorate?: any; departmentId?: string | null },
+        actorId?: string,
+    ) {
+        const [secretaries, managers, hrAdmins] = await Promise.all([
+            requestUser?.governorate
+                ? this.prisma.user.findMany({
+                    where: { governorate: requestUser.governorate, role: 'BRANCH_SECRETARY' },
+                    select: { id: true },
+                })
+                : Promise.resolve([]),
+            requestUser?.departmentId
+                ? this.prisma.user.findMany({
+                    where: { departmentId: requestUser.departmentId, role: 'MANAGER' },
+                    select: { id: true },
+                })
+                : Promise.resolve([]),
+            this.prisma.user.findMany({
+                where: { role: { in: ['HR_ADMIN', 'SUPER_ADMIN'] } },
+                select: { id: true },
+            }),
+        ]);
+
+        const ids = new Set<string>();
+        ids.add(requestUserId);
+        if (actorId) ids.add(actorId);
+        secretaries.forEach((user) => ids.add(user.id));
+        managers.forEach((user) => ids.add(user.id));
+        hrAdmins.forEach((user) => ids.add(user.id));
+        return Array.from(ids);
+    }
+
+    private async emitWorkflowUpdate(request: { id: string; userId: string; user: { governorate?: any; departmentId?: string | null } }, actorId?: string) {
+        const userIds = await this.getWorkflowUserIds(request.userId, request.user, actorId);
+        await this.notificationsService.emitRealtimeToUsers(userIds, {
+            type: 'REQUEST_UPDATED',
+            requestType: 'leave',
+            requestId: request.id,
+        });
+    }
+
     private async ensureYearBalances(userId: string, year: number) {
         const defaults: Array<{ leaveType: any; days: number }> = [
             { leaveType: 'ANNUAL', days: 21 },
@@ -172,6 +214,8 @@ export class LeavesService {
                 });
             }
         }
+
+        await this.emitWorkflowUpdate(request, userId);
 
         return request;
     }
@@ -366,6 +410,8 @@ export class LeavesService {
         } else if (role === 'HR_ADMIN' || role === 'SUPER_ADMIN') {
             await this.notificationsService.notifyLeaveAction(request, 'approved');
         }
+
+        await this.emitWorkflowUpdate({ ...request, id }, actorId);
 
         return updated;
     }

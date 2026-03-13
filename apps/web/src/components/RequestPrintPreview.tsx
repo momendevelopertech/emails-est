@@ -28,6 +28,7 @@ type LeaveDetails = {
     totalDays: number;
     reason?: string | null;
     status: string;
+    approvedByMgrId?: string | null;
     user: UserInfo;
     approvedByMgr?: ManagerInfo;
 };
@@ -41,6 +42,7 @@ type PermissionDetails = {
     leaveTime?: string | null;
     reason?: string | null;
     status: string;
+    approvedByMgrId?: string | null;
     user: UserInfo;
     approvedByMgr?: ManagerInfo;
 };
@@ -100,7 +102,10 @@ export default function RequestPrintPreview({
         const isLeave = requestType === 'leave';
         const data = details as LeaveDetails | PermissionDetails;
         const employeeName = (data.user.fullNameAr || data.user.fullName || '').trim();
-        const statusLabel = enumLabels.status(data.status, 'ar');
+        const statusLabel = enumLabels.status(data.status, 'ar', {
+            requestType: requestType,
+            approvedByMgrId: data.approvedByMgrId ?? null,
+        });
         const managerName = (data.approvedByMgr?.fullNameAr || data.approvedByMgr?.fullName || '').trim();
 
         if (isLeave) {

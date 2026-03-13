@@ -18,6 +18,48 @@ export class PermissionsService {
         private auditService: AuditService,
     ) { }
 
+    private async getWorkflowUserIds(
+        requestUserId: string,
+        requestUser: { governorate?: any; departmentId?: string | null },
+        actorId?: string,
+    ) {
+        const [secretaries, managers, hrAdmins] = await Promise.all([
+            requestUser?.governorate
+                ? this.prisma.user.findMany({
+                    where: { governorate: requestUser.governorate, role: 'BRANCH_SECRETARY' },
+                    select: { id: true },
+                })
+                : Promise.resolve([]),
+            requestUser?.departmentId
+                ? this.prisma.user.findMany({
+                    where: { departmentId: requestUser.departmentId, role: 'MANAGER' },
+                    select: { id: true },
+                })
+                : Promise.resolve([]),
+            this.prisma.user.findMany({
+                where: { role: { in: ['HR_ADMIN', 'SUPER_ADMIN'] } },
+                select: { id: true },
+            }),
+        ]);
+
+        const ids = new Set<string>();
+        ids.add(requestUserId);
+        if (actorId) ids.add(actorId);
+        secretaries.forEach((user) => ids.add(user.id));
+        managers.forEach((user) => ids.add(user.id));
+        hrAdmins.forEach((user) => ids.add(user.id));
+        return Array.from(ids);
+    }
+
+    private async emitWorkflowUpdate(request: { id: string; userId: string; user: { governorate?: any; departmentId?: string | null } }, actorId?: string) {
+        const userIds = await this.getWorkflowUserIds(request.userId, request.user, actorId);
+        await this.notificationsService.emitRealtimeToUsers(userIds, {
+            type: 'REQUEST_UPDATED',
+            requestType: 'permission',
+            requestId: request.id,
+        });
+    }
+
     // Permission cycle: day 11 to day 10 next month.
     private getCycleForDate(date: Date): { start: Date; end: Date } {
         const d = date.getDate();
@@ -214,6 +256,8 @@ export class PermissionsService {
             }
         }
 
+        await this.emitWorkflowUpdate(request, userId);
+
         return request;
     }
 
@@ -387,6 +431,8 @@ export class PermissionsService {
         } else {
             await this.notificationsService.notifyPermissionAction(request, 'approved', { comment, sendExternal: true });
         }
+
+        await this.emitWorkflowUpdate({ ...request, id }, actorId);
 
         return updated;
     }

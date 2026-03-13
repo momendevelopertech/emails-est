@@ -1,9 +1,10 @@
 ﻿'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
+import { usePusherChannel } from '@/lib/use-pusher-channel';
 import PageLoader from './PageLoader';
 
 type NotificationItem = {
@@ -29,7 +30,7 @@ const notificationTypes = ['LEAVE_REQUEST', 'LEAVE_APPROVED', 'LEAVE_REJECTED', 
 
 export default function NotificationsClient({ locale }: { locale: string }) {
     const t = useTranslations('notifications');
-    const { ready } = useRequireAuth(locale);
+    const { user, ready } = useRequireAuth(locale);
     const [items, setItems] = useState<NotificationItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -55,22 +56,51 @@ export default function NotificationsClient({ locale }: { locale: string }) {
         ...(filters.to ? { to: filters.to } : {}),
     }), [filters.from, filters.search, filters.status, filters.to, filters.type, limit, page]);
 
-    const fetchAll = useCallback(async () => {
-        setLoading(true);
+    const refreshInFlight = useRef(false);
+
+    const refreshAll = useCallback(async () => {
+        if (refreshInFlight.current) return;
+        refreshInFlight.current = true;
         try {
             const res = await api.get<NotificationsResponse>('/notifications', { params });
             setItems(res.data.items || []);
             setTotal(res.data.total || 0);
             setTotalPages(res.data.totalPages || 1);
         } finally {
-            setLoading(false);
+            refreshInFlight.current = false;
         }
     }, [params]);
+
+    const fetchAll = useCallback(async () => {
+        setLoading(true);
+        try {
+            await refreshAll();
+        } finally {
+            setLoading(false);
+        }
+    }, [refreshAll]);
 
     useEffect(() => {
         if (!ready) return;
         fetchAll();
     }, [ready, fetchAll]);
+
+    const notificationHandlers = useMemo(
+        () => ({
+            notification: () => refreshAll(),
+        }),
+        [refreshAll],
+    );
+
+    usePusherChannel(user ? `user-${user.id}` : null, notificationHandlers);
+
+    useEffect(() => {
+        if (!ready) return;
+        const interval = setInterval(() => {
+            refreshAll();
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [ready, refreshAll]);
 
     const markAll = async () => {
         await api.patch('/notifications/read-all');

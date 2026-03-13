@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { usePusherChannel } from '@/lib/use-pusher-channel';
@@ -75,8 +75,11 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     const [loading, setLoading] = useState(true);
     const [schedule, setSchedule] = useState<any | null>(null);
 
-    const fetchAll = useCallback(async () => {
-        setLoading(true);
+    const refreshInFlight = useRef(false);
+
+    const refreshAll = useCallback(async () => {
+        if (refreshInFlight.current) return;
+        refreshInFlight.current = true;
         try {
             const [leaveBalances, leaveReqs, permissionReqs, formSubs, notesRes, cycle, absence, scheduleRes, latenessRes] = await Promise.all([
                 api.get('/leaves/balances'),
@@ -104,9 +107,18 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
             setSchedule(scheduleRes.data);
             setLatenessItems(latenessRes.data?.items || []);
         } finally {
-            setLoading(false);
+            refreshInFlight.current = false;
         }
     }, []);
+
+    const fetchAll = useCallback(async () => {
+        setLoading(true);
+        try {
+            await refreshAll();
+        } finally {
+            setLoading(false);
+        }
+    }, [refreshAll]);
 
     useEffect(() => {
         if (!ready) return;
@@ -115,12 +127,20 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
 
     const notificationHandlers = useMemo(
         () => ({
-            notification: () => fetchAll(),
+            notification: () => refreshAll(),
         }),
-        [fetchAll],
+        [refreshAll],
     );
 
     usePusherChannel(user ? `user-${user.id}` : null, notificationHandlers);
+
+    useEffect(() => {
+        if (!ready) return;
+        const interval = setInterval(() => {
+            refreshAll();
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [ready, refreshAll]);
 
     const stats = useMemo(() => {
         const annual = balances.find((b) => b.leaveType === 'ANNUAL');

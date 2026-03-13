@@ -29,7 +29,12 @@ export default function EventDetailsModal({ open, event, locale, onClose }: Prop
     })();
 
     const employeeName = item.user?.fullName || item.fullName || t('notAvailable');
-    const statusLabel = item.status ? enumLabels.status(item.status, locale) : '-';
+    const statusLabel = item.status
+        ? enumLabels.status(item.status, locale, {
+            requestType: kind === 'permission' ? 'permission' : kind === 'leave' || kind === 'absence' || kind === 'mission' ? 'leave' : undefined,
+            approvedByMgrId: item.approvedByMgrId ?? null,
+        })
+        : '-';
     const reason = item.reason || item.body || item.note || '';
 
     const typeLabel = (() => {

@@ -1,4 +1,8 @@
 type Locale = 'en' | 'ar';
+type StatusLabelOptions = {
+    requestType?: 'leave' | 'permission';
+    approvedByMgrId?: string | null;
+};
 
 const labels = {
     ar: {
@@ -67,9 +71,32 @@ function getLabel(group: keyof (typeof labels)['ar'], value: string, locale: Loc
     return labels[locale][group][value as keyof (typeof labels)['ar'][typeof group]] || value;
 }
 
+function getStatusLabel(value: string, locale: Locale, options?: StatusLabelOptions) {
+    const isRequest = options?.requestType === 'leave' || options?.requestType === 'permission';
+
+    if (isRequest && value === 'PENDING') {
+        return locale === 'ar'
+            ? 'في انتظار تحقق السكرتارية'
+            : 'Awaiting secretary verification';
+    }
+
+    if (isRequest && value === 'MANAGER_APPROVED' && options && Object.prototype.hasOwnProperty.call(options, 'approvedByMgrId')) {
+        if (options.approvedByMgrId) {
+            return locale === 'ar'
+                ? 'تمت الموافقة من المدير'
+                : 'Approved by manager';
+        }
+        return locale === 'ar'
+            ? 'في انتظار موافقة المدير'
+            : 'Awaiting manager approval';
+    }
+
+    return getLabel('status', value, locale);
+}
+
 export const enumLabels = {
     role: (value: string, locale: Locale) => getLabel('roles', value, locale),
-    status: (value: string, locale: Locale) => getLabel('status', value, locale),
+    status: (value: string, locale: Locale, options?: StatusLabelOptions) => getStatusLabel(value, locale, options),
     leaveType: (value: string, locale: Locale) => getLabel('leaveType', value, locale),
     permissionType: (value: string, locale: Locale) => getLabel('permissionType', value, locale),
 };

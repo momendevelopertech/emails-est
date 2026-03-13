@@ -1,12 +1,13 @@
 ﻿'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import { enumLabels } from '@/lib/enum-labels';
 import { getPublicApiUrl } from '@/lib/public-urls';
+import { usePusherChannel } from '@/lib/use-pusher-channel';
 import PageLoader from './PageLoader';
 
 type PaginatedResponse<T> = {
@@ -52,17 +53,29 @@ export default function ReportsClient({ locale }: { locale: string }) {
         ...(filters.reportType ? { reportType: filters.reportType } : {}),
     }), [filters.employee, filters.from, filters.reportType, filters.status, filters.to, page, rows]);
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
+    const refreshInFlight = useRef(false);
+
+    const refreshData = useCallback(async () => {
+        if (refreshInFlight.current) return;
+        refreshInFlight.current = true;
         try {
             const res = await api.get<PaginatedResponse<any>>(endpoint, { params });
             setData(res.data.items || []);
             setTotal(res.data.total || 0);
             setTotalPages(res.data.totalPages || 1);
         } finally {
-            setLoading(false);
+            refreshInFlight.current = false;
         }
     }, [endpoint, params]);
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            await refreshData();
+        } finally {
+            setLoading(false);
+        }
+    }, [refreshData]);
 
     useEffect(() => {
         if (!ready) return;
@@ -72,6 +85,23 @@ export default function ReportsClient({ locale }: { locale: string }) {
         }
         fetchData();
     }, [ready, canAdmin, locale, router, fetchData]);
+
+    const notificationHandlers = useMemo(
+        () => ({
+            notification: () => refreshData(),
+        }),
+        [refreshData],
+    );
+
+    usePusherChannel(user ? `user-${user.id}` : null, notificationHandlers);
+
+    useEffect(() => {
+        if (!ready || !canAdmin) return;
+        const interval = setInterval(() => {
+            refreshData();
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [canAdmin, ready, refreshData]);
 
     if (!ready || loading) {
         return <PageLoader text={locale === 'ar' ? 'جاري تحميل التقارير...' : 'Loading reports...'} />;
@@ -146,7 +176,10 @@ export default function ReportsClient({ locale }: { locale: string }) {
                                 const status = item.status || (item.isActive ? 'ACTIVE' : 'INACTIVE');
                                 const statusLabel = tab === 'employees'
                                     ? (status === 'ACTIVE' ? t('active') : t('inactive'))
-                                    : enumLabels.status(status, locale as 'en' | 'ar');
+                                    : enumLabels.status(status, locale as 'en' | 'ar', {
+                                        requestType: tab === 'leaves' ? 'leave' : tab === 'permissions' ? 'permission' : undefined,
+                                        approvedByMgrId: item.approvedByMgrId ?? null,
+                                    });
                                 const typeLabel = tab === 'leaves'
                                     ? enumLabels.leaveType(type, locale as 'en' | 'ar')
                                     : tab === 'permissions'

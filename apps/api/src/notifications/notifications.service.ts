@@ -40,6 +40,14 @@ export class NotificationsService {
         return notification;
     }
 
+    async emitRealtimeToUsers(userIds: string[], payload: Record<string, any> = { type: 'REQUEST_UPDATED' }) {
+        const unique = Array.from(new Set(userIds.filter(Boolean)));
+        if (unique.length === 0) return;
+        await Promise.all(
+            unique.map((userId) => this.pusher.triggerToUser(userId, 'notification', payload)),
+        );
+    }
+
     async broadcastToAll(data: {
         senderId?: string;
         type: any;

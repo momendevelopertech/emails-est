@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { addMonths } from 'date-fns';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
@@ -113,8 +113,11 @@ export default function RequestsClient({ locale }: { locale: string }) {
 
     const dateLocale = useMemo(() => (locale === 'ar' ? 'ar-EG' : 'en-US'), [locale]);
 
-    const fetchAll = useCallback(async () => {
-        setLoading(true);
+    const refreshInFlight = useRef(false);
+
+    const refreshAll = useCallback(async () => {
+        if (refreshInFlight.current) return;
+        refreshInFlight.current = true;
         try {
             const [leaveReqs, permissionReqs] = await Promise.all([
                 api.get('/leaves'),
@@ -123,9 +126,18 @@ export default function RequestsClient({ locale }: { locale: string }) {
             setLeaves(leaveReqs.data);
             setPermissions(permissionReqs.data);
         } finally {
-            setLoading(false);
+            refreshInFlight.current = false;
         }
     }, []);
+
+    const fetchAll = useCallback(async () => {
+        setLoading(true);
+        try {
+            await refreshAll();
+        } finally {
+            setLoading(false);
+        }
+    }, [refreshAll]);
 
     useEffect(() => {
         if (!ready) return;
@@ -152,12 +164,20 @@ export default function RequestsClient({ locale }: { locale: string }) {
 
     const notificationHandlers = useMemo(
         () => ({
-            notification: () => fetchAll(),
+            notification: () => refreshAll(),
         }),
-        [fetchAll],
+        [refreshAll],
     );
 
     usePusherChannel(user ? `user-${user.id}` : null, notificationHandlers);
+
+    useEffect(() => {
+        if (!ready) return;
+        const interval = setInterval(() => {
+            refreshAll();
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [ready, refreshAll]);
 
     const formatDateOnly = (value: Date) => {
         const year = value.getFullYear();
@@ -424,7 +444,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
                             onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
                         >
                             <option value="">{t('allStatuses')}</option>
-                            <option value="PENDING">{enumLabels.status('PENDING', locale as 'en' | 'ar')}</option>
+                            <option value="PENDING">{enumLabels.status('PENDING', locale as 'en' | 'ar', { requestType: 'leave' })}</option>
                             <option value="MANAGER_APPROVED">{enumLabels.status('MANAGER_APPROVED', locale as 'en' | 'ar')}</option>
                             <option value="HR_APPROVED">{enumLabels.status('HR_APPROVED', locale as 'en' | 'ar')}</option>
                             <option value="REJECTED">{enumLabels.status('REJECTED', locale as 'en' | 'ar')}</option>
@@ -500,7 +520,12 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                         <td className="py-2">{row.details}</td>
                                         <td className="py-2">{new Date(row.requestDate).toLocaleDateString(dateLocale)}</td>
                                         <td className="py-2">
-                                            <span className="pill bg-ink/10 text-ink">{enumLabels.status(row.status, locale as 'en' | 'ar')}</span>
+                                            <span className="pill bg-ink/10 text-ink">
+                                                {enumLabels.status(row.status, locale as 'en' | 'ar', {
+                                                    requestType: row.requestType,
+                                                    approvedByMgrId: row.approvedByMgrId,
+                                                })}
+                                            </span>
                                         </td>
                                         <td className="py-2">
                                             <div className="flex flex-wrap gap-2">
