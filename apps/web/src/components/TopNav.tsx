@@ -30,10 +30,11 @@ export default function TopNav({ locale }: { locale: string }) {
     }, []);
 
     useEffect(() => {
+        if (!user) return;
         api.get('/settings/work-schedule')
             .then((res) => setPwaEnabled(!!res.data?.pwaInstallEnabled))
             .catch(() => null);
-    }, []);
+    }, [user]);
 
     useEffect(() => {
         const handler = (event: MouseEvent) => {

@@ -7,6 +7,7 @@ import { NotebookPen } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useTranslations } from 'next-intl';
+import { useAuthStore } from '@/stores/auth-store';
 
 type RequestType = 'leave' | 'absence' | 'permission' | 'mission' | 'note' | 'lateness';
 
@@ -57,6 +58,7 @@ const dateOnly = (value: Date) => new Date(value.getFullYear(), value.getMonth()
 export default function RequestModal({ open, date, onClose, onSubmitted, locale }: Props) {
     const t = useTranslations('requests');
     const tm = useTranslations('requestModal');
+    const { user } = useAuthStore();
     const [type, setType] = useState<RequestType | null>(null);
     const [formData, setFormData] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(false);
@@ -72,11 +74,11 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
         return format(date, 'EEEE', { locale: dateLocale });
     }, [date, locale]);
     useEffect(() => {
-        if (!open) return;
+        if (!open || !user) return;
         api.get('/settings/work-schedule')
             .then((res) => setSchedule((prev) => ({ ...prev, ...res.data })))
             .catch(() => null);
-    }, [open]);
+    }, [open, user]);
 
     const permissionPreview = useMemo(() => {
         if (!date || type !== 'permission') return null;

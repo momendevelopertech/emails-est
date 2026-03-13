@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getPublicApiUrl } from './public-urls';
+import { useAuthStore } from '@/stores/auth-store';
 
 let csrfToken: string | null = null;
 let refreshPromise: Promise<void> | null = null;
@@ -27,6 +28,34 @@ const resetRefreshState = () => {
 const disableRefreshState = () => {
     refreshDisabled = true;
     csrfToken = null;
+};
+
+const clearAuthState = () => {
+    if (typeof window === 'undefined') return;
+    try {
+        const { setUser, setBootstrapped } = useAuthStore.getState();
+        setUser(null);
+        setBootstrapped(false);
+    } catch {
+        // ignore store errors
+    }
+};
+
+const redirectToLogin = () => {
+    if (typeof window === 'undefined') return;
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const locale = segments[0] || 'en';
+    const target = `/${locale}/login`;
+    if (!window.location.pathname.startsWith(target)) {
+        window.location.assign(target);
+    }
+};
+
+const handleSessionExpired = () => {
+    disableRefreshState();
+    clearApiCache();
+    clearAuthState();
+    redirectToLogin();
 };
 
 const api = axios.create({
@@ -203,7 +232,7 @@ api.interceptors.response.use((response) => {
         } catch (refreshError: any) {
             const refreshStatus = refreshError?.response?.status;
             if (refreshStatus === 401 || refreshStatus === 403 || refreshStatus === 500) {
-                disableRefreshState();
+                handleSessionExpired();
             }
             return Promise.reject(refreshError);
         }

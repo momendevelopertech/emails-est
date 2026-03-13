@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
@@ -9,6 +9,7 @@ export function useRequireAuth(locale: string) {
     const router = useRouter();
     const { user, bootstrapped, setUser, setLoading, setBootstrapped } = useAuthStore();
     const [ready, setReady] = useState(false);
+    const attemptedRef = useRef(false);
 
     useEffect(() => {
         if (bootstrapped && user) {
@@ -16,6 +17,9 @@ export function useRequireAuth(locale: string) {
             setLoading(false);
             return;
         }
+
+        if (attemptedRef.current) return;
+        attemptedRef.current = true;
 
         let active = true;
         const boot = async () => {
