@@ -287,6 +287,12 @@ export default function RequestsClient({ locale }: { locale: string }) {
         return deletePermission(row.id);
     };
 
+    useEffect(() => {
+        if (!ready || user?.role !== 'MANAGER') return;
+        setActiveTab('all');
+        setFilters((prev) => ({ ...prev, status: 'MANAGER_APPROVED' }));
+    }, [ready, user?.role]);
+
     const isCurrentCycle = useMemo(() => {
         const current = getCycleRange(new Date());
         const selected = getCycleRange(cycleBaseDate);
@@ -306,12 +312,6 @@ export default function RequestsClient({ locale }: { locale: string }) {
         { key: 'lateness', label: t('tabLateness'), count: latenessSummary.totalCount },
     ];
 
-
-    useEffect(() => {
-        if (!ready || user?.role !== 'MANAGER') return;
-        setActiveTab('all');
-        setFilters((prev) => ({ ...prev, status: 'MANAGER_APPROVED' }));
-    }, [ready, user?.role]);
 
     const tableAlignClass = locale === 'ar' ? 'text-right' : 'text-left';
     const cycleLabel = latenessSummary.cycleStart && latenessSummary.cycleEnd
