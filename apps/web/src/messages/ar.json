@@ -373,6 +373,7 @@
     "latenessDeduction": "أيام الخصم",
     "latenessSalary": "الراتب الشهري",
     "latenessEstimate": "الخصم المتوقع",
+    "latenessNetSalary": "صافي الراتب",
     "latenessPolicy": "اللائحة: أول تأخير ربع يوم، ثاني تأخير نصف يوم، ثالث تأخير يوم كامل (حد أقصى).",
     "latenessDate": "التاريخ",
     "latenessLateMinutes": "دقائق التأخير",

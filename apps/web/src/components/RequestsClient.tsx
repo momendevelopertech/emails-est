@@ -393,11 +393,19 @@ export default function RequestsClient({ locale }: { locale: string }) {
 
 
     const tableAlignClass = locale === 'ar' ? 'text-right' : 'text-left';
+    const formatDateOnlyFromIso = (value?: string) => {
+        if (!value) return '';
+        const datePart = value.split('T')[0];
+        const [year, month, day] = datePart.split('-').map((part) => Number(part));
+        if (!year || !month || !day) return new Date(value).toLocaleDateString(dateLocale);
+        return new Date(year, month - 1, day).toLocaleDateString(dateLocale);
+    };
     const cycleLabel = latenessSummary.cycleStart && latenessSummary.cycleEnd
-        ? `${new Date(latenessSummary.cycleStart).toLocaleDateString(dateLocale)} - ${new Date(latenessSummary.cycleEnd).toLocaleDateString(dateLocale)}`
+        ? `${formatDateOnlyFromIso(latenessSummary.cycleStart)} - ${formatDateOnlyFromIso(latenessSummary.cycleEnd)}`
         : '';
     const salaryValue = Number(salary) || 0;
     const estimatedDeduction = salaryValue > 0 ? (salaryValue / 30) * (latenessSummary.deductionDays || 0) : 0;
+    const netSalary = salaryValue > 0 ? Math.max(0, salaryValue - estimatedDeduction) : 0;
 
     return (
         <main className="px-4 pb-12 sm:px-6">
@@ -630,6 +638,11 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                     <p className="mt-2 text-sm text-ink/70">
                                         {t('latenessEstimate')}: <span className="font-semibold">
                                             {estimatedDeduction ? estimatedDeduction.toLocaleString(dateLocale) : '0'}
+                                        </span>
+                                    </p>
+                                    <p className="mt-2 text-sm text-ink/70">
+                                        {t('latenessNetSalary')}: <span className="font-semibold">
+                                            {netSalary ? netSalary.toLocaleString(dateLocale) : '0'}
                                         </span>
                                     </p>
                                 </div>

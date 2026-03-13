@@ -373,6 +373,7 @@
     "latenessDeduction": "Deduction days",
     "latenessSalary": "Monthly salary",
     "latenessEstimate": "Estimated deduction",
+    "latenessNetSalary": "Net salary",
     "latenessPolicy": "Policy: 1st delay = 1/4 day, 2nd = 1/2 day, 3rd+ = 1 day (max).",
     "latenessDate": "Date",
     "latenessLateMinutes": "Late (min)",
