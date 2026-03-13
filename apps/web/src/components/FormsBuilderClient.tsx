@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import PageLoader from './PageLoader';
+import ConfirmDialog from './ConfirmDialog';
 
 type Department = { id: string; name: string };
 type FormField = {
@@ -18,6 +19,7 @@ type FormField = {
 
 export default function FormsBuilderClient({ locale }: { locale: string }) {
     const t = useTranslations('formsBuilder');
+    const tCommon = useTranslations('common');
     const router = useRouter();
     const { user, ready } = useRequireAuth(locale);
     const [departments, setDepartments] = useState<Department[]>([]);
@@ -25,6 +27,8 @@ export default function FormsBuilderClient({ locale }: { locale: string }) {
     const [form, setForm] = useState<any>({});
     const [fields, setFields] = useState<FormField[]>([]);
     const [createOpen, setCreateOpen] = useState(false);
+    const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+    const [deleteBusy, setDeleteBusy] = useState(false);
     const [loading, setLoading] = useState(true);
     const cancelLabel = locale === 'ar' ? 'إلغاء' : 'Cancel';
 
@@ -80,9 +84,20 @@ export default function FormsBuilderClient({ locale }: { locale: string }) {
         router.refresh();
     };
 
-    const deactivateForm = async (id: string) => {
-        await api.delete(`/forms/${id}`);
-        fetchAll();
+    const requestDeleteForm = (id: string) => {
+        setPendingDeleteId(id);
+    };
+
+    const confirmDeleteForm = async () => {
+        if (!pendingDeleteId || deleteBusy) return;
+        setDeleteBusy(true);
+        try {
+            await api.delete(`/forms/${pendingDeleteId}`);
+            await fetchAll();
+        } finally {
+            setDeleteBusy(false);
+            setPendingDeleteId(null);
+        }
     };
 
     return (
@@ -103,7 +118,7 @@ export default function FormsBuilderClient({ locale }: { locale: string }) {
                                 <p className="font-semibold">{currentForm.name}</p>
                                 <p className="text-xs text-ink/60">{currentForm.department?.name || t('allDepartments')}</p>
                             </div>
-                            <button className="btn-outline" onClick={() => deactivateForm(currentForm.id)}>{t('deactivate')}</button>
+                            <button className="btn-outline" onClick={() => requestDeleteForm(currentForm.id)}>{t('deactivate')}</button>
                         </div>
                     ))}
                 </div>
@@ -160,6 +175,15 @@ export default function FormsBuilderClient({ locale }: { locale: string }) {
                     </div>
                 </div>
             )}
+            <ConfirmDialog
+                open={!!pendingDeleteId}
+                message={tCommon('confirmDeleteItem')}
+                confirmLabel={tCommon('confirm')}
+                cancelLabel={tCommon('cancel')}
+                confirmDisabled={deleteBusy}
+                onConfirm={confirmDeleteForm}
+                onCancel={() => setPendingDeleteId(null)}
+            />
         </main>
     );
 }

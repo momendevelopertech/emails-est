@@ -1,25 +1,45 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import PageLoader from './PageLoader';
+import ConfirmDialog from './ConfirmDialog';
 
-type Department = { id: string; name: string; nameAr?: string };
+type Department = { id: string; name: string; nameAr?: string; _count?: { employees?: number } };
 
 export default function DepartmentsClient({ locale }: { locale: string }) {
     const t = useTranslations('departments');
+    const tCommon = useTranslations('common');
     const router = useRouter();
     const { user, ready } = useRequireAuth(locale);
     const [departments, setDepartments] = useState<Department[]>([]);
     const [form, setForm] = useState<any>({});
     const [createOpen, setCreateOpen] = useState(false);
+    const [pendingDelete, setPendingDelete] = useState<Department | null>(null);
+    const [deleteBusy, setDeleteBusy] = useState(false);
     const [loading, setLoading] = useState(true);
     const cancelLabel = locale === 'ar' ? 'إلغاء' : 'Cancel';
 
     const canAdmin = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
+
+    const resolveGroup = (dept: Department) => {
+        const combined = `${dept.name} ${dept.nameAr || ''}`.toLowerCase();
+        if (combined.includes('erc')) return 'ERC';
+        if (combined.includes('sphinx')) return 'Sphinx';
+        return 'Sphinx';
+    };
+
+    const groupedDepartments = useMemo(() => {
+        const groups: Record<'ERC' | 'Sphinx', Department[]> = { ERC: [], Sphinx: [] };
+        departments.forEach((dept) => {
+            const group = resolveGroup(dept);
+            groups[group].push(dept);
+        });
+        return groups;
+    }, [departments]);
 
     const fetchAll = async () => {
         setLoading(true);
@@ -58,9 +78,22 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
         router.refresh();
     };
 
-    const deleteDepartment = async (id: string) => {
-        await api.delete(`/departments/${id}`);
-        fetchAll();
+    const requestDeleteDepartment = (dept: Department) => {
+        const hasEmployees = (dept._count?.employees || 0) > 0;
+        if (hasEmployees) return;
+        setPendingDelete(dept);
+    };
+
+    const confirmDeleteDepartment = async () => {
+        if (!pendingDelete || deleteBusy) return;
+        setDeleteBusy(true);
+        try {
+            await api.delete(`/departments/${pendingDelete.id}`);
+            await fetchAll();
+        } finally {
+            setDeleteBusy(false);
+            setPendingDelete(null);
+        }
     };
 
     return (
@@ -74,14 +107,35 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
 
             <section className="card p-5">
                 <h2 className="text-lg font-semibold">{t('title')}</h2>
-                <div className="mt-4 space-y-3">
-                    {departments.map((dept) => (
-                        <div key={dept.id} className="rounded-xl border border-ink/10 bg-white/70 p-4 flex items-center justify-between">
-                            <div>
-                                <p className="font-semibold">{dept.name}</p>
-                                <p className="text-xs text-ink/60">{dept.nameAr}</p>
+                <div className="mt-4 grid gap-6 lg:grid-cols-2">
+                    {(['ERC', 'Sphinx'] as const).map((group) => (
+                        <div key={group} className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-ink/60">{group}</h3>
+                                <span className="text-xs text-ink/50">{groupedDepartments[group].length}</span>
                             </div>
-                            <button className="btn-outline" onClick={() => deleteDepartment(dept.id)}>{t('delete')}</button>
+                            {groupedDepartments[group].map((dept) => {
+                                const hasEmployees = (dept._count?.employees || 0) > 0;
+                                return (
+                                    <div key={dept.id} className="rounded-xl border border-ink/10 bg-white/70 p-4">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="font-semibold">{dept.name}</p>
+                                                <p className="text-xs text-ink/60">{dept.nameAr}</p>
+                                                <p className="text-xs text-ink/50">{t('employeesCount', { count: dept._count?.employees || 0 })}</p>
+                                                {hasEmployees && <p className="text-xs text-rose-600">{t('deleteBlocked')}</p>}
+                                            </div>
+                                            <button
+                                                className={`btn-outline ${hasEmployees ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                onClick={() => requestDeleteDepartment(dept)}
+                                                disabled={hasEmployees}
+                                            >
+                                                {t('delete')}
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     ))}
                 </div>
@@ -106,6 +160,15 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
                     </div>
                 </div>
             )}
+            <ConfirmDialog
+                open={!!pendingDelete}
+                message={t('confirmDelete')}
+                confirmLabel={tCommon('confirm')}
+                cancelLabel={tCommon('cancel')}
+                confirmDisabled={deleteBusy}
+                onConfirm={confirmDeleteDepartment}
+                onCancel={() => setPendingDelete(null)}
+            />
         </main>
     );
 }

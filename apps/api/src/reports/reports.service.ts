@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as ExcelJS from 'exceljs';
 import { PdfService } from '../pdf/pdf.service';
+import { matchesEmployeeSearch, normalizeSearchText } from '../shared/search-normalization';
 
 @Injectable()
 export class ReportsService {
@@ -28,22 +29,27 @@ export class ReportsService {
         };
     }
 
-    private buildUserWhere(query?: any) {
-        const employee = query?.employee?.trim();
+    private buildUserScopeWhere(query?: any, scopeUserIds?: string[] | null) {
         const userWhere: any = {
             ...(query?.departmentId ? { departmentId: query.departmentId } : {}),
             ...(query?.governorate ? { governorate: query.governorate } : {}),
         };
-
-        if (employee) {
-            userWhere.OR = [
-                { fullName: { contains: employee, mode: 'insensitive' } },
-                { fullNameAr: { contains: employee, mode: 'insensitive' } },
-                { employeeNumber: { contains: employee, mode: 'insensitive' } },
-            ];
+        if (scopeUserIds) {
+            userWhere.id = { in: scopeUserIds };
         }
-
         return userWhere;
+    }
+
+    private async resolveEmployeeIds(employee: string | undefined, userWhere: any) {
+        const normalized = normalizeSearchText(employee?.trim());
+        if (!normalized) return null;
+        const users = await this.prisma.user.findMany({
+            where: userWhere,
+            select: { id: true, fullName: true, fullNameAr: true, employeeNumber: true },
+        });
+        return users
+            .filter((user) => matchesEmployeeSearch(normalized, user))
+            .map((user) => user.id);
     }
 
     private async resolveScopeUserIds(requesterId: string, requesterRole: string) {
@@ -83,16 +89,18 @@ export class ReportsService {
             ...this.buildDateFilter('startDate', query),
         };
 
-        const userWhere = this.buildUserWhere(query);
-        if (Object.keys(userWhere).length) {
-            where.user = userWhere;
-        }
+        const userWhere = this.buildUserScopeWhere(query, scopeUserIds);
+        const employeeIds = await this.resolveEmployeeIds(query?.employee, userWhere);
 
         if (query?.userId) {
             if (scopeUserIds && !scopeUserIds.includes(query.userId)) return this.emptyPage(page, limit);
+            if (employeeIds && !employeeIds.includes(query.userId)) return this.emptyPage(page, limit);
             where.userId = query.userId;
-        } else if (scopeUserIds) {
-            where.userId = { in: scopeUserIds };
+        } else if (employeeIds !== null) {
+            if (employeeIds.length === 0) return this.emptyPage(page, limit);
+            where.userId = { in: employeeIds };
+        } else if (Object.keys(userWhere).length) {
+            where.user = userWhere;
         }
 
         const [items, total] = await Promise.all([
@@ -122,16 +130,18 @@ export class ReportsService {
             ...this.buildDateFilter('requestDate', query),
         };
 
-        const userWhere = this.buildUserWhere(query);
-        if (Object.keys(userWhere).length) {
-            where.user = userWhere;
-        }
+        const userWhere = this.buildUserScopeWhere(query, scopeUserIds);
+        const employeeIds = await this.resolveEmployeeIds(query?.employee, userWhere);
 
         if (query?.userId) {
             if (scopeUserIds && !scopeUserIds.includes(query.userId)) return this.emptyPage(page, limit);
+            if (employeeIds && !employeeIds.includes(query.userId)) return this.emptyPage(page, limit);
             where.userId = query.userId;
-        } else if (scopeUserIds) {
-            where.userId = { in: scopeUserIds };
+        } else if (employeeIds !== null) {
+            if (employeeIds.length === 0) return this.emptyPage(page, limit);
+            where.userId = { in: employeeIds };
+        } else if (Object.keys(userWhere).length) {
+            where.user = userWhere;
         }
 
         const [items, total] = await Promise.all([
@@ -170,16 +180,18 @@ export class ReportsService {
             ...this.buildDateFilter('createdAt', query),
         };
 
-        const userWhere = this.buildUserWhere(query);
-        if (Object.keys(userWhere).length) {
-            where.user = userWhere;
-        }
+        const userWhere = this.buildUserScopeWhere(query, scopeUserIds);
+        const employeeIds = await this.resolveEmployeeIds(query?.employee, userWhere);
 
         if (query?.userId) {
             if (scopeUserIds && !scopeUserIds.includes(query.userId)) return this.emptyPage(page, limit);
+            if (employeeIds && !employeeIds.includes(query.userId)) return this.emptyPage(page, limit);
             where.userId = query.userId;
-        } else if (scopeUserIds) {
-            where.userId = { in: scopeUserIds };
+        } else if (employeeIds !== null) {
+            if (employeeIds.length === 0) return this.emptyPage(page, limit);
+            where.userId = { in: employeeIds };
+        } else if (Object.keys(userWhere).length) {
+            where.user = userWhere;
         }
 
         const [items, total] = await Promise.all([
@@ -205,28 +217,13 @@ export class ReportsService {
         if (scopeUserIds && scopeUserIds.length === 0) return this.emptyPage(page, limit);
 
         const employee = query?.employee?.trim();
-        const userWhere: any = {
-            ...(query?.departmentId ? { departmentId: query.departmentId } : {}),
-            ...(query?.governorate ? { governorate: query.governorate } : {}),
-        };
+        const userWhere = this.buildUserScopeWhere(query, scopeUserIds);
+        let users: any[] = [];
+        let total = 0;
 
         if (employee) {
-            userWhere.OR = [
-                { fullName: { contains: employee, mode: 'insensitive' } },
-                { fullNameAr: { contains: employee, mode: 'insensitive' } },
-                { employeeNumber: { contains: employee, mode: 'insensitive' } },
-            ];
-        }
-
-        if (scopeUserIds) {
-            userWhere.id = { in: scopeUserIds };
-        }
-
-        const [users, total] = await Promise.all([
-            this.prisma.user.findMany({
+            const candidates = await this.prisma.user.findMany({
                 where: userWhere,
-                skip,
-                take: limit,
                 orderBy: { fullName: 'asc' },
                 select: {
                     id: true,
@@ -235,9 +232,30 @@ export class ReportsService {
                     employeeNumber: true,
                     department: { select: { name: true, nameAr: true } },
                 },
-            }),
-            this.prisma.user.count({ where: userWhere }),
-        ]);
+            });
+            const filtered = candidates.filter((user) => matchesEmployeeSearch(employee, user));
+            total = filtered.length;
+            users = filtered.slice(skip, skip + limit);
+        } else {
+            const result = await Promise.all([
+                this.prisma.user.findMany({
+                    where: userWhere,
+                    skip,
+                    take: limit,
+                    orderBy: { fullName: 'asc' },
+                    select: {
+                        id: true,
+                        fullName: true,
+                        fullNameAr: true,
+                        employeeNumber: true,
+                        department: { select: { name: true, nameAr: true } },
+                    },
+                }),
+                this.prisma.user.count({ where: userWhere }),
+            ]);
+            users = result[0];
+            total = result[1];
+        }
 
         if (users.length === 0) {
             return { items: [], total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
@@ -345,19 +363,21 @@ export class ReportsService {
             ...this.buildDateFilter('createdAt', query),
         };
 
-        const userWhere = this.buildUserWhere(query);
-        if (Object.keys(userWhere).length) {
-            leaveWhere.user = userWhere;
-            permissionWhere.user = userWhere;
-        }
+        const userWhere = this.buildUserScopeWhere(query, scopeUserIds);
+        const employeeIds = await this.resolveEmployeeIds(query?.employee, userWhere);
 
         if (query?.userId) {
             if (scopeUserIds && !scopeUserIds.includes(query.userId)) return this.emptyPage(page, limit);
+            if (employeeIds && !employeeIds.includes(query.userId)) return this.emptyPage(page, limit);
             leaveWhere.userId = query.userId;
             permissionWhere.userId = query.userId;
-        } else if (scopeUserIds) {
-            leaveWhere.userId = { in: scopeUserIds };
-            permissionWhere.userId = { in: scopeUserIds };
+        } else if (employeeIds !== null) {
+            if (employeeIds.length === 0) return this.emptyPage(page, limit);
+            leaveWhere.userId = { in: employeeIds };
+            permissionWhere.userId = { in: employeeIds };
+        } else if (Object.keys(userWhere).length) {
+            leaveWhere.user = userWhere;
+            permissionWhere.user = userWhere;
         }
 
         const [leaveItems, permissionItems] = await Promise.all([

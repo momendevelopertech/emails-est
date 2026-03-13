@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 
 export type UserProfile = {
     id: string;
@@ -23,11 +24,29 @@ type AuthState = {
     setBootstrapped: (bootstrapped: boolean) => void;
 };
 
-export const useAuthStore = create<AuthState>((set) => ({
+const initialState = {
     user: null,
     loading: true,
     bootstrapped: false,
-    setUser: (user) => set({ user }),
-    setLoading: (loading) => set({ loading }),
-    setBootstrapped: (bootstrapped) => set({ bootstrapped }),
-}));
+};
+
+export const useAuthStore = create<AuthState>()(
+    persist(
+        (set) => ({
+            ...initialState,
+            setUser: (user) => set({ user }),
+            setLoading: (loading) => set({ loading }),
+            setBootstrapped: (bootstrapped) => set({ bootstrapped }),
+        }),
+        {
+            name: 'sphinx-auth',
+            storage: typeof window !== 'undefined' ? createJSONStorage(() => localStorage) : undefined,
+            partialize: (state) => ({ user: state.user }),
+            onRehydrateStorage: () => (state) => {
+                if (!state) return;
+                state.setBootstrapped(!!state.user);
+                state.setLoading(false);
+            },
+        },
+    ),
+);

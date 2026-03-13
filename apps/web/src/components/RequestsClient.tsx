@@ -7,8 +7,10 @@ import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import { enumLabels } from '@/lib/enum-labels';
 import { usePusherChannel } from '@/lib/use-pusher-channel';
+import { normalizeSearchText } from '@/lib/search-normalization';
 import PageLoader from './PageLoader';
 import EmployeeHistoryModal from './EmployeeHistoryModal';
+import ConfirmDialog from './ConfirmDialog';
 
 type Department = { id: string; name: string; nameAr?: string | null };
 type RequestUser = {
@@ -47,6 +49,7 @@ type RequestRow = {
     leaveType?: string;
     subtype: string;
     employeeName: string;
+    employeeNameAlt?: string | null;
     employeeNumber: string;
     requestDate: string;
     createdAt: string;
@@ -78,6 +81,7 @@ type LatenessResponse = {
 export default function RequestsClient({ locale }: { locale: string }) {
     const t = useTranslations('requestsPage');
     const tEmployees = useTranslations('employees');
+    const tCommon = useTranslations('common');
     const { user, ready } = useRequireAuth(locale);
     const role = user?.role;
     const isSecretary = role === 'BRANCH_SECRETARY';
@@ -110,6 +114,8 @@ export default function RequestsClient({ locale }: { locale: string }) {
         governorate: '',
         departmentId: '',
     });
+    const [pendingDelete, setPendingDelete] = useState<RequestRow | null>(null);
+    const [deleteBusy, setDeleteBusy] = useState(false);
     const [salary, setSalary] = useState('');
     const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -249,42 +255,52 @@ export default function RequestsClient({ locale }: { locale: string }) {
 
     const leaveRows = useMemo<RequestRow[]>(
         () =>
-            leaves.map((leave) => ({
-                id: leave.id,
-                requestType: 'leave',
-                leaveType: leave.leaveType,
-                subtype: enumLabels.leaveType(leave.leaveType, locale as 'en' | 'ar'),
-                employeeName: locale === 'ar' ? leave.user.fullNameAr || leave.user.fullName : leave.user.fullName,
-                employeeNumber: leave.user.employeeNumber,
-                requestDate: leave.startDate,
-                createdAt: leave.createdAt,
-                status: leave.status,
-                details: `${new Date(leave.startDate).toLocaleDateString(dateLocale)} - ${new Date(leave.endDate).toLocaleDateString(dateLocale)}`,
-                printUrl: `/${locale}/requests/print/leave/${leave.id}`,
-                approvedByMgrId: leave.approvedByMgrId,
-                employeeGovernorate: leave.user.governorate ?? null,
-                employeeDepartmentId: leave.user.department?.id ?? null,
-            })),
+            leaves.map((leave) => {
+                const primaryName = locale === 'ar' ? leave.user.fullNameAr || leave.user.fullName : leave.user.fullName;
+                const altName = locale === 'ar' ? leave.user.fullName : leave.user.fullNameAr || '';
+                return {
+                    id: leave.id,
+                    requestType: 'leave',
+                    leaveType: leave.leaveType,
+                    subtype: enumLabels.leaveType(leave.leaveType, locale as 'en' | 'ar'),
+                    employeeName: primaryName,
+                    employeeNameAlt: altName || null,
+                    employeeNumber: leave.user.employeeNumber,
+                    requestDate: leave.startDate,
+                    createdAt: leave.createdAt,
+                    status: leave.status,
+                    details: `${new Date(leave.startDate).toLocaleDateString(dateLocale)} - ${new Date(leave.endDate).toLocaleDateString(dateLocale)}`,
+                    printUrl: `/${locale}/requests/print/leave/${leave.id}`,
+                    approvedByMgrId: leave.approvedByMgrId,
+                    employeeGovernorate: leave.user.governorate ?? null,
+                    employeeDepartmentId: leave.user.department?.id ?? null,
+                };
+            }),
         [dateLocale, leaves, locale],
     );
 
     const permissionRows = useMemo<RequestRow[]>(
         () =>
-            permissions.map((perm) => ({
-                id: perm.id,
-                requestType: 'permission',
-                subtype: enumLabels.permissionType(perm.permissionType, locale as 'en' | 'ar'),
-                employeeName: locale === 'ar' ? perm.user.fullNameAr || perm.user.fullName : perm.user.fullName,
-                employeeNumber: perm.user.employeeNumber,
-                requestDate: perm.requestDate,
-                createdAt: perm.createdAt,
-                status: perm.status,
-                details: `${perm.hoursUsed}h`,
-                printUrl: `/${locale}/requests/print/permission/${perm.id}`,
-                approvedByMgrId: perm.approvedByMgrId,
-                employeeGovernorate: perm.user.governorate ?? null,
-                employeeDepartmentId: perm.user.department?.id ?? null,
-            })),
+            permissions.map((perm) => {
+                const primaryName = locale === 'ar' ? perm.user.fullNameAr || perm.user.fullName : perm.user.fullName;
+                const altName = locale === 'ar' ? perm.user.fullName : perm.user.fullNameAr || '';
+                return {
+                    id: perm.id,
+                    requestType: 'permission',
+                    subtype: enumLabels.permissionType(perm.permissionType, locale as 'en' | 'ar'),
+                    employeeName: primaryName,
+                    employeeNameAlt: altName || null,
+                    employeeNumber: perm.user.employeeNumber,
+                    requestDate: perm.requestDate,
+                    createdAt: perm.createdAt,
+                    status: perm.status,
+                    details: `${perm.hoursUsed}h`,
+                    printUrl: `/${locale}/requests/print/permission/${perm.id}`,
+                    approvedByMgrId: perm.approvedByMgrId,
+                    employeeGovernorate: perm.user.governorate ?? null,
+                    employeeDepartmentId: perm.user.department?.id ?? null,
+                };
+            }),
         [locale, permissions],
     );
 
@@ -314,10 +330,12 @@ export default function RequestsClient({ locale }: { locale: string }) {
     );
 
     const applyFilters = useCallback((rows: RequestRow[]) => {
+        const normalizedQuery = normalizeSearchText(filters.search);
         return rows.filter((row) => {
-            const searchValue = `${row.employeeName} ${row.employeeNumber} ${row.subtype}`.toLowerCase();
+            const searchValue = `${row.employeeName} ${row.employeeNameAlt || ''} ${row.employeeNumber} ${row.subtype}`;
+            const normalizedValue = normalizeSearchText(searchValue);
             const statusOk = !filters.status || row.status === filters.status;
-            const searchOk = !filters.search || searchValue.includes(filters.search.toLowerCase());
+            const searchOk = !normalizedQuery || normalizedValue.includes(normalizedQuery);
             const fromOk = !filters.from || new Date(row.requestDate) >= new Date(filters.from);
             const toOk = !filters.to || new Date(row.requestDate) <= new Date(`${filters.to}T23:59:59`);
             const governorateOk = !filters.governorate || row.employeeGovernorate === filters.governorate;
@@ -368,10 +386,22 @@ export default function RequestsClient({ locale }: { locale: string }) {
     };
 
     const onDelete = (row: RequestRow) => {
-        const confirmed = window.confirm(t('confirmDelete'));
-        if (!confirmed) return;
-        if (row.requestType === 'leave') return deleteLeave(row.id);
-        return deletePermission(row.id);
+        setPendingDelete(row);
+    };
+
+    const confirmDelete = async () => {
+        if (!pendingDelete || deleteBusy) return;
+        setDeleteBusy(true);
+        try {
+            if (pendingDelete.requestType === 'leave') {
+                await deleteLeave(pendingDelete.id);
+            } else {
+                await deletePermission(pendingDelete.id);
+            }
+        } finally {
+            setDeleteBusy(false);
+            setPendingDelete(null);
+        }
     };
 
     const isCurrentCycle = useMemo(() => {
@@ -727,6 +757,15 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 user={user ? { id: user.id, fullName: user.fullName, fullNameAr: user.fullNameAr } : null}
                 locale={locale}
                 onClose={() => setHistoryOpen(false)}
+            />
+            <ConfirmDialog
+                open={!!pendingDelete}
+                message={tCommon('confirmDeleteItem')}
+                confirmLabel={tCommon('confirm')}
+                cancelLabel={tCommon('cancel')}
+                confirmDisabled={deleteBusy}
+                onConfirm={confirmDelete}
+                onCancel={() => setPendingDelete(null)}
             />
         </main>
     );

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -30,6 +30,14 @@ export class DepartmentsService {
     }
 
     async remove(id: string) {
+        const dept = await this.prisma.department.findUnique({
+            where: { id },
+            select: { id: true, _count: { select: { employees: true } } },
+        });
+        if (!dept) throw new NotFoundException('Department not found');
+        if ((dept._count?.employees || 0) > 0) {
+            throw new BadRequestException('Cannot delete department with employees');
+        }
         return this.prisma.department.delete({ where: { id } });
     }
 }

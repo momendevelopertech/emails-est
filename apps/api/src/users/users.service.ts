@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { RedisService } from '../redis/redis.service';
+import { matchesEmployeeSearch } from '../shared/search-normalization';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -169,7 +170,6 @@ export class UsersService {
             where.departmentId = params.departmentId;
         }
 
-        if (params?.name) where.fullName = { contains: params.name, mode: 'insensitive' };
         if (params?.phone) where.phone = { contains: params.phone, mode: 'insensitive' };
         if (params?.status === 'active') where.isActive = true;
         if (params?.status === 'inactive') where.isActive = false;
@@ -192,6 +192,38 @@ export class UsersService {
         const cacheKey = `users:${requesterRole}:${requesterId}:${JSON.stringify(params || {})}`;
         const cached = await this.redisService.getJSON<any>(cacheKey);
         if (cached) return cached;
+
+        const nameQuery = params?.name?.trim();
+        if (nameQuery) {
+            const candidates = await this.prisma.user.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                select: {
+                    id: true,
+                    employeeNumber: true,
+                    username: true,
+                    fullName: true,
+                    fullNameAr: true,
+                    email: true,
+                    phone: true,
+                    role: true,
+                    governorate: true,
+                    jobTitle: true,
+                    jobTitleAr: true,
+                    isActive: true,
+                    profileImage: true,
+                    mustChangePass: true,
+                    department: { select: { id: true, name: true, nameAr: true, managerId: true } },
+                    createdAt: true,
+                },
+            });
+            const filtered = candidates.filter((user) => matchesEmployeeSearch(nameQuery, user));
+            const items = filtered.slice(skip, skip + limit);
+            const total = filtered.length;
+            const payload = { items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+            await this.redisService.setJSON(cacheKey, payload, 30);
+            return payload;
+        }
 
         const [items, total] = await Promise.all([
             this.prisma.user.findMany({

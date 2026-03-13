@@ -3,6 +3,11 @@
     "name": "SPHINX HR",
     "tagline": "Enterprise HR Management System"
   },
+  "common": {
+    "confirmDeleteItem": "Are you sure you want to delete this item?",
+    "confirm": "Confirm",
+    "cancel": "Cancel"
+  },
   "nav": {
     "dashboard": "Dashboard",
     "calendar": "Calendar",
@@ -96,7 +101,9 @@
     "close": "Close",
     "cancel": "Cancel",
     "sending": "Sending...",
-    "permissionHours": "Permission Hours"
+    "permissionHours": "Permission Hours",
+    "markRead": "Read",
+    "markingRead": "Marking..."
   },
   "calendar": {
     "title": "Team Calendar",
@@ -292,7 +299,10 @@
     "name": "Name",
     "nameAr": "Name (AR)",
     "description": "Description",
-    "delete": "Delete"
+    "delete": "Delete",
+    "confirmDelete": "Are you sure you want to delete this department?",
+    "employeesCount": "Employees: {count}",
+    "deleteBlocked": "Cannot delete a department with assigned employees."
   },
   "formsBuilder": {
     "create": "Create Dynamic Form",
@@ -422,7 +432,7 @@
     "latenessNotConverted": "Not converted",
     "latenessEmpty": "No lateness records in this cycle.",
     "latenessLoading": "Loading lateness...",
-    "confirmDelete": "Confirm delete?"
+    "confirmDelete": "Are you sure you want to delete this item?"
   },
   "workSchedule": {
     "title": "Work Schedule",

@@ -13,6 +13,7 @@ import { useRequireAuth } from '@/lib/use-auth';
 import { useTranslations } from 'next-intl';
 import { enumLabels } from '@/lib/enum-labels';
 import PageLoader from './PageLoader';
+import { Megaphone, Wallet } from 'lucide-react';
 
 type LeaveRequest = {
     id: string;
@@ -54,6 +55,21 @@ type LatenessItem = {
     status?: string;
 };
 
+type AnnouncementNotification = {
+    id: string;
+    title: string;
+    titleAr?: string | null;
+    body?: string | null;
+    bodyAr?: string | null;
+    metadata?: { kind?: string } | null;
+    isRead: boolean;
+    createdAt: string;
+};
+
+type NotificationsResponse = {
+    items: AnnouncementNotification[];
+};
+
 export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     const t = useTranslations('dashboard');
     const tm = useTranslations('requestModal');
@@ -62,6 +78,8 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     const [permissions, setPermissions] = useState<PermissionRequest[]>([]);
     const [forms, setForms] = useState<FormSubmission[]>([]);
     const [notes, setNotes] = useState<NoteItem[]>([]);
+    const [hrNotice, setHrNotice] = useState<AnnouncementNotification | null>(null);
+    const [markingNotice, setMarkingNotice] = useState(false);
     const [latenessItems, setLatenessItems] = useState<LatenessItem[]>([]);
     const [balances, setBalances] = useState<any[]>([]);
     const [permissionCycle, setPermissionCycle] = useState<any | null>(null);
@@ -81,7 +99,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         if (refreshInFlight.current) return;
         refreshInFlight.current = true;
         try {
-            const [leaveBalances, leaveReqs, permissionReqs, formSubs, notesRes, cycle, absence, scheduleRes, latenessRes] = await Promise.all([
+            const [leaveBalances, leaveReqs, permissionReqs, formSubs, notesRes, cycle, absence, scheduleRes, latenessRes, announcementsRes] = await Promise.all([
                 api.get('/leaves/balances'),
                 api.get('/leaves'),
                 api.get('/permissions'),
@@ -96,6 +114,9 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
                         to: '2100-12-31',
                     },
                 }),
+                api.get<NotificationsResponse>('/notifications', {
+                    params: { type: 'ANNOUNCEMENT', status: 'unread', limit: 1 },
+                }),
             ]);
             setBalances(leaveBalances.data);
             setLeaves(leaveReqs.data);
@@ -106,6 +127,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
             setAbsenceDeduction(absence.data);
             setSchedule(scheduleRes.data);
             setLatenessItems(latenessRes.data?.items || []);
+            setHrNotice(announcementsRes.data?.items?.[0] || null);
         } finally {
             refreshInFlight.current = false;
         }
@@ -163,6 +185,22 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     }, [absenceDeduction?.deductedDays, balances, leaves, permissions, forms, permissionCycle?.remainingHours, permissionCycle?.usedHours, t]);
 
     const canBroadcast = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
+    const noticeContent = useMemo(() => {
+        if (!hrNotice) return null;
+        const isPayroll = hrNotice.metadata?.kind === 'PAYROLL';
+        const title = locale === 'ar'
+            ? hrNotice.titleAr || hrNotice.title || ''
+            : hrNotice.title || hrNotice.titleAr || '';
+        const body = locale === 'ar'
+            ? hrNotice.bodyAr || hrNotice.body || ''
+            : hrNotice.body || hrNotice.bodyAr || '';
+        return {
+            isPayroll,
+            title,
+            body,
+            label: isPayroll ? t('payrollTitle') : t('announcementTitle'),
+        };
+    }, [hrNotice, locale, t]);
 
     const sendAnnouncement = async () => {
         if (!announcement.title.trim() || !announcement.body.trim()) return;
@@ -189,6 +227,17 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
             toast.success(t('payrollSent'));
         } finally {
             setSendingPayroll(false);
+        }
+    };
+
+    const markAnnouncementRead = async () => {
+        if (!hrNotice || markingNotice) return;
+        setMarkingNotice(true);
+        try {
+            await api.patch(`/notifications/${hrNotice.id}/read`);
+            setHrNotice(null);
+        } finally {
+            setMarkingNotice(false);
         }
     };
 
@@ -258,6 +307,27 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
                         <button className="btn-secondary" onClick={triggerPayroll} disabled={sendingPayroll}>
                             {sendingPayroll ? t('payrollProcessing') : t('payrollButton')}
                         </button>
+                    </div>
+                </div>
+            )}
+            {noticeContent && (
+                <div className="px-6 mt-6">
+                    <div className="rounded-2xl border border-ink/10 bg-white/80 p-4 shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex items-start gap-3">
+                                <div className={`flex h-11 w-11 items-center justify-center rounded-full ${noticeContent.isPayroll ? 'bg-amber-100 text-amber-700' : 'bg-cactus/15 text-cactus'}`}>
+                                    {noticeContent.isPayroll ? <Wallet size={20} /> : <Megaphone size={20} />}
+                                </div>
+                                <div>
+                                    <p className="text-xs uppercase tracking-[0.2em] text-ink/50">{noticeContent.label}</p>
+                                    <p className="text-sm font-semibold">{noticeContent.title || noticeContent.label}</p>
+                                    {noticeContent.body && <p className="text-sm text-ink/60">{noticeContent.body}</p>}
+                                </div>
+                            </div>
+                            <button className="btn-primary" onClick={markAnnouncementRead} disabled={markingNotice}>
+                                {markingNotice ? t('markingRead') : t('markRead')}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

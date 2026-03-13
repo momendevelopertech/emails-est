@@ -14,7 +14,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
     const t = useTranslations('auth');
     const router = useRouter();
     const pathname = usePathname();
-    const { setUser } = useAuthStore();
+    const { setUser, setBootstrapped } = useAuthStore();
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
@@ -88,6 +88,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
             await api.get('/auth/csrf');
             const res = await api.post('/auth/login', { identifier: identifier.trim(), password, rememberMe });
             setUser(res.data.user);
+            setBootstrapped(true);
             const role = res.data?.user?.role;
             const target = role === 'MANAGER' || role === 'BRANCH_SECRETARY'
                 ? `/${params.locale}/requests`

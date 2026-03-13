@@ -18,7 +18,7 @@ type PaginatedResponse<T> = {
     totalPages: number;
 };
 
-type TabKey = 'leaves' | 'permissions' | 'missions' | 'absences' | 'summary' | 'pending' | 'forms';
+type TabKey = 'leaves' | 'permissions' | 'missions' | 'absences' | 'summary' | 'pending';
 
 type Department = { id: string; name: string; nameAr?: string | null };
 
@@ -57,7 +57,6 @@ export default function ReportsClient({ locale }: { locale: string }) {
         to: '',
         employee: '',
         status: '',
-        reportType: '',
         departmentId: '',
         governorate: '',
         leaveType: '',
@@ -70,7 +69,6 @@ export default function ReportsClient({ locale }: { locale: string }) {
         if (tab === 'permissions') return '/reports/permissions';
         if (tab === 'summary') return '/reports/employee-summary';
         if (tab === 'pending') return '/reports/pending';
-        if (tab === 'forms') return '/reports/forms';
         return '/reports/leaves';
     }, [tab]);
 
@@ -89,13 +87,12 @@ export default function ReportsClient({ locale }: { locale: string }) {
             ...(filters.to ? { to: filters.to } : {}),
             ...(filters.employee ? { employee: filters.employee } : {}),
             ...(filters.status ? { status: filters.status } : {}),
-            ...(filters.reportType && tab === 'forms' ? { reportType: filters.reportType } : {}),
             ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
             ...(filters.governorate ? { governorate: filters.governorate } : {}),
             ...(filters.permissionType && tab === 'permissions' ? { permissionType: filters.permissionType } : {}),
             ...(effectiveLeaveType ? { leaveType: effectiveLeaveType } : {}),
         };
-    }, [filters.departmentId, filters.employee, filters.from, filters.governorate, filters.leaveType, filters.permissionType, filters.reportType, filters.status, filters.to, page, rows, tab]);
+    }, [filters.departmentId, filters.employee, filters.from, filters.governorate, filters.leaveType, filters.permissionType, filters.status, filters.to, page, rows, tab]);
 
     const fetchSummary = useCallback(async () => {
         if (!canViewReports) return;
@@ -175,7 +172,7 @@ export default function ReportsClient({ locale }: { locale: string }) {
 
     useEffect(() => {
         setPage(1);
-    }, [tab, filters.departmentId, filters.employee, filters.from, filters.governorate, filters.leaveType, filters.permissionType, filters.reportType, filters.status, filters.to, rows]);
+    }, [tab, filters.departmentId, filters.employee, filters.from, filters.governorate, filters.leaveType, filters.permissionType, filters.status, filters.to, rows]);
 
     const tableAlignClass = locale === 'ar' ? 'text-right' : 'text-left';
     const showEmergency = useMemo(
@@ -195,11 +192,9 @@ export default function ReportsClient({ locale }: { locale: string }) {
         { key: 'absences', label: t('absenceTitle') },
         { key: 'summary', label: t('summaryTitle') },
         { key: 'pending', label: t('pendingTitle') },
-        { key: 'forms', label: t('formsTitle') },
     ];
 
     const showStatusFilter = tab !== 'pending';
-    const showReportTypeFilter = tab === 'forms';
     const showLeaveTypeFilter = tab === 'leaves';
     const showPermissionTypeFilter = tab === 'permissions';
 
@@ -301,14 +296,6 @@ export default function ReportsClient({ locale }: { locale: string }) {
                         value={filters.employee}
                         onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, employee: e.target.value })); }}
                     />
-                    {showReportTypeFilter && (
-                        <input
-                            className="rounded-xl border border-ink/20 bg-white px-3 py-2"
-                            placeholder={t('reportTypeFilter')}
-                            value={filters.reportType}
-                            onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, reportType: e.target.value })); }}
-                        />
-                    )}
                     {showLeaveTypeFilter && (
                         <select
                             className="rounded-xl border border-ink/20 bg-white px-3 py-2"
@@ -475,17 +462,13 @@ export default function ReportsClient({ locale }: { locale: string }) {
                                         : item.user?.fullName || item.fullName || '-';
                                     const type = item.leaveType
                                         || item.permissionType
-                                        || (tab === 'forms' ? (locale === 'ar' ? item.form?.nameAr || item.form?.name : item.form?.name) : null)
-                                        || item.form?.name
                                         || item.role
                                         || '-';
                                     const status = item.status || (item.isActive ? 'ACTIVE' : 'INACTIVE');
-                                    const statusLabel = tab === 'forms'
-                                        ? enumLabels.status(status, locale as 'en' | 'ar')
-                                        : enumLabels.status(status, locale as 'en' | 'ar', {
-                                            requestType: tab === 'permissions' ? 'permission' : 'leave',
-                                            approvedByMgrId: item.approvedByMgrId ?? null,
-                                        });
+                                    const statusLabel = enumLabels.status(status, locale as 'en' | 'ar', {
+                                        requestType: tab === 'permissions' ? 'permission' : 'leave',
+                                        approvedByMgrId: item.approvedByMgrId ?? null,
+                                    });
                                     const typeLabel = item.leaveType
                                         ? enumLabels.leaveType(type, locale as 'en' | 'ar')
                                         : item.permissionType

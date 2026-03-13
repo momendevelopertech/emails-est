@@ -3,6 +3,11 @@
     "name": "SPHINX HR",
     "tagline": "نظام إدارة الموارد البشرية"
   },
+  "common": {
+    "confirmDeleteItem": "هل أنت متأكد من حذف هذا العنصر؟",
+    "confirm": "تأكيد",
+    "cancel": "إلغاء"
+  },
   "nav": {
     "dashboard": "لوحة التحكم",
     "calendar": "التقويم",
@@ -96,7 +101,9 @@
     "close": "إغلاق",
     "cancel": "إلغاء",
     "sending": "جارٍ الإرسال...",
-    "permissionHours": "ساعات الإذن"
+    "permissionHours": "ساعات الإذن",
+    "markRead": "قراءة",
+    "markingRead": "جارٍ التحديث..."
   },
   "calendar": {
     "title": "تقويم الفريق",
@@ -292,7 +299,10 @@
     "name": "اسم القسم",
     "nameAr": "اسم القسم (عربي)",
     "description": "الوصف",
-    "delete": "حذف"
+    "delete": "حذف",
+    "confirmDelete": "هل أنت متأكد من حذف هذا القسم؟",
+    "employeesCount": "عدد الموظفين: {count}",
+    "deleteBlocked": "لا يمكن حذف قسم مرتبط بموظفين."
   },
   "formsBuilder": {
     "create": "إنشاء نموذج ديناميكي",
@@ -422,7 +432,7 @@
     "latenessNotConverted": "غير محول",
     "latenessEmpty": "لا توجد تأخيرات في هذه الدورة.",
     "latenessLoading": "جاري تحميل التأخيرات...",
-    "confirmDelete": "تأكيد حذف الطلب؟"
+    "confirmDelete": "هل أنت متأكد من حذف هذا العنصر؟"
   },
   "workSchedule": {
     "title": "مواعيد العمل",
