@@ -35,6 +35,9 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
     const [departments, setDepartments] = useState<Department[]>([]);
     const [branches, setBranches] = useState<Branch[]>([]);
     const [form, setForm] = useState<FormState>({ name: '', nameAr: '', description: '', branchIds: [] });
+    const [branchForm, setBranchForm] = useState({ name: '', nameAr: '' });
+    const [branchCreateOpen, setBranchCreateOpen] = useState(false);
+    const [branchSaving, setBranchSaving] = useState(false);
     const [createOpen, setCreateOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [editingDept, setEditingDept] = useState<Department | null>(null);
@@ -91,7 +94,7 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
     }, [page, totalPages]);
 
     if (!ready || loading) {
-        return <PageLoader text={locale === 'ar' ? 'جاري تحميل الأقسام...' : 'Loading departments...'} />;
+        return <PageLoader text={locale === 'ar' ? 'جاري تحميل الفروع والأقسام...' : 'Loading branches & departments...'} />;
     }
     if (!canAdmin) return null;
 
@@ -113,6 +116,7 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
     };
 
     const resetForm = () => setForm({ name: '', nameAr: '', description: '', branchIds: [] });
+    const resetBranchForm = () => setBranchForm({ name: '', nameAr: '' });
 
     const createDepartment = async () => {
         if (!form.name.trim()) {
@@ -134,6 +138,28 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
         await fetchAll();
         router.push(`/${locale}/departments`);
         router.refresh();
+    };
+
+    const createBranch = async () => {
+        if (!branchForm.name.trim()) {
+            alert(locale === 'ar' ? 'اسم الفرع مطلوب.' : 'Branch name is required.');
+            return;
+        }
+        setBranchSaving(true);
+        try {
+            await api.post('/branches', {
+                name: branchForm.name.trim(),
+                nameAr: branchForm.nameAr?.trim() || undefined,
+            });
+            resetBranchForm();
+            setBranchCreateOpen(false);
+            await fetchAll();
+        } catch (error: any) {
+            const message = error?.message || (locale === 'ar' ? 'تعذر إضافة الفرع.' : 'Unable to create branch.');
+            alert(message);
+        } finally {
+            setBranchSaving(false);
+        }
     };
 
     const openEdit = (dept: Department) => {
@@ -192,8 +218,44 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
     const getBranchCount = (dept: Department, branchId: number) =>
         dept.branchCounts.find((entry) => entry.branchId === branchId)?.count || 0;
 
+    const branchDepartmentCounts = useMemo(() => {
+        const counts = new Map<number, number>();
+        departments.forEach((dept) => {
+            dept.branches.forEach((branch) => {
+                counts.set(branch.id, (counts.get(branch.id) || 0) + 1);
+            });
+        });
+        return counts;
+    }, [departments]);
+
     return (
         <main className="px-6 pb-12 space-y-6">
+            <section className="card p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-lg font-semibold">{t('branchesTitle')}</h2>
+                        <p className="text-sm text-ink/60">{t('branchesHint')}</p>
+                    </div>
+                    <button className="btn-primary" onClick={() => setBranchCreateOpen(true)}>{t('branchCreateCta')}</button>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3">
+                    {branches.length === 0 && (
+                        <p className="text-sm text-ink/60">{t('branchListEmpty')}</p>
+                    )}
+                    {branches.map((branch) => {
+                        const departmentCount = branchDepartmentCounts.get(branch.id) || 0;
+                        return (
+                            <div key={branch.id} className="rounded-2xl border border-ink/10 bg-white/70 px-4 py-3">
+                                <p className="text-sm font-semibold">
+                                    {locale === 'ar' ? (branch.nameAr || branch.name) : branch.name}
+                                </p>
+                                <p className="text-xs text-ink/60">{t('branchDepartmentsCount', { count: departmentCount })}</p>
+                            </div>
+                        );
+                    })}
+                </div>
+            </section>
+
             <section className="card p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-lg font-semibold">{t('title')}</h2>
@@ -340,6 +402,37 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
                         <div className="mt-4 flex justify-end gap-2">
                             <button className="btn-outline" onClick={() => { setCreateOpen(false); resetForm(); }}>{cancelLabel}</button>
                             <button className="btn-primary" onClick={createDepartment}>{t('createCta')}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {branchCreateOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                    <div className="card w-full max-w-lg p-6">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-semibold">{t('branchCreate')}</h3>
+                            <button className="btn-outline" onClick={() => { setBranchCreateOpen(false); resetBranchForm(); }}>×</button>
+                        </div>
+                        <div className="mt-4 grid gap-3">
+                            <input
+                                className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                placeholder={t('branchName')}
+                                value={branchForm.name}
+                                onChange={(e) => setBranchForm((p) => ({ ...p, name: e.target.value }))}
+                            />
+                            <input
+                                className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                placeholder={t('branchNameAr')}
+                                value={branchForm.nameAr}
+                                onChange={(e) => setBranchForm((p) => ({ ...p, nameAr: e.target.value }))}
+                            />
+                        </div>
+                        <div className="mt-4 flex justify-end gap-2">
+                            <button className="btn-outline" onClick={() => { setBranchCreateOpen(false); resetBranchForm(); }}>{cancelLabel}</button>
+                            <button className="btn-primary" onClick={createBranch} disabled={branchSaving}>
+                                {branchSaving ? t('saving') : t('branchCreateCta')}
+                            </button>
                         </div>
                     </div>
                 </div>
