@@ -12,6 +12,15 @@ export function useRequireAuth(locale: string) {
     const attemptedRef = useRef(false);
 
     useEffect(() => {
+        if (!user) {
+            setReady(false);
+            if (typeof window !== 'undefined' && window.sessionStorage.getItem('sphinx-logged-out') === '1') {
+                setLoading(false);
+                router.push(`/${locale}/login`);
+                return;
+            }
+        }
+
         const hasRequiredProfile = !!(user?.jobTitle && user?.governorate && user?.branchId);
         if (bootstrapped && user && hasRequiredProfile) {
             setReady(true);
