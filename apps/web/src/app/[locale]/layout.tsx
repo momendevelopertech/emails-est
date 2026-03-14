@@ -8,6 +8,8 @@ import { defaultLocale, locales } from '@/i18n/routing';
 import { Noto_Kufi_Arabic, Sora } from 'next/font/google';
 import ClientCacheManager from '@/components/ClientCacheManager';
 import PwaRegistrar from '@/components/PwaRegistrar';
+import { AuthProvider } from '@/context/AuthContext';
+import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 
 const notoKufiArabic = Noto_Kufi_Arabic({
     subsets: ['arabic'],
@@ -52,10 +54,13 @@ export default async function LocaleLayout({
         <html lang={locale} dir={dir} className={fontClass}>
             <body className={`bg-atmosphere text-ink ${locale === 'ar' ? 'font-ar' : 'font-base'}`}>
                 <NextIntlClientProvider messages={messages}>
-                    <ClientCacheManager />
-                    <PwaRegistrar />
-                    {children}
-                    <Toaster position={locale === 'ar' ? 'top-left' : 'top-right'} />
+                    <AuthProvider locale={locale}>
+                        <ClientCacheManager />
+                        <PwaRegistrar />
+                        <SessionTimeoutManager />
+                        {children}
+                        <Toaster position={locale === 'ar' ? 'top-left' : 'top-right'} />
+                    </AuthProvider>
                 </NextIntlClientProvider>
             </body>
         </html>
