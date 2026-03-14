@@ -22,12 +22,13 @@ import {
 export default function NavLinks({ locale }: { locale: string }) {
     const t = useTranslations('nav');
     const pathname = usePathname();
-    const { user } = useAuthStore();
+    const { user, loading, bootstrapped } = useAuthStore();
     const isAdmin = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
     const canViewReports = isAdmin || user?.role === 'MANAGER' || user?.role === 'BRANCH_SECRETARY';
     const canManageEmployees = isAdmin || user?.role === 'MANAGER' || user?.role === 'BRANCH_SECRETARY';
     const [unreadNotifications, setUnreadNotifications] = useState(0);
     const [unreadChats, setUnreadChats] = useState(0);
+    const authReady = bootstrapped && !loading && !!user;
 
     const fetchCounts = useCallback(async () => {
         if (!user) return;
@@ -72,6 +73,19 @@ export default function NavLinks({ locale }: { locale: string }) {
         ...(isAdmin ? [{ href: `/${locale}/settings`, label: t('settings'), icon: Settings }] : []),
         { href: `/${locale}/notifications`, label: t('notifications'), badge: unreadNotifications, icon: Bell },
     ];
+
+    if (!authReady) {
+        return (
+            <nav className="flex flex-wrap gap-2 px-4 pb-4 sm:px-6" aria-busy="true">
+                {Array.from({ length: 6 }).map((_, index) => (
+                    <div
+                        key={`nav-skeleton-${index}`}
+                        className="h-10 w-28 rounded-xl bg-ink/5 animate-pulse"
+                    />
+                ))}
+            </nav>
+        );
+    }
 
     return (
         <nav className="flex flex-wrap gap-2 px-4 pb-4 sm:px-6">
