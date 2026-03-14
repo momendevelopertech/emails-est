@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, ForbiddenException, NotFoundException 
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CreateFormDto, UpdateFormDto } from './dto/forms.dto';
 
 @Injectable()
 export class FormsService {
@@ -11,28 +12,11 @@ export class FormsService {
         private notificationsService: NotificationsService,
     ) { }
 
-    async createForm(data: {
-        name: string;
-        nameAr: string;
-        description?: string;
-        descriptionAr?: string;
-        departmentId?: string;
-        requiresManager?: boolean;
-        requiresHr?: boolean;
-        fields: Array<{
-            label: string;
-            labelAr: string;
-            fieldType: any;
-            isRequired?: boolean;
-            placeholder?: string;
-            options?: string[];
-            order?: number;
-        }>;
-    }, createdById?: string) {
+    async createForm(data: CreateFormDto, createdById?: string) {
         const form = await this.prisma.dynamicForm.create({
             data: {
                 name: data.name,
-                nameAr: data.nameAr,
+                nameAr: data.nameAr || data.name,
                 description: data.description,
                 descriptionAr: data.descriptionAr,
                 departmentId: data.departmentId,
@@ -74,8 +58,23 @@ export class FormsService {
         });
     }
 
-    async updateForm(id: string, data: any) {
-        return this.prisma.dynamicForm.update({ where: { id }, data });
+    async updateForm(id: string, data: UpdateFormDto) {
+        const updateData: any = {
+            ...(data.name ? { name: data.name } : {}),
+            ...(data.nameAr ? { nameAr: data.nameAr } : {}),
+            ...(data.description !== undefined ? { description: data.description } : {}),
+            ...(data.descriptionAr !== undefined ? { descriptionAr: data.descriptionAr } : {}),
+            ...(data.departmentId !== undefined ? { departmentId: data.departmentId || null } : {}),
+            ...(data.requiresManager !== undefined ? { requiresManager: data.requiresManager } : {}),
+            ...(data.requiresHr !== undefined ? { requiresHr: data.requiresHr } : {}),
+            ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+        };
+
+        return this.prisma.dynamicForm.update({
+            where: { id },
+            data: updateData,
+            include: { fields: { orderBy: { order: 'asc' } } },
+        });
     }
 
     async deleteForm(id: string) {

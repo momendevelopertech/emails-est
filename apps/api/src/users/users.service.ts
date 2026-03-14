@@ -5,13 +5,15 @@ import {
     ForbiddenException,
     BadRequestException,
 } from '@nestjs/common';
-import { addMonths, endOfDay, setDate, startOfDay } from 'date-fns';
+import { endOfDay, startOfDay } from 'date-fns';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { RedisService } from '../redis/redis.service';
 import { matchesEmployeeSearch, normalizeDigits, normalizeSearchText } from '../shared/search-normalization';
 import * as bcrypt from 'bcrypt';
+import { getCycleRange } from '../shared/cycle';
+import { CreateUserDto, UpdateUserDto } from './dto/users.dto';
 
 @Injectable()
 export class UsersService {
@@ -63,18 +65,7 @@ export class UsersService {
 
     // Request history cycle: day 11 to day 10 next month.
     private getCycleRange(date: Date) {
-        const day = date.getDate();
-        if (day >= 11) {
-            return {
-                start: startOfDay(setDate(date, 11)),
-                end: endOfDay(setDate(addMonths(date, 1), 10)),
-            };
-        }
-        const prevMonth = addMonths(date, -1);
-        return {
-            start: startOfDay(setDate(prevMonth, 11)),
-            end: endOfDay(setDate(date, 10)),
-        };
+        return getCycleRange(date, { endOfDay: true });
     }
 
     private formatCycleKey(date: Date) {
@@ -84,22 +75,9 @@ export class UsersService {
         return `${year}-${month}-${day}`;
     }
 
-    async create(data: {
-        employeeNumber: string;
-        fullName: string;
-        fullNameAr?: string;
-        email: string;
-        phone?: string;
-        password?: string;
-        role?: any;
-        governorate?: any;
-        branchId?: number;
-        departmentId?: string;
-        jobTitle?: string;
-        jobTitleAr?: string;
-        fingerprintId?: string;
-    }, createdById?: string) {
+    async create(data: CreateUserDto, createdById?: string) {
         const defaultPassword = 'SPHINX@2026';
+        const normalizedEmail = data.email.trim().toLowerCase();
         const password = data.password || defaultPassword;
         const normalizedPhone = this.validatePhone(data.phone);
         const phoneLast4 = (normalizedPhone || '').slice(-4) || '0000';
@@ -145,7 +123,7 @@ export class UsersService {
         const existing = await this.prisma.user.findFirst({
             where: {
                 OR: [
-                    { email: data.email },
+                    { email: normalizedEmail },
                     { employeeNumber: data.employeeNumber },
                     { username: generatedUsername },
                 ],
@@ -161,7 +139,7 @@ export class UsersService {
                 username: generatedUsername,
                 fullName: data.fullName,
                 fullNameAr: data.fullNameAr,
-                email: data.email,
+                email: normalizedEmail,
                 phone: normalizedPhone,
                 passwordHash,
                 role,
@@ -393,7 +371,7 @@ export class UsersService {
         return user;
     }
 
-    async update(id: string, data: any, updatedById?: string) {
+    async update(id: string, data: UpdateUserDto, updatedById?: string) {
         const normalizedPhone = data.phone !== undefined ? this.validatePhone(data.phone) : undefined;
 
         const existing = await this.prisma.user.findUnique({ where: { id } });

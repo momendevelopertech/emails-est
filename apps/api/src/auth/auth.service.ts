@@ -12,6 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { addDays, addMinutes } from 'date-fns';
 import { getJwtKeys } from './jwt-keys';
+import { createHmac } from 'crypto';
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_DURATION_MINUTES = 30;
@@ -25,12 +26,35 @@ export class AuthService {
         private auditService: AuditService,
     ) { }
 
+    private getRefreshTokenSecret() {
+        return (
+            process.env.REFRESH_TOKEN_SECRET ||
+            process.env.JWT_PRIVATE_KEY ||
+            process.env.CSRF_SECRET ||
+            'dev-refresh-secret'
+        );
+    }
+
+    private hashToken(token: string, purpose: 'refresh' | 'reset') {
+        return createHmac('sha256', this.getRefreshTokenSecret())
+            .update(`${purpose}:${token}`)
+            .digest('hex');
+    }
+
+    private async revokeAllRefreshTokens(userId: string) {
+        await this.prisma.refreshToken.updateMany({
+            where: { userId, tokenType: 'REFRESH' },
+            data: { isRevoked: true },
+        });
+    }
+
     async login(identifier: string, password: string, rememberMe = false, ipAddress?: string, userAgent?: string) {
+        const normalized = identifier.trim().toLowerCase();
         const user = await this.prisma.user.findFirst({
             where: {
                 OR: [
-                    { email: identifier },
-                    { username: identifier.toLowerCase() },
+                    { email: normalized },
+                    { username: normalized },
                 ],
             },
             include: { department: true },
@@ -107,6 +131,7 @@ export class AuthService {
             user.email,
             user.role,
             rememberMe ? this.getRememberMeRefreshDays() : undefined,
+            { ipAddress, userAgent },
         );
 
         return {
@@ -129,9 +154,11 @@ export class AuthService {
 
     async logout(userId: string | undefined, refreshToken: string | undefined) {
         if (refreshToken) {
+            const tokenHash = this.hashToken(refreshToken, 'refresh');
             await this.prisma.refreshToken.updateMany({
                 where: {
-                    token: refreshToken,
+                    token: tokenHash,
+                    tokenType: 'REFRESH',
                     ...(userId ? { userId } : {}),
                 },
                 data: { isRevoked: true },
@@ -143,31 +170,45 @@ export class AuthService {
         }
     }
 
-    async refreshTokens(refreshToken: string, rememberMe = false) {
+    async refreshTokens(refreshToken: string, rememberMe = false, ipAddress?: string, userAgent?: string) {
         if (!refreshToken) {
             throw new UnauthorizedException('Missing refresh token');
         }
 
-        const stored = await this.prisma.refreshToken.findUnique({
-            where: { token: refreshToken },
+        const tokenHash = this.hashToken(refreshToken, 'refresh');
+        const stored = await this.prisma.refreshToken.findFirst({
+            where: { token: tokenHash, tokenType: 'REFRESH' },
             include: { user: true },
         });
 
-        if (!stored || stored.isRevoked || stored.expiresAt < new Date()) {
+        if (!stored) {
             throw new UnauthorizedException('Invalid refresh token');
         }
 
-        // Rotate refresh token
-        await this.prisma.refreshToken.update({
-            where: { id: stored.id },
-            data: { isRevoked: true },
-        });
+        if (stored.isRevoked) {
+            await this.revokeAllRefreshTokens(stored.userId);
+            throw new UnauthorizedException('Refresh token revoked');
+        }
+
+        if (stored.expiresAt < new Date()) {
+            await this.revokeAllRefreshTokens(stored.userId);
+            throw new UnauthorizedException('Invalid refresh token');
+        }
+
+        if (
+            (stored.ipAddress && ipAddress && stored.ipAddress !== ipAddress)
+            || (stored.userAgent && userAgent && stored.userAgent !== userAgent)
+        ) {
+            await this.revokeAllRefreshTokens(stored.userId);
+            throw new ForbiddenException('Session verification failed. Please sign in again.');
+        }
 
         const tokens = await this.generateTokens(
             stored.user.id,
             stored.user.email,
             stored.user.role,
             rememberMe ? this.getRememberMeRefreshDays() : undefined,
+            { ipAddress, userAgent, replaceTokenId: stored.id },
         );
         return tokens;
     }
@@ -193,14 +234,16 @@ export class AuthService {
     }
 
     async requestPasswordReset(email: string, locale = 'en') {
-        const user = await this.prisma.user.findUnique({ where: { email } });
+        const normalizedEmail = email.trim().toLowerCase();
+        const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
         if (!user) return; // Don't reveal user existence
 
         const resetToken = uuidv4();
-        // Store token with expiry (1 hour)
+        const resetHash = this.hashToken(resetToken, 'reset');
         await this.prisma.refreshToken.create({
             data: {
-                token: `reset_${resetToken}`,
+                token: resetHash,
+                tokenType: 'RESET',
                 userId: user.id,
                 expiresAt: addMinutes(new Date(), 60),
             },
@@ -224,8 +267,9 @@ export class AuthService {
     }
 
     async resetPassword(token: string, newPassword: string) {
-        const stored = await this.prisma.refreshToken.findUnique({
-            where: { token: `reset_${token}` },
+        const resetHash = this.hashToken(token, 'reset');
+        const stored = await this.prisma.refreshToken.findFirst({
+            where: { token: resetHash, tokenType: 'RESET' },
         });
 
         if (!stored || stored.isRevoked || stored.expiresAt < new Date()) {
@@ -251,7 +295,13 @@ export class AuthService {
         return Number.isNaN(rememberDays) ? 30 : rememberDays;
     }
 
-    private async generateTokens(userId: string, email: string, role: string, refreshDaysOverride?: number) {
+    private async generateTokens(
+        userId: string,
+        email: string,
+        role: string,
+        refreshDaysOverride?: number,
+        options?: { ipAddress?: string; userAgent?: string; replaceTokenId?: string },
+    ) {
         const payload = { sub: userId, email, role };
         const keys = getJwtKeys();
 
@@ -262,14 +312,30 @@ export class AuthService {
         });
 
         const refreshToken = uuidv4();
+        const refreshHash = this.hashToken(refreshToken, 'refresh');
         const refreshDays = refreshDaysOverride ?? parseInt((process.env.JWT_REFRESH_EXPIRES || '7d').replace('d', ''), 10);
-        await this.prisma.refreshToken.create({
+        const expiresAt = addDays(new Date(), Number.isNaN(refreshDays) ? 7 : refreshDays);
+
+        const createToken = () => this.prisma.refreshToken.create({
             data: {
-                token: refreshToken,
+                token: refreshHash,
+                tokenType: 'REFRESH',
                 userId,
-                expiresAt: addDays(new Date(), Number.isNaN(refreshDays) ? 7 : refreshDays),
+                expiresAt,
+                ipAddress: options?.ipAddress,
+                userAgent: options?.userAgent,
             },
         });
+
+        if (options?.replaceTokenId) {
+            const newToken = await createToken();
+            await this.prisma.refreshToken.update({
+                where: { id: options.replaceTokenId },
+                data: { isRevoked: true, replacedById: newToken.id },
+            });
+        } else {
+            await createToken();
+        }
 
         return { accessToken, refreshToken };
     }

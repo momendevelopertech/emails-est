@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { LatenessService } from './lateness.service';
+import { CreateLatenessDto } from './dto/lateness.dto';
 
 @Controller('lateness')
 @UseGuards(JwtAuthGuard)
@@ -17,7 +18,7 @@ export class LatenessController {
     }
 
     @Post()
-    create(@Req() req: any, @Body() body: { date: string; minutesLate: number }) {
+    create(@Req() req: any, @Body() body: CreateLatenessDto) {
         return this.latenessService.createOrUpdate(req.user.id, body);
     }
 

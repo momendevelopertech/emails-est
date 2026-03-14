@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { endOfDay, startOfDay } from 'date-fns';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateNoteDto } from './dto/notes.dto';
 
 @Injectable()
 export class NotesService {
     constructor(private prisma: PrismaService) { }
 
-    async create(userId: string, data: { date: string; title: string; body?: string }) {
+    async create(userId: string, data: CreateNoteDto) {
         return this.prisma.note.create({
             data: {
                 userId,

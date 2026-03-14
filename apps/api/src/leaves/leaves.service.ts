@@ -7,7 +7,9 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
-import { addMonths, differenceInBusinessDays, endOfDay, setDate, startOfDay } from 'date-fns';
+import { differenceInBusinessDays, endOfDay, startOfDay } from 'date-fns';
+import { getCycleRange } from '../shared/cycle';
+import { CreateLeaveDto, UpdateLeaveDto } from './dto/leaves.dto';
 
 @Injectable()
 export class LeavesService {
@@ -99,9 +101,7 @@ export class LeavesService {
 
     async getMonthlyAbsenceDeduction(userId: string, role: string, month?: string) {
         const now = month ? new Date(`${month}-01`) : new Date();
-        const day = now.getDate();
-        const cycleStart = day >= 11 ? startOfDay(setDate(now, 11)) : startOfDay(setDate(addMonths(now, -1), 11));
-        const cycleEnd = day >= 11 ? endOfDay(setDate(addMonths(now, 1), 10)) : endOfDay(setDate(now, 10));
+        const { start: cycleStart, end: cycleEnd } = getCycleRange(now, { endOfDay: true });
 
         const where: any = {
             leaveType: 'ABSENCE_WITH_PERMISSION',
@@ -155,13 +155,7 @@ export class LeavesService {
         };
     }
 
-    async createRequest(userId: string, data: {
-        leaveType: any;
-        startDate: Date;
-        endDate: Date;
-        reason?: string;
-        attachmentUrl?: string;
-    }) {
+    async createRequest(userId: string, data: CreateLeaveDto) {
         const year = new Date(data.startDate).getFullYear();
         await this.ensureYearBalances(userId, year);
 
@@ -448,7 +442,7 @@ export class LeavesService {
         return { message: 'Cancelled' };
     }
 
-    async updateRequest(id: string, actorId: string, role: string, data: any) {
+    async updateRequest(id: string, actorId: string, role: string, data: UpdateLeaveDto) {
         const request = await this.prisma.leaveRequest.findUnique({ where: { id } });
         if (!request) throw new NotFoundException('Not found');
 

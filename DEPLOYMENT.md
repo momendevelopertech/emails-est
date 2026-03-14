@@ -17,6 +17,7 @@ Set the required variables in `.env`:
 `REDIS_URL`  
 `JWT_PRIVATE_KEY`  
 `JWT_PUBLIC_KEY`  
+`REFRESH_TOKEN_SECRET`  
 `CLOUDINARY_CLOUD_NAME`  
 `CLOUDINARY_API_KEY`  
 `CLOUDINARY_API_SECRET`  
@@ -34,6 +35,7 @@ Set the required variables in `.env`:
 `PUSHER_SECRET`  
 `PUSHER_CLUSTER`  
 `CSRF_SECRET`  
+`REPORTS_CACHE_TTL`  
 
 ## Local Run (Without Docker)
 

@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { WorkScheduleService } from './work-schedule.service';
+import { UpdateWorkScheduleDto } from './dto/work-schedule.dto';
 
 @Controller('settings/work-schedule')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -16,7 +17,7 @@ export class WorkScheduleController {
 
     @Put()
     @Roles('SUPER_ADMIN', 'HR_ADMIN')
-    updateSettings(@Body() body: any) {
+    updateSettings(@Body() body: UpdateWorkScheduleDto) {
         return this.service.updateSettings(body);
     }
 }

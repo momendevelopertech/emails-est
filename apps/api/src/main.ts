@@ -11,6 +11,7 @@ import { getAllowedOrigins, getCookieSettings, getFrontendOrigin } from './share
 async function bootstrap() {
     const app = await NestFactory.create(AppModule);
     const isProd = process.env.NODE_ENV === 'production';
+    app.disable('x-powered-by');
     app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
     // Security

@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiTags } from '@nestjs/swagger';
+import { CreateAnnouncementDto, NotificationsQueryDto } from './dto/notifications.dto';
 
 @ApiTags('notifications')
 @Controller('notifications')
@@ -12,24 +13,15 @@ export class NotificationsController {
     constructor(private notificationsService: NotificationsService) { }
 
     @Get()
-    getAll(
-        @Req() req: any,
-        @Query('page') page?: string,
-        @Query('limit') limit?: string,
-        @Query('type') type?: string,
-        @Query('status') status?: string,
-        @Query('search') search?: string,
-        @Query('from') from?: string,
-        @Query('to') to?: string,
-    ) {
+    getAll(@Req() req: any, @Query() query: NotificationsQueryDto) {
         return this.notificationsService.getAll(req.user.id, {
-            page: page ? parseInt(page, 10) : 1,
-            limit: limit ? parseInt(limit, 10) : 20,
-            type,
-            status,
-            search,
-            from,
-            to,
+            page: query.page ?? 1,
+            limit: query.limit ?? 20,
+            type: query.type,
+            status: query.status,
+            search: query.search,
+            from: query.from,
+            to: query.to,
         });
     }
 
@@ -59,16 +51,7 @@ export class NotificationsController {
     @Roles('SUPER_ADMIN', 'HR_ADMIN', 'BRANCH_SECRETARY')
     createAnnouncement(
         @Req() req: any,
-        @Body() body: {
-            title: string;
-            titleAr?: string;
-            body: string;
-            bodyAr?: string;
-            targetScope?: 'ALL' | 'DEPARTMENT' | 'GOVERNORATE' | 'USERS';
-            departmentId?: string;
-            governorate?: string;
-            userIds?: string[];
-        },
+        @Body() body: CreateAnnouncementDto,
     ) {
         const targetScope = body.targetScope || 'ALL';
         const governorate = req.user.role === 'BRANCH_SECRETARY' ? req.user.governorate : body.governorate;

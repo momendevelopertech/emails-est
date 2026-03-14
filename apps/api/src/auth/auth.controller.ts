@@ -105,7 +105,12 @@ export class AuthController {
     async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
         const refreshToken = req.cookies?.refresh_token;
         const rememberMe = req.cookies?.remember_me === '1';
-        const tokens = await this.authService.refreshTokens(refreshToken, rememberMe);
+        const tokens = await this.authService.refreshTokens(
+            refreshToken,
+            rememberMe,
+            req.ip,
+            req.headers['user-agent'],
+        );
         const ages = this.getCookieAges(rememberMe);
 
         res.cookie('access_token', tokens.accessToken, this.getHttpOnlyCookieOptions(ages.accessMs));

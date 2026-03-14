@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiTags } from '@nestjs/swagger';
+import { CreatePermissionDto, PermissionDecisionDto, UpdatePermissionDto } from './dto/permissions.dto';
 
 @ApiTags('permissions')
 @Controller('permissions')
@@ -27,26 +28,26 @@ export class PermissionsController {
     }
 
     @Post()
-    create(@Body() body: any, @Req() req: any) {
+    create(@Body() body: CreatePermissionDto, @Req() req: any) {
         return this.permissionsService.createRequest(req.user.id, body);
     }
 
     @Patch(':id/approve')
     @UseGuards(RolesGuard)
     @Roles('BRANCH_SECRETARY', 'MANAGER', 'HR_ADMIN', 'SUPER_ADMIN')
-    approve(@Param('id') id: string, @Body('comment') comment: string, @Req() req: any) {
-        return this.permissionsService.updateStatus(id, req.user.id, req.user.role, 'approve', comment);
+    approve(@Param('id') id: string, @Body() body: PermissionDecisionDto, @Req() req: any) {
+        return this.permissionsService.updateStatus(id, req.user.id, req.user.role, 'approve', body.comment);
     }
 
     @Patch(':id/reject')
     @UseGuards(RolesGuard)
     @Roles('BRANCH_SECRETARY', 'MANAGER', 'HR_ADMIN', 'SUPER_ADMIN')
-    reject(@Param('id') id: string, @Body('comment') comment: string, @Req() req: any) {
-        return this.permissionsService.updateStatus(id, req.user.id, req.user.role, 'reject', comment);
+    reject(@Param('id') id: string, @Body() body: PermissionDecisionDto, @Req() req: any) {
+        return this.permissionsService.updateStatus(id, req.user.id, req.user.role, 'reject', body.comment);
     }
 
     @Patch(':id')
-    update(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    update(@Param('id') id: string, @Body() body: UpdatePermissionDto, @Req() req: any) {
         return this.permissionsService.updateRequest(id, req.user.id, req.user.role, body);
     }
 

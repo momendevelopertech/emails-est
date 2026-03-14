@@ -1,12 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateDepartmentDto, UpdateDepartmentDto } from './dto/departments.dto';
 
 @Injectable()
 export class DepartmentsService {
     constructor(private prisma: PrismaService) { }
 
-    async create(data: { name: string; nameAr?: string; description?: string; branches?: number[] }) {
+    async create(data: CreateDepartmentDto) {
         const name = (data.name || '').trim();
         if (!name) throw new BadRequestException('Department name is required');
 
@@ -114,7 +115,7 @@ export class DepartmentsService {
         });
     }
 
-    async update(id: string, data: { name?: string; nameAr?: string; description?: string; branches?: number[] }) {
+    async update(id: string, data: UpdateDepartmentDto) {
         const dept = await this.prisma.department.findUnique({ where: { id } });
         if (!dept) throw new NotFoundException('Department not found');
 

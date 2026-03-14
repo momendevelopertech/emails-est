@@ -1,13 +1,47 @@
 import { Injectable } from '@nestjs/common';
-import { addMonths, endOfDay, setDate, startOfDay } from 'date-fns';
+import { endOfDay, startOfDay } from 'date-fns';
 import { PrismaService } from '../prisma/prisma.service';
 import * as ExcelJS from 'exceljs';
 import { PdfService } from '../pdf/pdf.service';
 import { matchesEmployeeSearch, normalizeDigits, normalizeSearchText } from '../shared/search-normalization';
+import { getCycleRange } from '../shared/cycle';
+import { RedisService } from '../redis/redis.service';
+import { createHash } from 'crypto';
 
 @Injectable()
 export class ReportsService {
-    constructor(private prisma: PrismaService, private pdfService: PdfService) { }
+    constructor(
+        private prisma: PrismaService,
+        private pdfService: PdfService,
+        private redisService: RedisService,
+    ) { }
+
+    private getCacheTtlSeconds() {
+        const raw = parseInt(process.env.REPORTS_CACHE_TTL || '30', 10);
+        if (Number.isNaN(raw)) return 30;
+        return Math.max(5, raw);
+    }
+
+    private normalizeQuery(query?: Record<string, any>) {
+        if (!query) return {};
+        const entries = Object.entries(query)
+            .filter(([, value]) => value !== undefined && value !== null && value !== '')
+            .map(([key, value]) => [key, Array.isArray(value) ? [...value].sort() : value]);
+        entries.sort(([a], [b]) => a.localeCompare(b));
+        return Object.fromEntries(entries);
+    }
+
+    private buildCacheKey(scope: string, requesterId: string, requesterRole: string, query?: Record<string, any>) {
+        const normalized = this.normalizeQuery(query);
+        const hash = createHash('sha1').update(JSON.stringify(normalized)).digest('hex');
+        return `reports:${scope}:${requesterRole}:${requesterId}:${hash}`;
+    }
+
+    private shouldCache(query?: Record<string, any>) {
+        const limit = query?.limit;
+        if (!limit) return true;
+        return Number(limit) <= 2000;
+    }
 
     private toPaging(query: any, defaultLimit = 20) {
         const page = Math.max(1, parseInt(query?.page || '1', 10));
@@ -48,7 +82,7 @@ export class ReportsService {
         if (!normalized) return null;
         const phoneDigits = normalizeDigits(raw).replace(/\D/g, '');
         const hasLetters = /[a-z\u0600-\u06FF]/i.test(normalized);
-        const where = phoneDigits && !hasLetters
+        const searchWhere = phoneDigits && !hasLetters
             ? {
                 ...userWhere,
                 OR: [
@@ -56,10 +90,19 @@ export class ReportsService {
                     { employeeNumber: { contains: phoneDigits, mode: 'insensitive' } },
                 ],
             }
-            : userWhere;
+            : {
+                ...userWhere,
+                OR: [
+                    { fullName: { contains: raw, mode: 'insensitive' } },
+                    { fullNameAr: { contains: raw, mode: 'insensitive' } },
+                    { employeeNumber: { contains: normalized, mode: 'insensitive' } },
+                    ...(phoneDigits ? [{ phone: { contains: phoneDigits, mode: 'insensitive' } }] : []),
+                ],
+            };
         const users = await this.prisma.user.findMany({
-            where,
+            where: searchWhere,
             select: { id: true, fullName: true, fullNameAr: true, employeeNumber: true, phone: true },
+            orderBy: { fullName: 'asc' },
         });
         return users
             .filter((user) => matchesEmployeeSearch(raw, user))
@@ -94,22 +137,17 @@ export class ReportsService {
 
     // Reporting cycle: day 11 to day 10 next month.
     private getCycleRange(date: Date) {
-        const day = date.getDate();
-        if (day >= 11) {
-            return {
-                start: startOfDay(setDate(date, 11)),
-                end: endOfDay(setDate(addMonths(date, 1), 10)),
-            };
-        }
-
-        const prevMonth = addMonths(date, -1);
-        return {
-            start: startOfDay(setDate(prevMonth, 11)),
-            end: endOfDay(setDate(date, 10)),
-        };
+        return getCycleRange(date, { endOfDay: true });
     }
 
     async getLeaveReport(requesterId: string, requesterRole: string, query?: any) {
+        const cacheKey = this.buildCacheKey('leaves', requesterId, requesterRole, query);
+        const shouldCache = this.shouldCache(query);
+        if (shouldCache) {
+            const cached = await this.redisService.getJSON<any>(cacheKey);
+            if (cached) return cached;
+        }
+
         const { page, limit, skip } = this.toPaging(query, 10);
         const scopeUserIds = await this.resolveScopeUserIds(requesterId, requesterRole);
         if (scopeUserIds && scopeUserIds.length === 0) return this.emptyPage(page, limit);
@@ -147,10 +185,21 @@ export class ReportsService {
             this.prisma.leaveRequest.count({ where }),
         ]);
 
-        return { items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+        const payload = { items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+        if (shouldCache) {
+            await this.redisService.setJSON(cacheKey, payload, this.getCacheTtlSeconds());
+        }
+        return payload;
     }
 
     async getPermissionReport(requesterId: string, requesterRole: string, query?: any) {
+        const cacheKey = this.buildCacheKey('permissions', requesterId, requesterRole, query);
+        const shouldCache = this.shouldCache(query);
+        if (shouldCache) {
+            const cached = await this.redisService.getJSON<any>(cacheKey);
+            if (cached) return cached;
+        }
+
         const { page, limit, skip } = this.toPaging(query, 10);
         const scopeUserIds = await this.resolveScopeUserIds(requesterId, requesterRole);
         if (scopeUserIds && scopeUserIds.length === 0) return this.emptyPage(page, limit);
@@ -188,10 +237,21 @@ export class ReportsService {
             this.prisma.permissionRequest.count({ where }),
         ]);
 
-        return { items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+        const payload = { items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+        if (shouldCache) {
+            await this.redisService.setJSON(cacheKey, payload, this.getCacheTtlSeconds());
+        }
+        return payload;
     }
 
     async getFormsReport(requesterId: string, requesterRole: string, query?: any) {
+        const cacheKey = this.buildCacheKey('forms', requesterId, requesterRole, query);
+        const shouldCache = this.shouldCache(query);
+        if (shouldCache) {
+            const cached = await this.redisService.getJSON<any>(cacheKey);
+            if (cached) return cached;
+        }
+
         const { page, limit, skip } = this.toPaging(query, 10);
         const scopeUserIds = await this.resolveScopeUserIds(requesterId, requesterRole);
         if (scopeUserIds && scopeUserIds.length === 0) return this.emptyPage(page, limit);
@@ -239,10 +299,21 @@ export class ReportsService {
             this.prisma.formSubmission.count({ where }),
         ]);
 
-        return { items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+        const payload = { items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+        if (shouldCache) {
+            await this.redisService.setJSON(cacheKey, payload, this.getCacheTtlSeconds());
+        }
+        return payload;
     }
 
     async getEmployeeSummary(requesterId: string, requesterRole: string, query?: any) {
+        const cacheKey = this.buildCacheKey('employee-summary', requesterId, requesterRole, query);
+        const shouldCache = this.shouldCache(query);
+        if (shouldCache) {
+            const cached = await this.redisService.getJSON<any>(cacheKey);
+            if (cached) return cached;
+        }
+
         const { page, limit, skip } = this.toPaging(query, 20);
         const scopeUserIds = await this.resolveScopeUserIds(requesterId, requesterRole);
         if (scopeUserIds && scopeUserIds.length === 0) return this.emptyPage(page, limit);
@@ -253,8 +324,14 @@ export class ReportsService {
         let total = 0;
 
         if (employee) {
-            const candidates = await this.prisma.user.findMany({
-                where: userWhere,
+            const employeeIds = await this.resolveEmployeeIds(employee, userWhere);
+            if (employeeIds && employeeIds.length === 0) {
+                return this.emptyPage(page, limit);
+            }
+            const pagedIds = employeeIds ? employeeIds.slice(skip, skip + limit) : [];
+            total = employeeIds ? employeeIds.length : 0;
+            users = await this.prisma.user.findMany({
+                where: { id: { in: pagedIds } },
                 orderBy: { fullName: 'asc' },
                 select: {
                     id: true,
@@ -265,9 +342,6 @@ export class ReportsService {
                     department: { select: { name: true, nameAr: true } },
                 },
             });
-            const filtered = candidates.filter((user) => matchesEmployeeSearch(employee, user));
-            total = filtered.length;
-            users = filtered.slice(skip, skip + limit);
         } else {
             const result = await Promise.all([
                 this.prisma.user.findMany({
@@ -291,7 +365,11 @@ export class ReportsService {
         }
 
         if (users.length === 0) {
-            return { items: [], total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+            const empty = { items: [], total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+            if (shouldCache) {
+                await this.redisService.setJSON(cacheKey, empty, this.getCacheTtlSeconds());
+            }
+            return empty;
         }
 
         const userIds = users.map((user) => user.id);
@@ -372,7 +450,11 @@ export class ReportsService {
             };
         });
 
-        return { items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+        const payload = { items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+        if (shouldCache) {
+            await this.redisService.setJSON(cacheKey, payload, this.getCacheTtlSeconds());
+        }
+        return payload;
     }
 
     private resolvePendingStage(status: string, approvedByMgrId?: string | null) {
@@ -383,6 +465,13 @@ export class ReportsService {
     }
 
     async getPendingRequests(requesterId: string, requesterRole: string, query?: any) {
+        const cacheKey = this.buildCacheKey('pending', requesterId, requesterRole, query);
+        const shouldCache = this.shouldCache(query);
+        if (shouldCache) {
+            const cached = await this.redisService.getJSON<any>(cacheKey);
+            if (cached) return cached;
+        }
+
         const { page, limit, skip } = this.toPaging(query, 20);
         const scopeUserIds = await this.resolveScopeUserIds(requesterId, requesterRole);
         if (scopeUserIds && scopeUserIds.length === 0) return this.emptyPage(page, limit);
@@ -470,7 +559,11 @@ export class ReportsService {
         const total = merged.length;
         const paged = merged.slice(skip, skip + limit);
 
-        return { items: paged, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+        const payload = { items: paged, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+        if (shouldCache) {
+            await this.redisService.setJSON(cacheKey, payload, this.getCacheTtlSeconds());
+        }
+        return payload;
     }
 
     async getMonthlySummary(requesterId: string, requesterRole: string) {
@@ -481,6 +574,11 @@ export class ReportsService {
 
         const now = new Date();
         const { start: cycleStart, end: cycleEnd } = this.getCycleRange(now);
+        const cacheKey = this.buildCacheKey('summary', requesterId, requesterRole, {
+            cycleStart: cycleStart.toISOString().slice(0, 10),
+        });
+        const cached = await this.redisService.getJSON<any>(cacheKey);
+        if (cached) return cached;
 
         const leaveScope: any = {
             startDate: { gte: cycleStart, lte: cycleEnd },
@@ -516,7 +614,7 @@ export class ReportsService {
             this.prisma.permissionRequest.count({ where: permissionScope }),
         ]);
 
-        return {
+        const payload = {
             cycleStart,
             cycleEnd,
             totals: {
@@ -526,6 +624,8 @@ export class ReportsService {
                 absences,
             },
         };
+        await this.redisService.setJSON(cacheKey, payload, this.getCacheTtlSeconds());
+        return payload;
     }
 
     async exportLeaveReportToExcel(requesterId: string, requesterRole: string, filters?: any): Promise<Buffer> {

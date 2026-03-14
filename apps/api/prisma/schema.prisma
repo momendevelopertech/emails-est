@@ -47,6 +47,11 @@ enum PermissionType {
   EARLY_LEAVE
 }
 
+enum TokenType {
+  REFRESH
+  RESET
+}
+
 enum NotificationType {
   LEAVE_REQUEST
   LEAVE_APPROVED
@@ -245,14 +250,23 @@ model Lateness {
 }
 
 model RefreshToken {
-  id        String   @id @default(cuid())
-  token     String   @unique
-  userId    String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  isRevoked Boolean  @default(false)
+  id           String    @id @default(cuid())
+  token        String    @unique
+  tokenType    TokenType @default(REFRESH)
+  userId       String
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  isRevoked    Boolean   @default(false)
+  ipAddress    String?
+  userAgent    String?
+  replacedById String?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedBy   RefreshToken?  @relation("RefreshTokenRotation", fields: [replacedById], references: [id])
+  replacedTokens RefreshToken[] @relation("RefreshTokenRotation")
+
+  @@index([userId, tokenType])
+  @@index([expiresAt])
 }
 
 // ─── LEAVE SYSTEM ────────────────────────────────────────────────────────────

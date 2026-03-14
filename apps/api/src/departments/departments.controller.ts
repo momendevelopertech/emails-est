@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiTags } from '@nestjs/swagger';
+import { CreateDepartmentDto, UpdateDepartmentDto } from './dto/departments.dto';
 
 @ApiTags('departments')
 @Controller('departments')
@@ -14,7 +15,7 @@ export class DepartmentsController {
     @Post()
     @UseGuards(RolesGuard)
     @Roles('SUPER_ADMIN', 'HR_ADMIN')
-    create(@Body() body: any) {
+    create(@Body() body: CreateDepartmentDto) {
         return this.deptService.create(body);
     }
 
@@ -31,7 +32,7 @@ export class DepartmentsController {
     @Patch(':id')
     @UseGuards(RolesGuard)
     @Roles('SUPER_ADMIN', 'HR_ADMIN')
-    update(@Param('id') id: string, @Body() body: any) {
+    update(@Param('id') id: string, @Body() body: UpdateDepartmentDto) {
         return this.deptService.update(id, body);
     }
 

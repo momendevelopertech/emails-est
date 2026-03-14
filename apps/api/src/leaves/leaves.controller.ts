@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiTags } from '@nestjs/swagger';
+import { CreateLeaveDto, LeaveDecisionDto, UpdateLeaveDto } from './dto/leaves.dto';
 
 @ApiTags('leaves')
 @Controller('leaves')
@@ -32,22 +33,22 @@ export class LeavesController {
     }
 
     @Post()
-    create(@Body() body: any, @Req() req: any) {
+    create(@Body() body: CreateLeaveDto, @Req() req: any) {
         return this.leavesService.createRequest(req.user.id, body);
     }
 
     @Patch(':id/approve')
     @UseGuards(RolesGuard)
     @Roles('BRANCH_SECRETARY', 'MANAGER', 'HR_ADMIN', 'SUPER_ADMIN')
-    approve(@Param('id') id: string, @Body('comment') comment: string, @Req() req: any) {
-        return this.leavesService.updateStatus(id, req.user.id, req.user.role, 'approve', comment);
+    approve(@Param('id') id: string, @Body() body: LeaveDecisionDto, @Req() req: any) {
+        return this.leavesService.updateStatus(id, req.user.id, req.user.role, 'approve', body.comment);
     }
 
     @Patch(':id/reject')
     @UseGuards(RolesGuard)
     @Roles('BRANCH_SECRETARY', 'MANAGER', 'HR_ADMIN', 'SUPER_ADMIN')
-    reject(@Param('id') id: string, @Body('comment') comment: string, @Req() req: any) {
-        return this.leavesService.updateStatus(id, req.user.id, req.user.role, 'reject', comment);
+    reject(@Param('id') id: string, @Body() body: LeaveDecisionDto, @Req() req: any) {
+        return this.leavesService.updateStatus(id, req.user.id, req.user.role, 'reject', body.comment);
     }
 
     @Patch(':id/cancel')
@@ -56,7 +57,7 @@ export class LeavesController {
     }
 
     @Patch(':id')
-    update(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    update(@Param('id') id: string, @Body() body: UpdateLeaveDto, @Req() req: any) {
         return this.leavesService.updateRequest(id, req.user.id, req.user.role, body);
     }
 

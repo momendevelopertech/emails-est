@@ -30,6 +30,13 @@ If Redis is not available locally, the API now falls back to direct DB reads (ca
 docker compose up --build
 ```
 
+## Documentation
+
+- `docs/system-architecture.md`
+- `docs/api.md`
+- `docs/operations.md`
+- `docs/auth-cookie-hardening.md`
+
 ## Vercel
 
 Deploy `apps/web` to Vercel as the frontend app.

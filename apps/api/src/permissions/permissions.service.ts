@@ -8,7 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { Cron } from '@nestjs/schedule';
-import { addMonths, setDate, startOfDay } from 'date-fns';
+import { getCycleRange } from '../shared/cycle';
+import { CreatePermissionDto, UpdatePermissionDto } from './dto/permissions.dto';
 
 @Injectable()
 export class PermissionsService {
@@ -62,20 +63,7 @@ export class PermissionsService {
 
     // Permission cycle: day 11 to day 10 next month.
     private getCycleForDate(date: Date): { start: Date; end: Date } {
-        const d = date.getDate();
-        let cycleStart: Date;
-        let cycleEnd: Date;
-
-        if (d >= 11) {
-            cycleStart = startOfDay(setDate(date, 11));
-            cycleEnd = startOfDay(setDate(addMonths(date, 1), 10));
-        } else {
-            const prevMonth = addMonths(date, -1);
-            cycleStart = startOfDay(setDate(prevMonth, 11));
-            cycleEnd = startOfDay(setDate(date, 10));
-        }
-
-        return { start: cycleStart, end: cycleEnd };
+        return getCycleRange(date, { endOfDay: false });
     }
 
     private parseHours(arrivalTime?: string, leaveTime?: string) {
@@ -168,15 +156,7 @@ export class PermissionsService {
         return this.getOrCreateCycle(userId, new Date());
     }
 
-    async createRequest(userId: string, data: {
-        permissionType: any;
-        requestDate: Date;
-        arrivalTime?: string;
-        leaveTime?: string;
-        permissionScope?: 'ARRIVAL' | 'DEPARTURE';
-        durationMinutes?: number;
-        reason?: string;
-    }) {
+    async createRequest(userId: string, data: CreatePermissionDto) {
         const requestDate = new Date(data.requestDate);
         const cycle = await this.getOrCreateCycle(userId, requestDate);
 
@@ -438,7 +418,7 @@ export class PermissionsService {
         return updated;
     }
 
-    async updateRequest(id: string, actorId: string, role: string, data: any) {
+    async updateRequest(id: string, actorId: string, role: string, data: UpdatePermissionDto) {
         const request = await this.prisma.permissionRequest.findUnique({ where: { id } });
         if (!request) throw new NotFoundException('Not found');
         if (role === 'EMPLOYEE') {

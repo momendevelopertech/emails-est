@@ -1,7 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { addMonths, endOfDay, parseISO, setDate, startOfDay } from 'date-fns';
+import { endOfDay, parseISO, startOfDay } from 'date-fns';
 import { PrismaService } from '../prisma/prisma.service';
 import { PermissionsService } from '../permissions/permissions.service';
+import { getCycleRange } from '../shared/cycle';
 
 @Injectable()
 export class LatenessService {
@@ -19,20 +20,7 @@ export class LatenessService {
     }
 
     private getCycleForDate(date: Date): { start: Date; end: Date } {
-        const day = date.getDate();
-        let cycleStart: Date;
-        let cycleEnd: Date;
-
-        if (day >= 11) {
-            cycleStart = startOfDay(setDate(date, 11));
-            cycleEnd = endOfDay(setDate(addMonths(date, 1), 10));
-        } else {
-            const prevMonth = addMonths(date, -1);
-            cycleStart = startOfDay(setDate(prevMonth, 11));
-            cycleEnd = endOfDay(setDate(date, 10));
-        }
-
-        return { start: cycleStart, end: cycleEnd };
+        return getCycleRange(date, { endOfDay: true });
     }
 
     private getDeductionDays(count: number) {

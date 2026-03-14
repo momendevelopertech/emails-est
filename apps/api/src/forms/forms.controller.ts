@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiTags } from '@nestjs/swagger';
+import { CreateFormDto, SubmissionDecisionDto, SubmitFormDto, UpdateFormDto, UpdateSubmissionDto } from './dto/forms.dto';
 
 @ApiTags('forms')
 @Controller('forms')
@@ -15,7 +16,7 @@ export class FormsController {
     @Post()
     @UseGuards(RolesGuard)
     @Roles('SUPER_ADMIN', 'HR_ADMIN')
-    createForm(@Body() body: any, @Req() req: any) {
+    createForm(@Body() body: CreateFormDto, @Req() req: any) {
         return this.formsService.createForm(body, req.user.id);
     }
 
@@ -38,7 +39,7 @@ export class FormsController {
     @Patch(':id')
     @UseGuards(RolesGuard)
     @Roles('SUPER_ADMIN', 'HR_ADMIN')
-    updateForm(@Param('id') id: string, @Body() body: any) {
+    updateForm(@Param('id') id: string, @Body() body: UpdateFormDto) {
         return this.formsService.updateForm(id, body);
     }
 
@@ -51,27 +52,27 @@ export class FormsController {
 
     // Employee: Submit a form
     @Post(':id/submit')
-    submit(@Param('id') formId: string, @Body() body: any, @Req() req: any) {
-        return this.formsService.submitForm(formId, req.user.id, body.data);
+    submit(@Param('id') formId: string, @Body() body: SubmitFormDto, @Req() req: any) {
+        return this.formsService.submitForm(formId, req.user.id, body.data || {});
     }
 
     @Patch('submissions/:id/approve')
     @UseGuards(RolesGuard)
     @Roles('MANAGER', 'HR_ADMIN', 'SUPER_ADMIN')
-    approveSubmission(@Param('id') id: string, @Body('comment') comment: string, @Req() req: any) {
-        return this.formsService.updateSubmissionStatus(id, req.user.id, req.user.role, 'approve', comment);
+    approveSubmission(@Param('id') id: string, @Body() body: SubmissionDecisionDto, @Req() req: any) {
+        return this.formsService.updateSubmissionStatus(id, req.user.id, req.user.role, 'approve', body.comment);
     }
 
     @Patch('submissions/:id/reject')
     @UseGuards(RolesGuard)
     @Roles('MANAGER', 'HR_ADMIN', 'SUPER_ADMIN')
-    rejectSubmission(@Param('id') id: string, @Body('comment') comment: string, @Req() req: any) {
-        return this.formsService.updateSubmissionStatus(id, req.user.id, req.user.role, 'reject', comment);
+    rejectSubmission(@Param('id') id: string, @Body() body: SubmissionDecisionDto, @Req() req: any) {
+        return this.formsService.updateSubmissionStatus(id, req.user.id, req.user.role, 'reject', body.comment);
     }
 
     @Patch('submissions/:id')
-    updateSubmission(@Param('id') id: string, @Body('data') data: any, @Req() req: any) {
-        return this.formsService.updateSubmission(id, req.user.id, req.user.role, data);
+    updateSubmission(@Param('id') id: string, @Body() body: UpdateSubmissionDto, @Req() req: any) {
+        return this.formsService.updateSubmission(id, req.user.id, req.user.role, body.data || {});
     }
 
     @Patch('submissions/:id/cancel')
