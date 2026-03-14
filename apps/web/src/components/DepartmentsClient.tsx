@@ -51,6 +51,16 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
 
     const canAdmin = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
 
+    const branchDepartmentCounts = useMemo(() => {
+        const counts = new Map<number, number>();
+        departments.forEach((dept) => {
+            dept.branches.forEach((branch) => {
+                counts.set(branch.id, (counts.get(branch.id) || 0) + 1);
+            });
+        });
+        return counts;
+    }, [departments]);
+
     const fetchAll = async () => {
         setLoading(true);
         try {
@@ -217,16 +227,6 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
 
     const getBranchCount = (dept: Department, branchId: number) =>
         dept.branchCounts.find((entry) => entry.branchId === branchId)?.count || 0;
-
-    const branchDepartmentCounts = useMemo(() => {
-        const counts = new Map<number, number>();
-        departments.forEach((dept) => {
-            dept.branches.forEach((branch) => {
-                counts.set(branch.id, (counts.get(branch.id) || 0) + 1);
-            });
-        });
-        return counts;
-    }, [departments]);
 
     return (
         <main className="px-6 pb-12 space-y-6">
