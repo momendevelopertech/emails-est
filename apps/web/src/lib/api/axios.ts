@@ -219,10 +219,10 @@ const ensureRefresh = async () => {
     if (!refreshPromise) {
         refreshPromise = (async () => {
             if (!csrfToken) {
-                await api.get('/auth/csrf');
+                await api.get('/auth/csrf', { headers: { 'x-skip-activity': '1' } });
             }
 
-            await api.post('/auth/refresh', {});
+            await api.post('/auth/refresh', {}, { headers: { 'x-skip-activity': '1' } });
         })()
             .then(() => {
                 refreshDisabled = false;

@@ -104,11 +104,18 @@ export default function NotificationsClient({ locale }: { locale: string }) {
 
     const refreshInFlight = useRef(false);
 
-    const refreshAll = useCallback(async () => {
+    const backgroundConfig = useMemo(() => ({ headers: { 'x-skip-activity': '1' } }), []);
+
+    const refreshAll = useCallback(async (skipActivity = false) => {
         if (refreshInFlight.current) return;
         refreshInFlight.current = true;
         try {
-            const res = await api.get<NotificationsResponse>('/notifications', { params });
+            const res = await api.get<NotificationsResponse>(
+                '/notifications',
+                skipActivity
+                    ? { ...backgroundConfig, params }
+                    : { params },
+            );
             setItems(res.data.items || []);
             setTotal(res.data.total || 0);
             setTotalPages(res.data.totalPages || 1);
@@ -117,7 +124,7 @@ export default function NotificationsClient({ locale }: { locale: string }) {
         } finally {
             refreshInFlight.current = false;
         }
-    }, [params]);
+    }, [backgroundConfig, params]);
 
     const fetchAll = useCallback(async () => {
         const isInitial = initialLoadRef.current;
@@ -143,7 +150,7 @@ export default function NotificationsClient({ locale }: { locale: string }) {
 
     const notificationHandlers = useMemo(
         () => ({
-            notification: () => refreshAll(),
+            notification: () => refreshAll(true),
         }),
         [refreshAll],
     );
@@ -153,7 +160,7 @@ export default function NotificationsClient({ locale }: { locale: string }) {
     useEffect(() => {
         if (!ready) return;
         const interval = setInterval(() => {
-            refreshAll();
+            refreshAll(true);
         }, 30000);
         return () => clearInterval(interval);
     }, [ready, refreshAll]);

@@ -101,21 +101,28 @@ export default function ReportsClient({ locale }: { locale: string }) {
         };
     }, [debouncedEmployee, filters.departmentId, filters.from, filters.governorate, filters.leaveType, filters.permissionType, filters.status, filters.to, page, rows, tab]);
 
-    const fetchSummary = useCallback(async () => {
+    const backgroundConfig = useMemo(() => ({ headers: { 'x-skip-activity': '1' } }), []);
+
+    const fetchSummary = useCallback(async (skipActivity = false) => {
         if (!canViewReports) return;
         try {
-            const res = await api.get('/reports/summary');
+            const res = await api.get('/reports/summary', skipActivity ? backgroundConfig : undefined);
             setSummary(res.data);
         } catch (error) {
             if (isAuthError(error)) return;
         }
-    }, [canViewReports]);
+    }, [backgroundConfig, canViewReports]);
 
-    const refreshData = useCallback(async () => {
+    const refreshData = useCallback(async (skipActivity = false) => {
         if (refreshInFlight.current) return;
         refreshInFlight.current = true;
         try {
-            const res = await api.get<PaginatedResponse<any>>(endpoint, { params });
+            const res = await api.get<PaginatedResponse<any>>(
+                endpoint,
+                skipActivity
+                    ? { ...backgroundConfig, params }
+                    : { params },
+            );
             setData(res.data.items || []);
             setTotal(res.data.total || 0);
             setTotalPages(res.data.totalPages || 1);
@@ -124,7 +131,7 @@ export default function ReportsClient({ locale }: { locale: string }) {
         } finally {
             refreshInFlight.current = false;
         }
-    }, [endpoint, params]);
+    }, [backgroundConfig, endpoint, params]);
 
     const fetchData = useCallback(async () => {
         const isInitial = initialLoadRef.current;
@@ -173,8 +180,8 @@ export default function ReportsClient({ locale }: { locale: string }) {
     const notificationHandlers = useMemo(
         () => ({
             notification: () => {
-                refreshData();
-                fetchSummary();
+                refreshData(true);
+                fetchSummary(true);
             },
         }),
         [fetchSummary, refreshData],
@@ -185,8 +192,8 @@ export default function ReportsClient({ locale }: { locale: string }) {
     useEffect(() => {
         if (!ready || !canViewReports) return;
         const interval = setInterval(() => {
-            refreshData();
-            fetchSummary();
+            refreshData(true);
+            fetchSummary(true);
         }, 30000);
         return () => clearInterval(interval);
     }, [canViewReports, fetchSummary, ready, refreshData]);

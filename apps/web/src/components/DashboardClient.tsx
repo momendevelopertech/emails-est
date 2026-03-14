@@ -115,26 +115,31 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
 
     const refreshInFlight = useRef(false);
 
-    const refreshAll = useCallback(async () => {
+    const backgroundConfig = useMemo(() => ({ headers: { 'x-skip-activity': '1' } }), []);
+
+    const refreshAll = useCallback(async (skipActivity = false) => {
         if (refreshInFlight.current) return;
         refreshInFlight.current = true;
         try {
+            const config = skipActivity ? backgroundConfig : undefined;
             const [leaveBalances, leaveReqs, permissionReqs, formSubs, notesRes, cycle, absence, scheduleRes, latenessRes, announcementsRes] = await Promise.all([
-                api.get('/leaves/balances'),
-                api.get('/leaves'),
-                api.get('/permissions'),
-                api.get('/forms/submissions'),
-                api.get('/notes'),
-                api.get('/permissions/cycle'),
-                api.get('/leaves/absence-deductions'),
-                api.get('/settings/work-schedule'),
+                api.get('/leaves/balances', config),
+                api.get('/leaves', config),
+                api.get('/permissions', config),
+                api.get('/forms/submissions', config),
+                api.get('/notes', config),
+                api.get('/permissions/cycle', config),
+                api.get('/leaves/absence-deductions', config),
+                api.get('/settings/work-schedule', config),
                 api.get('/lateness', {
+                    ...(config || {}),
                     params: {
                         from: '2000-01-01',
                         to: '2100-12-31',
                     },
                 }),
                 api.get<NotificationsResponse>('/notifications', {
+                    ...(config || {}),
                     params: { type: 'ANNOUNCEMENT', status: 'unread', limit: 1 },
                 }),
             ]);
@@ -153,7 +158,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         } finally {
             refreshInFlight.current = false;
         }
-    }, []);
+    }, [backgroundConfig]);
 
     const fetchAll = useCallback(async () => {
         setLoading(true);
@@ -171,7 +176,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
 
     const notificationHandlers = useMemo(
         () => ({
-            notification: () => refreshAll(),
+            notification: () => refreshAll(true),
         }),
         [refreshAll],
     );
@@ -181,7 +186,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     useEffect(() => {
         if (!ready) return;
         const interval = setInterval(() => {
-            refreshAll();
+            refreshAll(true);
         }, 30000);
         return () => clearInterval(interval);
     }, [ready, refreshAll]);

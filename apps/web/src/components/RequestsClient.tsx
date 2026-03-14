@@ -124,13 +124,16 @@ export default function RequestsClient({ locale }: { locale: string }) {
 
     const refreshInFlight = useRef(false);
 
-    const refreshAll = useCallback(async () => {
+    const backgroundConfig = useMemo(() => ({ headers: { 'x-skip-activity': '1' } }), []);
+
+    const refreshAll = useCallback(async (skipActivity = false) => {
         if (refreshInFlight.current) return;
         refreshInFlight.current = true;
         try {
+            const config = skipActivity ? backgroundConfig : undefined;
             const [leaveReqs, permissionReqs] = await Promise.all([
-                api.get('/leaves'),
-                api.get('/permissions'),
+                api.get('/leaves', config),
+                api.get('/permissions', config),
             ]);
             setLeaves(leaveReqs.data);
             setPermissions(permissionReqs.data);
@@ -139,7 +142,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
         } finally {
             refreshInFlight.current = false;
         }
-    }, []);
+    }, [backgroundConfig]);
 
     const fetchAll = useCallback(async () => {
         setLoading(true);
@@ -179,7 +182,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
 
     const notificationHandlers = useMemo(
         () => ({
-            notification: () => refreshAll(),
+            notification: () => refreshAll(true),
         }),
         [refreshAll],
     );
@@ -189,7 +192,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
     useEffect(() => {
         if (!ready) return;
         const interval = setInterval(() => {
-            refreshAll();
+            refreshAll(true);
         }, 30000);
         return () => clearInterval(interval);
     }, [ready, refreshAll]);
