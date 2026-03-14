@@ -87,7 +87,7 @@
     "pendingApprovals": "طلبات بانتظار الموافقة",
     "recentRequests": "أحدث الطلبات",
     "days": "يوم",
-    "absenceDeduction": "خصم الغياب بإذن (شهري)",
+    "absenceDeduction": "الخصومات",
     "announcementTitle": "إعلان",
     "announcementBody": "نص الإعلان",
     "sendAnnouncement": "إرسال إعلان",
@@ -480,6 +480,13 @@
     "pwaTitle": "زر تثبيت التطبيق",
     "pwaDescription": "تحكم في ظهور زر التثبيت لكل المستخدمين.",
     "pwaInstallLabel": "إظهار زر التثبيت لكل المستخدمين",
-    "pwaInstallHint": "يظهر فقط عند دعم المتصفح للتثبيت، وعلى iOS تظهر رسالة إرشادية."
+    "pwaInstallHint": "يظهر فقط عند دعم المتصفح للتثبيت، وعلى iOS تظهر رسالة إرشادية.",
+    "dataResetTitle": "تصفير البيانات",
+    "dataResetDescription": "مسح كل بيانات الموظفين (الطلبات، الأذونات، الإجازات، التأخيرات، الإشعارات، الرسائل) وإعادة رصيد الإجازات.",
+    "dataResetCta": "تصفير بيانات الموظفين",
+    "dataResetConfirm": "هل أنت متأكد من تصفير جميع بيانات الموظفين؟ لا يمكن التراجع.",
+    "dataResetRunning": "جارٍ التصفير...",
+    "dataResetSuccess": "تم تصفير بيانات الموظفين بنجاح.",
+    "dataResetFailed": "تعذر تصفير البيانات. حاول مرة أخرى."
   }
 }

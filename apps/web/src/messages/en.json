@@ -87,7 +87,7 @@
     "pendingApprovals": "Pending Approvals",
     "recentRequests": "Recent Requests",
     "days": "days",
-    "absenceDeduction": "Absence Deduction (Monthly)",
+    "absenceDeduction": "Deductions",
     "announcementTitle": "Announcement",
     "announcementBody": "Announcement message",
     "sendAnnouncement": "Send Announcement",
@@ -480,6 +480,13 @@
     "pwaTitle": "PWA Install Button",
     "pwaDescription": "Control whether users can see the install button.",
     "pwaInstallLabel": "Show install button to all users",
-    "pwaInstallHint": "Shown only when the browser supports installation; iOS shows instructions instead."
+    "pwaInstallHint": "Shown only when the browser supports installation; iOS shows instructions instead.",
+    "dataResetTitle": "Data Reset",
+    "dataResetDescription": "Clear all employee activity data (requests, permissions, leaves, lateness, notifications, messages) and reset leave balances.",
+    "dataResetCta": "Reset Employee Data",
+    "dataResetConfirm": "Are you sure you want to reset all employee data? This cannot be undone.",
+    "dataResetRunning": "Resetting...",
+    "dataResetSuccess": "All employee data has been reset.",
+    "dataResetFailed": "Unable to reset data. Please try again."
   }
 }

@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import PageLoader from './PageLoader';
+import ConfirmDialog from './ConfirmDialog';
 
 type WorkScheduleSettings = {
     id: string;
@@ -38,11 +39,14 @@ const DEFAULT_SETTINGS: WorkScheduleSettings = {
 
 export default function SettingsClient({ locale }: { locale: string }) {
     const t = useTranslations('workSchedule');
+    const tCommon = useTranslations('common');
     const router = useRouter();
     const { user, ready } = useRequireAuth(locale);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [settings, setSettings] = useState<WorkScheduleSettings>(DEFAULT_SETTINGS);
+    const [resetOpen, setResetOpen] = useState(false);
+    const [resetting, setResetting] = useState(false);
 
     const isAdmin = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
 
@@ -90,6 +94,20 @@ export default function SettingsClient({ locale }: { locale: string }) {
             fetchSettings();
         } finally {
             setSaving(false);
+        }
+    };
+
+    const runReset = async () => {
+        if (resetting) return;
+        setResetting(true);
+        try {
+            await api.post('/settings/reset-data');
+            toast.success(t('dataResetSuccess'));
+        } catch {
+            toast.error(t('dataResetFailed'));
+        } finally {
+            setResetting(false);
+            setResetOpen(false);
         }
     };
 
@@ -254,6 +272,29 @@ export default function SettingsClient({ locale }: { locale: string }) {
                     </button>
                 </div>
             </section>
+
+            <section className="card p-5 space-y-3">
+                <div>
+                    <h2 className="text-lg font-semibold">{t('dataResetTitle')}</h2>
+                    <p className="text-sm text-ink/60">{t('dataResetDescription')}</p>
+                </div>
+                <div className="flex justify-end">
+                    <button className="btn-outline text-red-600" onClick={() => setResetOpen(true)}>
+                        {t('dataResetCta')}
+                    </button>
+                </div>
+            </section>
+
+            <ConfirmDialog
+                open={resetOpen}
+                title={t('dataResetTitle')}
+                message={t('dataResetConfirm')}
+                confirmLabel={resetting ? t('dataResetRunning') : t('dataResetCta')}
+                cancelLabel={tCommon('cancel')}
+                confirmDisabled={resetting}
+                onConfirm={runReset}
+                onCancel={() => setResetOpen(false)}
+            />
         </main>
     );
 }
