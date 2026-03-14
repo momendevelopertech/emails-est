@@ -28,6 +28,7 @@ export default function PwaInstallButton({ enabled }: { enabled: boolean }) {
     const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
     const [isIos, setIsIos] = useState(false);
     const [isInstalled, setIsInstalled] = useState(false);
+    const [installUnavailable, setInstallUnavailable] = useState(false);
 
     useEffect(() => {
         setIsIos(detectIos());
@@ -36,10 +37,12 @@ export default function PwaInstallButton({ enabled }: { enabled: boolean }) {
         const handleBeforeInstall = (event: Event) => {
             event.preventDefault();
             setPromptEvent(event as BeforeInstallPromptEvent);
+            setInstallUnavailable(false);
         };
         const handleInstalled = () => {
             setPromptEvent(null);
             setIsInstalled(true);
+            setInstallUnavailable(false);
         };
 
         window.addEventListener('beforeinstallprompt', handleBeforeInstall as EventListener);
@@ -50,6 +53,14 @@ export default function PwaInstallButton({ enabled }: { enabled: boolean }) {
         };
     }, [enabled]);
 
+    useEffect(() => {
+        if (!enabled || isIos || isInstalled || promptEvent) return;
+        const timer = window.setTimeout(() => {
+            setInstallUnavailable(true);
+        }, 2500);
+        return () => window.clearTimeout(timer);
+    }, [enabled, isIos, isInstalled, promptEvent]);
+
     if (isInstalled) return null;
     if (!enabled) return null;
 
@@ -57,7 +68,11 @@ export default function PwaInstallButton({ enabled }: { enabled: boolean }) {
         return <span className="text-xs text-ink/60 sm:text-sm">{t('installIosHint')}</span>;
     }
 
-    if (!promptEvent) return null;
+    if (!promptEvent) {
+        return installUnavailable ? (
+            <span className="text-xs text-ink/60 sm:text-sm">{t('installUnavailable')}</span>
+        ) : null;
+    }
 
     const install = async () => {
         await promptEvent.prompt();

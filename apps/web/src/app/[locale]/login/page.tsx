@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
@@ -70,7 +70,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
         router.push(segments.join('/'));
     };
 
-    const redirectForRole = (role?: string) => {
+    const redirectForRole = useCallback((role?: string) => {
         const target = role === 'MANAGER' || role === 'BRANCH_SECRETARY'
             ? `/${params.locale}/requests`
             : `/${params.locale}`;
@@ -80,7 +80,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
                 window.location.href = target;
             }
         }, 600);
-    };
+    }, [params.locale, router]);
 
     useEffect(() => {
         let active = true;
@@ -103,7 +103,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
         return () => {
             active = false;
         };
-    }, [setBootstrapped, setUser]);
+    }, [redirectForRole, setBootstrapped, setUser]);
 
     const validate = () => {
         const nextErrors: { identifier?: string; password?: string } = {};

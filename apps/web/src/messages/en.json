@@ -24,7 +24,8 @@
     "themeDark": "Dark",
     "settings": "Settings",
     "installApp": "Install App",
-    "installIosHint": "iOS: Share → Add to Home Screen"
+    "installIosHint": "iOS: Share → Add to Home Screen",
+    "installUnavailable": "Install not available on this browser"
   },
   "chat": {
     "loading": "Loading chat...",

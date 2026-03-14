@@ -379,6 +379,11 @@ export class UsersService {
         const existing = await this.prisma.user.findUnique({ where: { id } });
         if (!existing) throw new NotFoundException('Employee not found');
 
+        const finalJobTitle = data.jobTitle !== undefined ? data.jobTitle?.trim() : existing.jobTitle;
+        if (!finalJobTitle) {
+            throw new BadRequestException('Job title is required');
+        }
+
         const role = data.role || existing.role;
         const branchIdInput = this.parseBranchId(data.branchId);
         let branchId = existing.branchId ?? undefined;
@@ -432,7 +437,7 @@ export class UsersService {
             ...(data.fullNameAr && { fullNameAr: data.fullNameAr }),
             ...(data.phone !== undefined && { phone: normalizedPhone }),
             ...(data.role && { role: data.role }),
-            ...(data.jobTitle && { jobTitle: data.jobTitle }),
+            ...(data.jobTitle !== undefined && { jobTitle: finalJobTitle }),
             ...(data.jobTitleAr && { jobTitleAr: data.jobTitleAr }),
             ...(data.fingerprintId && { fingerprintId: data.fingerprintId }),
             ...(data.isActive !== undefined && { isActive: data.isActive }),
