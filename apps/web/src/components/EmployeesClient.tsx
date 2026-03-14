@@ -367,24 +367,42 @@ export default function EmployeesClient({ locale }: { locale: string }) {
                                     {canViewEmployees && (
                                         <td className="py-2">
                                             <div className="flex flex-wrap gap-2">
-                                                <button className="btn-outline" onClick={() => openStats(emp)}>
+                                                <button
+                                                    className="btn-outline border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300 hover:bg-sky-100"
+                                                    onClick={() => openStats(emp)}
+                                                >
                                                     {locale === 'ar' ? 'عرض' : 'View'}
                                                 </button>
-                                                <button className="btn-outline" onClick={() => openHistory(emp)}>
+                                                <button
+                                                    className="btn-outline border-indigo-200 bg-indigo-50 text-indigo-700 hover:border-indigo-300 hover:bg-indigo-100"
+                                                    onClick={() => openHistory(emp)}
+                                                >
                                                     {t('history')}
                                                 </button>
                                                 {canAdmin && (
-                                                    <button className="btn-outline" onClick={() => openEdit(emp)}>
+                                                    <button
+                                                        className="btn-outline border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100"
+                                                        onClick={() => openEdit(emp)}
+                                                    >
                                                         {locale === 'ar' ? 'تعديل' : 'Edit'}
                                                     </button>
                                                 )}
                                                 {canAdmin && (
-                                                    <button className="btn-outline" onClick={() => toggleActive(emp)}>
+                                                    <button
+                                                        className={`btn-outline ${emp.isActive
+                                                            ? 'border-orange-200 bg-orange-50 text-orange-700 hover:border-orange-300 hover:bg-orange-100'
+                                                            : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100'
+                                                        }`}
+                                                        onClick={() => toggleActive(emp)}
+                                                    >
                                                         {emp.isActive ? t('deactivate') : t('activate')}
                                                     </button>
                                                 )}
                                                 {canAdmin && (
-                                                    <button className="btn-outline text-red-600" onClick={() => resetEmployeeData(emp)}>
+                                                    <button
+                                                        className="btn-outline border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100"
+                                                        onClick={() => resetEmployeeData(emp)}
+                                                    >
                                                         {resetLabel}
                                                     </button>
                                                 )}
