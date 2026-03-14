@@ -73,6 +73,14 @@ type NotificationsResponse = {
     items: AnnouncementNotification[];
 };
 
+type UsersResponse = {
+    items: EmployeeOption[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+};
+
 export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     const t = useTranslations('dashboard');
     const tm = useTranslations('requestModal');
@@ -222,7 +230,27 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         const loadRecipients = async () => {
             const [deptRes, usersRes] = await Promise.all([
                 api.get('/departments'),
-                api.get('/users', { params: { limit: 1000, status: 'active' } }),
+                (async () => {
+                    const firstPage = await api.get<UsersResponse>('/users', {
+                        params: { limit: 100, status: 'active', page: 1 },
+                    });
+                    const items = [...(firstPage.data?.items || [])];
+                    const totalPages = firstPage.data?.totalPages || 1;
+                    if (totalPages > 1) {
+                        const pages = Array.from({ length: totalPages - 1 }, (_, index) => index + 2);
+                        const responses = await Promise.all(
+                            pages.map((page) => api.get<UsersResponse>('/users', {
+                                params: { limit: 100, status: 'active', page },
+                            })),
+                        );
+                        responses.forEach((res) => {
+                            if (res.data?.items?.length) {
+                                items.push(...res.data.items);
+                            }
+                        });
+                    }
+                    return { data: { items } };
+                })(),
             ]);
             setDepartments(deptRes.data || []);
             setEmployees(usersRes.data?.items || []);
