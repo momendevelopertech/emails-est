@@ -8,6 +8,7 @@ import { useRequireAuth } from '@/lib/use-auth';
 import { enumLabels } from '@/lib/enum-labels';
 import PageLoader from './PageLoader';
 import EmployeeHistoryModal from './EmployeeHistoryModal';
+import DateRangeFilter from './DateRangeFilter';
 
 type Department = { id: string; name: string };
 type User = {
@@ -268,8 +269,15 @@ export default function EmployeesClient({ locale }: { locale: string }) {
                         <option value="active">{t('active')}</option>
                         <option value="inactive">{t('inactive')}</option>
                     </select>
-                    <input type="date" className="rounded-xl border border-ink/20 bg-white px-3 py-2" value={filters.from} onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, from: e.target.value })); }} />
-                    <input type="date" className="rounded-xl border border-ink/20 bg-white px-3 py-2" value={filters.to} onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, to: e.target.value })); }} />
+                    <DateRangeFilter
+                        locale={locale}
+                        from={filters.from}
+                        to={filters.to}
+                        onChange={({ from, to }) => {
+                            setPage(1);
+                            setFilters((p: any) => ({ ...p, from, to }));
+                        }}
+                    />
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3">

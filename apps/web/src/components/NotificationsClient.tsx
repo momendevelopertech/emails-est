@@ -6,6 +6,7 @@ import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import { usePusherChannel } from '@/lib/use-pusher-channel';
 import PageLoader from './PageLoader';
+import DateRangeFilter from './DateRangeFilter';
 
 type NotificationItem = {
     id: string;
@@ -177,8 +178,15 @@ export default function NotificationsClient({ locale }: { locale: string }) {
                         <option value="read">{t('read')}</option>
                         <option value="unread">{t('unread')}</option>
                     </select>
-                    <input type="date" className="rounded-xl border border-ink/20 bg-white px-3 py-2" value={filters.from} onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, from: e.target.value })); }} />
-                    <input type="date" className="rounded-xl border border-ink/20 bg-white px-3 py-2" value={filters.to} onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, to: e.target.value })); }} />
+                    <DateRangeFilter
+                        locale={locale}
+                        from={filters.from}
+                        to={filters.to}
+                        onChange={({ from, to }) => {
+                            setPage(1);
+                            setFilters((p: any) => ({ ...p, from, to }));
+                        }}
+                    />
                     <label className="text-sm">
                         {t('rowsPerPage')}
                         <select className="ms-2 rounded-lg border border-ink/20 px-2 py-1" value={limit} onChange={(e) => { setPage(1); setLimit(parseInt(e.target.value, 10)); }}>
