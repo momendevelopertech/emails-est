@@ -10,14 +10,27 @@ import { Eye, EyeOff, Languages, Moon, Sun } from 'lucide-react';
 import { AppApiError } from '@/lib/api';
 import Link from 'next/link';
 
+const REMEMBER_KEY = 'sphinx-remember-me';
+const IDENTIFIER_KEY = 'sphinx-remember-identifier';
+
 export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } }) {
     const t = useTranslations('auth');
     const router = useRouter();
     const pathname = usePathname();
     const { setUser, setBootstrapped } = useAuthStore();
-    const [identifier, setIdentifier] = useState('');
+    const [identifier, setIdentifier] = useState(() => {
+        if (typeof window === 'undefined') return '';
+        const storedRemember = window.localStorage.getItem(REMEMBER_KEY);
+        if (storedRemember === '0') return '';
+        return window.localStorage.getItem(IDENTIFIER_KEY) || '';
+    });
     const [password, setPassword] = useState('');
-    const [rememberMe, setRememberMe] = useState(true);
+    const [rememberMe, setRememberMe] = useState(() => {
+        if (typeof window === 'undefined') return true;
+        const stored = window.localStorage.getItem(REMEMBER_KEY);
+        return stored ? stored === '1' : true;
+    });
+    const [checkingSession, setCheckingSession] = useState(true);
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState<{ identifier?: string; password?: string; form?: string }>({});
@@ -31,6 +44,14 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
             document.documentElement.dataset.theme = next;
         }
     }, []);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(REMEMBER_KEY, rememberMe ? '1' : '0');
+        if (!rememberMe) {
+            window.localStorage.removeItem(IDENTIFIER_KEY);
+        }
+    }, [rememberMe]);
 
     const toggleTheme = () => {
         const next = theme === 'dark' ? 'light' : 'dark';
@@ -48,6 +69,41 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
         segments[1] = nextLocale;
         router.push(segments.join('/'));
     };
+
+    const redirectForRole = (role?: string) => {
+        const target = role === 'MANAGER' || role === 'BRANCH_SECRETARY'
+            ? `/${params.locale}/requests`
+            : `/${params.locale}`;
+        router.push(target);
+        setTimeout(() => {
+            if (typeof window !== 'undefined' && window.location.pathname.includes('/login')) {
+                window.location.href = target;
+            }
+        }, 600);
+    };
+
+    useEffect(() => {
+        let active = true;
+        const boot = async () => {
+            try {
+                await api.get('/auth/csrf');
+                const res = await api.get('/auth/me');
+                if (!active) return;
+                setUser(res.data);
+                setBootstrapped(true);
+                redirectForRole(res.data?.role);
+                return;
+            } catch {
+                // ignore, user is not authenticated
+            } finally {
+                if (active) setCheckingSession(false);
+            }
+        };
+        boot();
+        return () => {
+            active = false;
+        };
+    }, [setBootstrapped, setUser]);
 
     const validate = () => {
         const nextErrors: { identifier?: string; password?: string } = {};
@@ -81,7 +137,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
     };
 
     const submit = async () => {
-        if (loading || !validate()) return;
+        if (loading || checkingSession || !validate()) return;
         setLoading(true);
         setErrors({});
         try {
@@ -89,16 +145,15 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
             const res = await api.post('/auth/login', { identifier: identifier.trim(), password, rememberMe });
             setUser(res.data.user);
             setBootstrapped(true);
-            const role = res.data?.user?.role;
-            const target = role === 'MANAGER' || role === 'BRANCH_SECRETARY'
-                ? `/${params.locale}/requests`
-                : `/${params.locale}`;
-            router.push(target);
-            setTimeout(() => {
-                if (typeof window !== 'undefined' && window.location.pathname.includes('/login')) {
-                    window.location.href = target;
+            if (typeof window !== 'undefined') {
+                window.localStorage.setItem(REMEMBER_KEY, rememberMe ? '1' : '0');
+                if (rememberMe) {
+                    window.localStorage.setItem(IDENTIFIER_KEY, identifier.trim());
+                } else {
+                    window.localStorage.removeItem(IDENTIFIER_KEY);
                 }
-            }, 600);
+            }
+            redirectForRole(res.data?.user?.role);
         } catch (error) {
             setErrors({ form: formatLoginError(error) });
         } finally {
@@ -190,10 +245,14 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
                     <button
                         className="btn-primary w-full"
                         type="button"
-                        disabled={loading}
+                        disabled={loading || checkingSession}
                         onClick={submit}
                     >
-                        {loading ? (params.locale === 'ar' ? 'جارٍ تسجيل الدخول...' : 'Signing in...') : t('login')}
+                        {loading
+                            ? (params.locale === 'ar' ? 'جارٍ تسجيل الدخول...' : 'Signing in...')
+                            : checkingSession
+                                ? (params.locale === 'ar' ? 'جارٍ التحقق...' : 'Checking session...')
+                                : t('login')}
                     </button>
                     <div className="flex items-center justify-between text-sm">
                         <Link className="text-ink/70 hover:text-ink" href={`/${params.locale}/forgot-password`}>
