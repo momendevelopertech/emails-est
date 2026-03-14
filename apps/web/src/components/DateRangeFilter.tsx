@@ -153,9 +153,6 @@ export default function DateRangeFilter({ locale, from = '', to = '', onChange, 
                         <button type="button" className="btn-outline text-xs" onClick={clear}>
                             {locale === 'ar' ? 'مسح' : 'Clear'}
                         </button>
-                        <button type="button" className="btn-outline text-xs" onClick={() => setOpen(false)}>
-                            {locale === 'ar' ? 'إغلاق' : 'Done'}
-                        </button>
                     </div>
                 </div>
             )}
