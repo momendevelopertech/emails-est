@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { endOfDay, startOfDay } from 'date-fns';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -25,9 +26,11 @@ export class NotesService {
         };
 
         if (filters?.from || filters?.to) {
+            const fromDate = filters?.from ? startOfDay(new Date(filters.from)) : undefined;
+            const toDate = filters?.to ? endOfDay(new Date(filters.to)) : undefined;
             where.date = {
-                ...(filters?.from ? { gte: new Date(filters.from) } : {}),
-                ...(filters?.to ? { lte: new Date(filters.to) } : {}),
+                ...(fromDate ? { gte: fromDate } : {}),
+                ...(toDate ? { lte: toDate } : {}),
             };
         }
 

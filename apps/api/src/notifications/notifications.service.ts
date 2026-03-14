@@ -1,5 +1,6 @@
 ﻿import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { endOfDay, startOfDay } from 'date-fns';
 import { PusherService } from '../pusher/pusher.service';
 import axios from 'axios';
 import * as nodemailer from 'nodemailer';
@@ -137,12 +138,16 @@ export class NotificationsService {
                 }
                 : {}),
             ...(params?.from || params?.to
-                ? {
-                    createdAt: {
-                        ...(params?.from ? { gte: new Date(params.from) } : {}),
-                        ...(params?.to ? { lte: new Date(params.to) } : {}),
-                    },
-                }
+                ? (() => {
+                    const fromDate = params?.from ? startOfDay(new Date(params.from)) : undefined;
+                    const toDate = params?.to ? endOfDay(new Date(params.to)) : undefined;
+                    return {
+                        createdAt: {
+                            ...(fromDate ? { gte: fromDate } : {}),
+                            ...(toDate ? { lte: toDate } : {}),
+                        },
+                    };
+                })()
                 : {}),
         };
 

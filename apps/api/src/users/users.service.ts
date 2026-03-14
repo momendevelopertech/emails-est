@@ -239,9 +239,11 @@ export class UsersService {
         if (params?.status === 'active') where.isActive = true;
         if (params?.status === 'inactive') where.isActive = false;
         if (params?.from || params?.to) {
+            const fromDate = params?.from ? startOfDay(new Date(params.from)) : undefined;
+            const toDate = params?.to ? endOfDay(new Date(params.to)) : undefined;
             where.createdAt = {
-                ...(params?.from ? { gte: new Date(params.from) } : {}),
-                ...(params?.to ? { lte: new Date(params.to) } : {}),
+                ...(fromDate ? { gte: fromDate } : {}),
+                ...(toDate ? { lte: toDate } : {}),
             };
         }
         if (params?.search) {

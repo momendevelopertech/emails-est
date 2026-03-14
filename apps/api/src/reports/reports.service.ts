@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { endOfDay, startOfDay } from 'date-fns';
 import { PrismaService } from '../prisma/prisma.service';
 import * as ExcelJS from 'exceljs';
 import { PdfService } from '../pdf/pdf.service';
@@ -20,10 +21,11 @@ export class ReportsService {
 
     private buildDateFilter(field: string, query?: any) {
         if (!query?.from && !query?.to) return {};
-        const toDate = query?.to ? new Date(`${query.to}T23:59:59`) : undefined;
+        const fromDate = query?.from ? startOfDay(new Date(query.from)) : undefined;
+        const toDate = query?.to ? endOfDay(new Date(query.to)) : undefined;
         return {
             [field]: {
-                ...(query?.from ? { gte: new Date(query.from) } : {}),
+                ...(fromDate ? { gte: fromDate } : {}),
                 ...(toDate ? { lte: toDate } : {}),
             },
         };
