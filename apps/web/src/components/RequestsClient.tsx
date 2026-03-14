@@ -79,6 +79,8 @@ type LatenessResponse = {
     cycleEnd: string;
 };
 
+const LATENESS_STALE_MS = 30000;
+
 export default function RequestsClient({ locale }: { locale: string }) {
     const t = useTranslations('requestsPage');
     const tEmployees = useTranslations('employees');
@@ -123,6 +125,8 @@ export default function RequestsClient({ locale }: { locale: string }) {
     const dateLocale = useMemo(() => (locale === 'ar' ? 'ar-EG' : 'en-US'), [locale]);
 
     const refreshInFlight = useRef(false);
+    const latenessFetchMetaRef = useRef<{ key: string | null; timestamp: number }>({ key: null, timestamp: 0 });
+    const latenessInFlightRef = useRef(false);
 
     const backgroundConfig = useMemo(() => ({ headers: { 'x-skip-activity': '1' } }), []);
 
@@ -192,6 +196,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
     useEffect(() => {
         if (!ready) return;
         const interval = setInterval(() => {
+            if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
             refreshAll(true);
         }, 30000);
         return () => clearInterval(interval);
@@ -220,10 +225,21 @@ export default function RequestsClient({ locale }: { locale: string }) {
         return { start, end };
     };
 
-    const fetchLateness = useCallback(async () => {
+    const fetchLateness = useCallback(async (force = false) => {
+        if (latenessInFlightRef.current) return;
+        const { start, end } = getCycleRange(cycleBaseDate);
+        const rangeKey = `${formatDateOnly(start)}:${formatDateOnly(end)}`;
+        const now = Date.now();
+        if (
+            !force
+            && latenessFetchMetaRef.current.key === rangeKey
+            && now - latenessFetchMetaRef.current.timestamp < LATENESS_STALE_MS
+        ) {
+            return;
+        }
+        latenessInFlightRef.current = true;
         setLatenessLoading(true);
         try {
-            const { start, end } = getCycleRange(cycleBaseDate);
             const res = await api.get<LatenessResponse>('/lateness', {
                 params: {
                     from: formatDateOnly(start),
@@ -238,9 +254,11 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 cycleStart: res.data.cycleStart,
                 cycleEnd: res.data.cycleEnd,
             });
+            latenessFetchMetaRef.current = { key: rangeKey, timestamp: now };
         } catch (error) {
             if (isAuthError(error)) return;
         } finally {
+            latenessInFlightRef.current = false;
             setLatenessLoading(false);
         }
     }, [cycleBaseDate]);
@@ -252,7 +270,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
 
     const convertLateness = async (id: string) => {
         await api.post(`/lateness/${id}/convert`);
-        await fetchLateness();
+        await fetchLateness(true);
     };
 
     const approveLeave = (id: string) => api.patch(`/leaves/${id}/approve`).then(fetchAll);

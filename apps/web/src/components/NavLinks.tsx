@@ -1,10 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import api from '@/lib/api';
+import api, { isAuthError } from '@/lib/api';
 import { usePusherChannel } from '@/lib/use-pusher-channel';
 import { useAuthStore } from '@/stores/auth-store';
 import {
@@ -29,17 +29,31 @@ export default function NavLinks({ locale }: { locale: string }) {
     const [unreadNotifications, setUnreadNotifications] = useState(0);
     const [unreadChats, setUnreadChats] = useState(0);
     const authReady = bootstrapped && !loading && !!user;
+    const countsInFlight = useRef(false);
+    const backgroundConfig = useMemo(() => ({
+        headers: {
+            'x-no-cache': '1',
+            'x-skip-activity': '1',
+        },
+    }), []);
 
     const fetchCounts = useCallback(async () => {
-        if (!user) return;
-        const [notificationsRes, chatsRes] = await Promise.all([
-            api.get('/notifications/unread', { headers: { 'x-no-cache': '1' } }),
-            api.get('/chat/chats', { headers: { 'x-no-cache': '1' } }),
-        ]);
-        setUnreadNotifications((notificationsRes.data || []).length);
-        const totalUnread = (chatsRes.data || []).reduce((sum: number, chat: any) => sum + (chat.unreadCount || 0), 0);
-        setUnreadChats(totalUnread);
-    }, [user]);
+        if (!user || countsInFlight.current) return;
+        countsInFlight.current = true;
+        try {
+            const [notificationsRes, chatsRes] = await Promise.all([
+                api.get('/notifications/unread', backgroundConfig),
+                api.get('/chat/chats', backgroundConfig),
+            ]);
+            setUnreadNotifications((notificationsRes.data || []).length);
+            const totalUnread = (chatsRes.data || []).reduce((sum: number, chat: any) => sum + (chat.unreadCount || 0), 0);
+            setUnreadChats(totalUnread);
+        } catch (error) {
+            if (isAuthError(error)) return;
+        } finally {
+            countsInFlight.current = false;
+        }
+    }, [backgroundConfig, user]);
 
     useEffect(() => {
         if (!user) return;
@@ -90,7 +104,10 @@ export default function NavLinks({ locale }: { locale: string }) {
     return (
         <nav className="flex flex-wrap gap-2 px-4 pb-4 sm:px-6">
             {links.map((link) => {
-                const active = pathname === link.href;
+                const isRoot = link.href === `/${locale}`;
+                const active = isRoot
+                    ? pathname === link.href
+                    : pathname === link.href || pathname.startsWith(`${link.href}/`);
                 return (
                     <Link
                         key={link.href}
