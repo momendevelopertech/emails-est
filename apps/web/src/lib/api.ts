@@ -91,7 +91,6 @@ export const clearApiCache = () => {
 export const clearBrowserRuntimeCache = async () => {
     clearApiCache();
     csrfToken = null;
-    refreshDisabled = false;
 
     if (typeof window === 'undefined') return;
 
@@ -222,9 +221,14 @@ api.interceptors.response.use((response) => {
         original &&
         !original._retry &&
         !original.url?.includes('/auth/login') &&
+        !original.url?.includes('/auth/logout') &&
         !original.url?.includes('/auth/refresh') &&
         !original.url?.includes('/auth/csrf')
     ) {
+        if (refreshDisabled) {
+            handleSessionExpired();
+            return Promise.reject(new AppApiError(401, 'Session expired. Please sign in again.'));
+        }
         original._retry = true;
         try {
             await ensureRefresh();

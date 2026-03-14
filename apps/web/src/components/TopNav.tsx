@@ -14,7 +14,7 @@ export default function TopNav({ locale }: { locale: string }) {
     const t = useTranslations('nav');
     const router = useRouter();
     const pathname = usePathname();
-    const { user, setUser } = useAuthStore();
+    const { user, setUser, setBootstrapped } = useAuthStore();
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const [pwaEnabled, setPwaEnabled] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
@@ -65,10 +65,18 @@ export default function TopNav({ locale }: { locale: string }) {
     };
 
     const logout = async () => {
-        await api.post('/auth/logout');
+        if (typeof window !== 'undefined') {
+            window.sessionStorage.setItem('sphinx-logged-out', '1');
+        }
+        try {
+            await api.post('/auth/logout');
+        } catch {
+            // Ignore logout network errors and continue client-side sign out.
+        }
         await clearBrowserRuntimeCache();
         clearApiCache();
         setUser(null);
+        setBootstrapped(false);
         router.push(`/${locale}/login`);
     };
 

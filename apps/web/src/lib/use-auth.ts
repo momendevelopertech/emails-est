@@ -25,9 +25,16 @@ export function useRequireAuth(locale: string) {
         let active = true;
         const boot = async () => {
             try {
+                if (typeof window !== 'undefined' && window.sessionStorage.getItem('sphinx-logged-out') === '1') {
+                    router.push(`/${locale}/login`);
+                    return;
+                }
                 await api.get('/auth/csrf');
                 const res = await api.get('/auth/me');
                 if (!active) return;
+                if (typeof window !== 'undefined') {
+                    window.sessionStorage.removeItem('sphinx-logged-out');
+                }
                 setUser(res.data);
                 setBootstrapped(true);
                 setReady(true);

@@ -86,9 +86,15 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
         let active = true;
         const boot = async () => {
             try {
+                if (typeof window !== 'undefined' && window.sessionStorage.getItem('sphinx-logged-out') === '1') {
+                    return;
+                }
                 await api.get('/auth/csrf');
                 const res = await api.get('/auth/me');
                 if (!active) return;
+                if (typeof window !== 'undefined') {
+                    window.sessionStorage.removeItem('sphinx-logged-out');
+                }
                 setUser(res.data);
                 setBootstrapped(true);
                 redirectForRole(res.data?.role);
@@ -146,6 +152,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
             setUser(res.data.user);
             setBootstrapped(true);
             if (typeof window !== 'undefined') {
+                window.sessionStorage.removeItem('sphinx-logged-out');
                 window.localStorage.setItem(REMEMBER_KEY, rememberMe ? '1' : '0');
                 if (rememberMe) {
                     window.localStorage.setItem(IDENTIFIER_KEY, identifier.trim());
