@@ -210,6 +210,7 @@ export class UsersService {
 
     async findAll(requesterId: string, requesterRole: string, params?: {
         departmentId?: string;
+        branchId?: number;
         page?: number;
         limit?: number;
         name?: string;
@@ -242,6 +243,10 @@ export class UsersService {
         } else {
             if (params?.departmentId) where.departmentId = params.departmentId;
             if (params?.governorate) where.governorate = params.governorate as any;
+        }
+
+        if (params?.branchId) {
+            where.branchId = params.branchId;
         }
 
         if (!searchQuery && params?.phone) {

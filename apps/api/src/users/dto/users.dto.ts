@@ -160,6 +160,12 @@ export class UsersQueryDto extends DateRangeQueryDto {
     departmentId?: string;
 
     @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    branchId?: number;
+
+    @IsOptional()
     @IsString()
     name?: string;
 

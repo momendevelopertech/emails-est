@@ -69,6 +69,7 @@ export default function EmployeesClient({ locale }: { locale: string }) {
     const [total, setTotal] = useState(0);
     const [filters, setFilters] = useState<any>({
         search: '',
+        branchId: '',
         departmentId: '',
         status: '',
         from: '',
@@ -90,11 +91,17 @@ export default function EmployeesClient({ locale }: { locale: string }) {
         page,
         limit,
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
+        ...(filters.branchId ? { branchId: filters.branchId } : {}),
         ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
         ...(filters.status ? { status: filters.status } : {}),
         ...(filters.from ? { from: filters.from } : {}),
         ...(filters.to ? { to: filters.to } : {}),
-    }), [debouncedSearch, filters.departmentId, filters.from, filters.status, filters.to, limit, page]);
+    }), [debouncedSearch, filters.branchId, filters.departmentId, filters.from, filters.status, filters.to, limit, page]);
+
+    const availableFilterDepartments = useMemo(() => {
+        if (!filters.branchId) return departments;
+        return departments.filter((dept) => dept.branches?.some((branch) => branch.id === filters.branchId));
+    }, [departments, filters.branchId]);
 
     const availableDepartments = useMemo(() => {
         if (!form.branchId) return [];
@@ -316,9 +323,25 @@ export default function EmployeesClient({ locale }: { locale: string }) {
                         value={filters.search}
                         onChange={(e) => setFilters((p: any) => ({ ...p, search: e.target.value }))}
                     />
+                    <select
+                        className="rounded-xl border border-ink/20 bg-white px-3 py-2"
+                        value={filters.branchId || ''}
+                        onChange={(e) => {
+                            const value = e.target.value ? Number(e.target.value) : '';
+                            setPage(1);
+                            setFilters((p: any) => ({ ...p, branchId: value, departmentId: '' }));
+                        }}
+                    >
+                        <option value="">{t('governorate')}</option>
+                        {branches.map((branch) => (
+                            <option key={branch.id} value={branch.id}>
+                                {locale === 'ar' ? (branch.nameAr || branch.name) : branch.name}
+                            </option>
+                        ))}
+                    </select>
                     <select className="rounded-xl border border-ink/20 bg-white px-3 py-2" value={filters.departmentId} onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, departmentId: e.target.value })); }}>
                         <option value="">{t('department')}</option>
-                        {departments.map((d) => (
+                        {availableFilterDepartments.map((d) => (
                             <option key={d.id} value={d.id}>{d.name}</option>
                         ))}
                     </select>

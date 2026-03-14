@@ -27,6 +27,7 @@ export class UsersController {
     findAll(@Req() req: any, @Query() query: UsersQueryDto) {
         return this.usersService.findAll(req.user.id, req.user.role, {
             departmentId: query.departmentId,
+            branchId: query.branchId,
             page: query.page ?? 1,
             limit: query.limit ?? 20,
             name: query.name,

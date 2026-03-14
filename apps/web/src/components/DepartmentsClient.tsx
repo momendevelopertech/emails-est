@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
+import { enumLabels } from '@/lib/enum-labels';
 import PageLoader from './PageLoader';
 import ConfirmDialog from './ConfirmDialog';
 
@@ -20,6 +21,31 @@ type Department = {
     totalEmployees: number;
 };
 
+type EmployeeRow = {
+    id: string;
+    employeeNumber: string;
+    fullName: string;
+    fullNameAr?: string | null;
+    email: string;
+    phone?: string | null;
+    role: string;
+    governorate?: 'CAIRO' | 'ALEXANDRIA' | null;
+    branchId?: number | null;
+    isActive: boolean;
+    createdAt: string;
+    jobTitle?: string | null;
+    jobTitleAr?: string | null;
+    department?: { id: string; name: string; nameAr?: string | null } | null;
+};
+
+type EmployeesResponse = {
+    items: EmployeeRow[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+};
+
 type FormState = {
     name: string;
     nameAr?: string;
@@ -30,6 +56,7 @@ type FormState = {
 export default function DepartmentsClient({ locale }: { locale: string }) {
     const t = useTranslations('departments');
     const tCommon = useTranslations('common');
+    const tEmployees = useTranslations('employees');
     const router = useRouter();
     const { user, ready } = useRequireAuth(locale);
     const [departments, setDepartments] = useState<Department[]>([]);
@@ -44,6 +71,13 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
     const [branchEditForm, setBranchEditForm] = useState({ name: '', nameAr: '' });
     const [pendingBranchDelete, setPendingBranchDelete] = useState<Branch | null>(null);
     const [branchDeleteBusy, setBranchDeleteBusy] = useState(false);
+    const [employeesOpen, setEmployeesOpen] = useState(false);
+    const [employeesLoading, setEmployeesLoading] = useState(false);
+    const [employeesPage, setEmployeesPage] = useState(1);
+    const [employeesTotalPages, setEmployeesTotalPages] = useState(1);
+    const [employeesTotal, setEmployeesTotal] = useState(0);
+    const [employeesItems, setEmployeesItems] = useState<EmployeeRow[]>([]);
+    const [employeesScope, setEmployeesScope] = useState<{ type: 'branch' | 'department'; id: number | string; label: string } | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [editingDept, setEditingDept] = useState<Department | null>(null);
@@ -56,6 +90,7 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
     const cancelLabel = locale === 'ar' ? 'إلغاء' : 'Cancel';
 
     const canAdmin = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
+    const employeesLimit = 20;
 
     const branchDepartmentCounts = useMemo(() => {
         const counts = new Map<number, number>();
@@ -76,6 +111,13 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
     const getBranchEmployeeCount = (branch: Branch) => (
         typeof branch.employeeCount === 'number' ? branch.employeeCount : 0
     );
+
+    const getBranchLabel = (branchId?: number | null) => {
+        if (!branchId) return '-';
+        const branch = branches.find((item) => item.id === branchId);
+        if (!branch) return '-';
+        return locale === 'ar' ? (branch.nameAr || branch.name) : branch.name;
+    };
 
     const fetchAll = async () => {
         setLoading(true);
@@ -118,6 +160,39 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
     useEffect(() => {
         if (page > totalPages) setPage(totalPages);
     }, [page, totalPages]);
+
+    useEffect(() => {
+        if (employeesPage > employeesTotalPages) setEmployeesPage(employeesTotalPages);
+    }, [employeesPage, employeesTotalPages]);
+
+    useEffect(() => {
+        if (!employeesOpen || !employeesScope) return;
+        let active = true;
+        const loadEmployees = async () => {
+            setEmployeesLoading(true);
+            try {
+                const params: any = { page: employeesPage, limit: employeesLimit };
+                if (employeesScope.type === 'branch') {
+                    params.branchId = employeesScope.id;
+                } else {
+                    params.departmentId = employeesScope.id;
+                }
+                const res = await api.get<EmployeesResponse>('/users', { params });
+                if (!active) return;
+                setEmployeesItems(res.data.items || []);
+                setEmployeesTotal(res.data.total || 0);
+                setEmployeesTotalPages(res.data.totalPages || 1);
+            } finally {
+                if (active) {
+                    setEmployeesLoading(false);
+                }
+            }
+        };
+        loadEmployees();
+        return () => {
+            active = false;
+        };
+    }, [employeesLimit, employeesOpen, employeesPage, employeesScope]);
 
     if (!ready || loading) {
         return <PageLoader text={locale === 'ar' ? 'جاري تحميل الفروع والأقسام...' : 'Loading branches & departments...'} />;
@@ -241,6 +316,35 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
         }
     };
 
+    const openEmployeesForBranch = (branch: Branch) => {
+        setEmployeesScope({
+            type: 'branch',
+            id: branch.id,
+            label: locale === 'ar' ? (branch.nameAr || branch.name) : branch.name,
+        });
+        setEmployeesPage(1);
+        setEmployeesOpen(true);
+    };
+
+    const openEmployeesForDepartment = (dept: Department) => {
+        setEmployeesScope({
+            type: 'department',
+            id: dept.id,
+            label: locale === 'ar' ? (dept.nameAr || dept.name) : dept.name,
+        });
+        setEmployeesPage(1);
+        setEmployeesOpen(true);
+    };
+
+    const closeEmployees = () => {
+        setEmployeesOpen(false);
+        setEmployeesScope(null);
+        setEmployeesItems([]);
+        setEmployeesTotal(0);
+        setEmployeesTotalPages(1);
+        setEmployeesPage(1);
+    };
+
     const openEdit = (dept: Department) => {
         setEditingDept(dept);
         setForm({
@@ -323,6 +427,9 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
                                 <p className="text-xs text-ink/60">{t('branchDepartmentsCount', { count: departmentCount })}</p>
                                 <p className="text-xs text-ink/60">{t('branchEmployeesCount', { count: employeeCount })}</p>
                                 <div className="mt-2 flex flex-wrap gap-2">
+                                    <button className="btn-outline text-xs" onClick={() => openEmployeesForBranch(branch)}>
+                                        {t('viewEmployees')}
+                                    </button>
                                     <button className="btn-outline text-xs" onClick={() => openBranchEdit(branch)}>
                                         {t('edit')}
                                     </button>
@@ -411,6 +518,9 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
                                         <td className="py-3 font-semibold">{dept.totalEmployees}</td>
                                         <td className="py-3">
                                             <div className="flex flex-wrap gap-2">
+                                                <button className="btn-outline" onClick={() => openEmployeesForDepartment(dept)}>
+                                                    {t('viewEmployees')}
+                                                </button>
                                                 <button className="btn-outline" onClick={() => openEdit(dept)}>{t('edit')}</button>
                                                 <button
                                                     className={`btn-outline text-red-600 ${dept.totalEmployees > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -571,6 +681,98 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
                             </button>
                             <button className="btn-primary" onClick={saveBranchEdit} disabled={branchEditSaving}>
                                 {branchEditSaving ? t('saving') : t('save')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {employeesOpen && employeesScope && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                    <div className="card w-full max-w-6xl p-6">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h3 className="text-lg font-semibold">{tEmployees('title')}</h3>
+                                <p className="text-sm text-ink/60">
+                                    {employeesScope.type === 'branch'
+                                        ? t('employeesInBranch', { name: employeesScope.label })
+                                        : t('employeesInDepartment', { name: employeesScope.label })}
+                                </p>
+                            </div>
+                            <button className="btn-outline" onClick={closeEmployees}>Ã—</button>
+                        </div>
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                            <p className="text-sm text-ink/60">{tEmployees('records', { count: employeesTotal })}</p>
+                        </div>
+                        {employeesLoading ? (
+                            <p className="mt-4 text-sm text-ink/60">{t('employeesLoading')}</p>
+                        ) : employeesItems.length === 0 ? (
+                            <p className="mt-4 text-sm text-ink/60">{t('employeesEmpty')}</p>
+                        ) : (
+                            <div className="mt-4 overflow-x-auto">
+                                <table className={`min-w-[1200px] w-full text-sm ${locale === 'ar' ? 'text-right' : 'text-left'}`}>
+                                    <thead className={locale === 'ar' ? 'text-right' : 'text-left'}>
+                                        <tr className="border-b border-ink/10">
+                                            <th className="py-2">#{tEmployees('employeeNumber')}</th>
+                                            <th className="py-2">{tEmployees('fullName')}</th>
+                                            <th className="py-2">{tEmployees('email')}</th>
+                                            <th className="py-2">{tEmployees('phone')}</th>
+                                            <th className="py-2">{tEmployees('jobTitle')}</th>
+                                            <th className="py-2">{tEmployees('department')}</th>
+                                            <th className="py-2">{tEmployees('governorate')}</th>
+                                            <th className="py-2">{tEmployees('role')}</th>
+                                            <th className="py-2">{tEmployees('status')}</th>
+                                            <th className="py-2">{tEmployees('created')}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className={locale === 'ar' ? 'text-right' : 'text-left'}>
+                                        {employeesItems.map((emp) => (
+                                            <tr key={emp.id} className="border-b border-ink/5">
+                                                <td className="py-2">{emp.employeeNumber}</td>
+                                                <td className="py-2">
+                                                    {locale === 'ar' ? (emp.fullNameAr || emp.fullName) : emp.fullName}
+                                                </td>
+                                                <td className="py-2">{emp.email}</td>
+                                                <td className="py-2">{emp.phone || '-'}</td>
+                                                <td className="py-2">
+                                                    {locale === 'ar'
+                                                        ? (emp.jobTitleAr || emp.jobTitle || '-')
+                                                        : (emp.jobTitle || '-')}
+                                                </td>
+                                                <td className="py-2">
+                                                    {emp.department
+                                                        ? (locale === 'ar'
+                                                            ? (emp.department.nameAr || emp.department.name)
+                                                            : emp.department.name)
+                                                        : '-'}
+                                                </td>
+                                                <td className="py-2">{getBranchLabel(emp.branchId)}</td>
+                                                <td className="py-2">{enumLabels.role(emp.role, locale as 'en' | 'ar')}</td>
+                                                <td className="py-2">{emp.isActive ? tEmployees('active') : tEmployees('inactive')}</td>
+                                                <td className="py-2">
+                                                    {new Date(emp.createdAt).toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US')}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                        <div className="mt-4 flex items-center justify-between">
+                            <button
+                                className="btn-outline"
+                                disabled={employeesPage <= 1}
+                                onClick={() => setEmployeesPage((p) => Math.max(1, p - 1))}
+                            >
+                                {t('prev')}
+                            </button>
+                            <p className="text-sm">{t('page', { page: employeesPage, totalPages: employeesTotalPages })}</p>
+                            <button
+                                className="btn-outline"
+                                disabled={employeesPage >= employeesTotalPages}
+                                onClick={() => setEmployeesPage((p) => Math.min(employeesTotalPages, p + 1))}
+                            >
+                                {t('next')}
                             </button>
                         </div>
                     </div>
