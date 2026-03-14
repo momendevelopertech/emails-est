@@ -11,6 +11,7 @@ import { normalizeSearchText } from '@/lib/search-normalization';
 import PageLoader from './PageLoader';
 import EmployeeHistoryModal from './EmployeeHistoryModal';
 import ConfirmDialog from './ConfirmDialog';
+import DateRangeFilter from './DateRangeFilter';
 
 type Department = { id: string; name: string; nameAr?: string | null };
 type RequestUser = {
@@ -520,17 +521,11 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                 ))}
                             </select>
                         )}
-                        <input
-                            type="date"
-                            className="rounded-xl border border-ink/20 bg-white px-3 py-2"
-                            value={filters.from}
-                            onChange={(e) => setFilters((prev) => ({ ...prev, from: e.target.value }))}
-                        />
-                        <input
-                            type="date"
-                            className="rounded-xl border border-ink/20 bg-white px-3 py-2"
-                            value={filters.to}
-                            onChange={(e) => setFilters((prev) => ({ ...prev, to: e.target.value }))}
+                        <DateRangeFilter
+                            locale={locale}
+                            from={filters.from}
+                            to={filters.to}
+                            onChange={({ from, to }) => setFilters((prev) => ({ ...prev, from, to }))}
                         />
                         <button
                             className="btn-outline"

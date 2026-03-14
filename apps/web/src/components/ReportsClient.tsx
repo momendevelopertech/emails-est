@@ -9,6 +9,7 @@ import { enumLabels } from '@/lib/enum-labels';
 import { getPublicApiUrl } from '@/lib/public-urls';
 import { usePusherChannel } from '@/lib/use-pusher-channel';
 import PageLoader from './PageLoader';
+import DateRangeFilter from './DateRangeFilter';
 
 type PaginatedResponse<T> = {
     items: T[];
@@ -278,17 +279,14 @@ export default function ReportsClient({ locale }: { locale: string }) {
                 </div>
 
                 <div className={`mt-4 grid gap-2 ${isAdmin ? 'md:grid-cols-3 xl:grid-cols-7' : 'md:grid-cols-3 xl:grid-cols-5'}`}>
-                    <input
-                        type="date"
-                        className="rounded-xl border border-ink/20 bg-white px-3 py-2"
-                        value={filters.from}
-                        onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, from: e.target.value })); }}
-                    />
-                    <input
-                        type="date"
-                        className="rounded-xl border border-ink/20 bg-white px-3 py-2"
-                        value={filters.to}
-                        onChange={(e) => { setPage(1); setFilters((p: any) => ({ ...p, to: e.target.value })); }}
+                    <DateRangeFilter
+                        locale={locale}
+                        from={filters.from}
+                        to={filters.to}
+                        onChange={({ from, to }) => {
+                            setPage(1);
+                            setFilters((p: any) => ({ ...p, from, to }));
+                        }}
                     />
                     <input
                         className="rounded-xl border border-ink/20 bg-white px-3 py-2"
