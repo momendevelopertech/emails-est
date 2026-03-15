@@ -114,11 +114,20 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     const [schedule, setSchedule] = useState<any | null>(null);
 
     const refreshInFlight = useRef(false);
+    const refreshQueued = useRef(false);
+    const refreshQueueSkipActivity = useRef<boolean | null>(null);
 
     const backgroundConfig = useMemo(() => ({ headers: { 'x-skip-activity': '1' } }), []);
 
     const refreshAll = useCallback(async (skipActivity = false) => {
-        if (refreshInFlight.current) return;
+        if (refreshInFlight.current) {
+            refreshQueued.current = true;
+            refreshQueueSkipActivity.current =
+                refreshQueueSkipActivity.current === null
+                    ? skipActivity
+                    : refreshQueueSkipActivity.current && skipActivity;
+            return;
+        }
         refreshInFlight.current = true;
         try {
             const config = skipActivity ? backgroundConfig : undefined;
@@ -157,6 +166,12 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
             if (isAuthError(error)) return;
         } finally {
             refreshInFlight.current = false;
+            if (refreshQueued.current) {
+                const queuedSkip = refreshQueueSkipActivity.current ?? false;
+                refreshQueued.current = false;
+                refreshQueueSkipActivity.current = null;
+                void refreshAll(queuedSkip);
+            }
         }
     }, [backgroundConfig]);
 
