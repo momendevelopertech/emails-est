@@ -12,9 +12,12 @@
     --accent-1: #2f6b5f;
     --accent-2: #d86f45;
     --calendar-day-bg: rgba(255, 255, 255, 0.75);
-    --calendar-day-today: #fde68a;
+    --calendar-day-today: #fcd34d;
     --calendar-day-ramadan: #fef9c3;
-    --calendar-day-ramadan-today: #fcd34d;
+    --calendar-day-ramadan-today: #fbbf24;
+    --calendar-day-today-border: rgba(180, 83, 9, 0.35);
+    --calendar-today-marker: #92400e;
+    --calendar-today-marker-ring: rgba(255, 255, 255, 0.85);
     --calendar-day-disabled: #e5e7eb;
     --calendar-day-disabled-text: #6b7280;
     --calendar-border: rgba(15, 23, 42, 0.08);
@@ -167,6 +170,7 @@ body {
 
 .rbc-day-today {
     background-color: var(--calendar-day-today);
+    box-shadow: inset 0 0 0 2px var(--calendar-day-today-border);
 }
 
 .rbc-day-ramadan {
@@ -175,6 +179,26 @@ body {
 
 .rbc-day-ramadan.rbc-day-today {
     background-color: var(--calendar-day-ramadan-today);
+    box-shadow: inset 0 0 0 2px var(--calendar-day-today-border);
+}
+
+.rbc-date-cell.rbc-now,
+.rbc-header.rbc-today {
+    position: relative;
+}
+
+.rbc-date-cell.rbc-now::after,
+.rbc-header.rbc-today::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    inset-inline-end: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background-color: var(--calendar-today-marker);
+    box-shadow: 0 0 0 2px var(--calendar-today-marker-ring);
+    pointer-events: none;
 }
 
 .rbc-day-friday {
@@ -248,9 +272,12 @@ body {
     --accent-1: #4f8f82;
     --accent-2: #e07a4f;
     --calendar-day-bg: rgba(15, 23, 42, 0.65);
-    --calendar-day-today: rgba(59, 130, 246, 0.32);
+    --calendar-day-today: rgba(59, 130, 246, 0.42);
     --calendar-day-ramadan: rgba(234, 179, 8, 0.15);
-    --calendar-day-ramadan-today: rgba(234, 179, 8, 0.35);
+    --calendar-day-ramadan-today: rgba(234, 179, 8, 0.45);
+    --calendar-day-today-border: rgba(125, 211, 252, 0.7);
+    --calendar-today-marker: #93c5fd;
+    --calendar-today-marker-ring: rgba(15, 23, 42, 0.75);
     --calendar-day-disabled: rgba(30, 41, 59, 0.85);
     --calendar-day-disabled-text: rgba(148, 163, 184, 0.7);
     --calendar-border: rgba(148, 163, 184, 0.25);
