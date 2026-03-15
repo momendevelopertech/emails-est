@@ -81,6 +81,12 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
             .catch(() => null);
     }, [open, user]);
 
+    useEffect(() => {
+        if (!open) return;
+        setType(null);
+        setFormData(date ? { startDate: dateValue, endDate: dateValue } : {});
+    }, [open, date, dateValue]);
+
     const permissionPreview = useMemo(() => {
         if (!date || type !== 'permission') return null;
         const hours = Number(formData.durationHours) || 0;
@@ -357,14 +363,6 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
                                     </div>
                                 </label>
                             </div>
-                            <label className="text-sm">
-                                {tm('reason')}
-                                <textarea
-                                    rows={3}
-                                    className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                    onChange={(e) => update('reason', e.target.value)}
-                                />
-                            </label>
                         </>
                     )}
 
@@ -386,14 +384,6 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
                                     </div>
                                 </label>
                             </div>
-                            <label className="text-sm">
-                                {tm('reason')}
-                                <textarea
-                                    rows={3}
-                                    className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                                    onChange={(e) => update('reason', e.target.value)}
-                                />
-                            </label>
                         </>
                     )}
 
