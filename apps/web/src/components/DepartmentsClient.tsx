@@ -651,7 +651,7 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
                                     resetBranchEditForm();
                                 }}
                             >
-                                Ã—
+                                ×
                             </button>
                         </div>
                         <div className="mt-4 grid gap-3">

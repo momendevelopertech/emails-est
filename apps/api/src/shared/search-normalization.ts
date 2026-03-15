@@ -13,12 +13,12 @@ export const normalizeSearchText = (value?: string | null) => {
         .trim()
         .toLowerCase()
         .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
-        .replace(/Ù€/g, '')
-        .replace(/[Ø¥Ø£Ø¢Ù±]/g, 'Ø§')
-        .replace(/Ø¤/g, 'Ùˆ')
-        .replace(/Ø¦/g, 'ÙŠ')
-        .replace(/Ù‰/g, 'ÙŠ')
-        .replace(/Ø¡/g, '')
+        .replace(/ـ/g, '')
+        .replace(/[إأآٱ]/g, 'ا')
+        .replace(/ؤ/g, 'و')
+        .replace(/ئ/g, 'ي')
+        .replace(/ى/g, 'ي')
+        .replace(/ء/g, '')
         .replace(/\s+/g, ' ');
 };
 
