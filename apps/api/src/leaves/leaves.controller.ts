@@ -23,8 +23,17 @@ export class LeavesController {
     }
 
     @Get()
-    findAll(@Req() req: any, @Query('status') status?: string, @Query('userId') userId?: string) {
-        return this.leavesService.findAll(req.user.id, req.user.role, { status: status as any, userId });
+    findAll(
+        @Req() req: any,
+        @Query('status') status?: string,
+        @Query('userId') userId?: string,
+        @Query('includeSelf') includeSelf?: string,
+    ) {
+        return this.leavesService.findAll(req.user.id, req.user.role, {
+            status: status as any,
+            userId,
+            includeSelf: includeSelf === '1' || includeSelf === 'true',
+        });
     }
 
     @Get(':id')

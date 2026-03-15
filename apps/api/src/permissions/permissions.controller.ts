@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req, Query } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -18,8 +18,10 @@ export class PermissionsController {
     }
 
     @Get()
-    findAll(@Req() req: any) {
-        return this.permissionsService.findAll(req.user.id, req.user.role);
+    findAll(@Req() req: any, @Query('includeSelf') includeSelf?: string) {
+        return this.permissionsService.findAll(req.user.id, req.user.role, {
+            includeSelf: includeSelf === '1' || includeSelf === 'true',
+        });
     }
 
     @Get(':id')

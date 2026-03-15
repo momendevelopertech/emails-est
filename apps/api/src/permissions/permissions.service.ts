@@ -242,7 +242,7 @@ export class PermissionsService {
         return request;
     }
 
-    async findAll(userId: string, role: string) {
+    async findAll(userId: string, role: string, filters?: { includeSelf?: boolean }) {
         const where: any = {};
         const secretaryStatuses = ['PENDING', 'MANAGER_APPROVED', 'HR_APPROVED'];
         const managerStatuses = ['MANAGER_APPROVED', 'HR_APPROVED'];
@@ -268,8 +268,12 @@ export class PermissionsService {
             where.userId = userId;
         }
 
+        const finalWhere = filters?.includeSelf
+            ? { OR: [{ userId }, where] }
+            : where;
+
         return this.prisma.permissionRequest.findMany({
-            where,
+            where: finalWhere,
             include: {
                 user: {
                     select: {

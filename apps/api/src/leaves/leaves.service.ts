@@ -231,7 +231,7 @@ export class LeavesService {
         return request;
     }
 
-    async findAll(userId: string, role: string, filters?: { status?: any; userId?: string }) {
+    async findAll(userId: string, role: string, filters?: { status?: any; userId?: string; includeSelf?: boolean }) {
         const where: any = {};
         const secretaryStatuses = ['PENDING', 'MANAGER_APPROVED', 'HR_APPROVED'];
         const managerStatuses = ['MANAGER_APPROVED', 'HR_APPROVED'];
@@ -276,8 +276,12 @@ export class LeavesService {
             where.userId = userId;
         }
 
+        const finalWhere = filters?.includeSelf
+            ? { OR: [{ userId }, where] }
+            : where;
+
         return this.prisma.leaveRequest.findMany({
-            where,
+            where: finalWhere,
             include: {
                 user: {
                     select: {

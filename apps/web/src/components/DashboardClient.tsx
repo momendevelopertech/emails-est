@@ -133,8 +133,14 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
             const config = skipActivity ? backgroundConfig : undefined;
             const [leaveBalances, leaveReqs, permissionReqs, formSubs, notesRes, cycle, absence, scheduleRes, latenessRes, announcementsRes] = await Promise.all([
                 api.get('/leaves/balances', config),
-                api.get('/leaves', config),
-                api.get('/permissions', config),
+                api.get('/leaves', {
+                    ...(config || {}),
+                    params: { includeSelf: 1 },
+                }),
+                api.get('/permissions', {
+                    ...(config || {}),
+                    params: { includeSelf: 1 },
+                }),
                 api.get('/forms/submissions', config),
                 api.get('/notes', config),
                 api.get('/permissions/cycle', config),
