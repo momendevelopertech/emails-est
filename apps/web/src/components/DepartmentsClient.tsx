@@ -699,7 +699,7 @@ export default function DepartmentsClient({ locale }: { locale: string }) {
                                         : t('employeesInDepartment', { name: employeesScope.label })}
                                 </p>
                             </div>
-                            <button className="btn-outline" onClick={closeEmployees}>Ã—</button>
+                            <button className="btn-outline" onClick={closeEmployees}>×</button>
                         </div>
                         <div className="mt-4 flex items-center justify-between gap-3">
                             <p className="text-sm text-ink/60">{tEmployees('records', { count: employeesTotal })}</p>
