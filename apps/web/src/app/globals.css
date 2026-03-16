@@ -151,6 +151,149 @@ body {
     cursor: pointer;
 }
 
+.rbc-day-bg,
+.rbc-day-slot {
+    position: relative;
+    overflow: hidden;
+}
+
+.rbc-day-bg::after,
+.rbc-day-slot::after {
+    content: '+';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 20px;
+    color: var(--text-2);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+}
+
+.rbc-day-bg.rbc-cell-hover::after,
+.rbc-day-slot.rbc-cell-hover::after {
+    opacity: 1;
+}
+
+.calendar-cell-ripple {
+    position: absolute;
+    border-radius: 999px;
+    background: rgba(26, 107, 74, 0.2);
+    transform: scale(0);
+    opacity: 0.5;
+    animation: calendar-ripple 0.5s ease-out forwards;
+    pointer-events: none;
+}
+
+@keyframes calendar-ripple {
+    to {
+        transform: scale(3);
+        opacity: 0;
+    }
+}
+
+.calendar-spotlight-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 60;
+}
+
+.calendar-spotlight-highlight {
+    position: fixed;
+    border: 2.5px solid #1a6b4a;
+    border-radius: 12px;
+    box-shadow: 0 0 0 0 rgba(26, 107, 74, 0.4);
+    animation: calendar-spotlight-pulse 1.6s ease-in-out infinite;
+    z-index: 61;
+}
+
+.calendar-spotlight-tooltip {
+    position: fixed;
+    width: 260px;
+    background: rgba(255, 255, 255, 0.98);
+    border-radius: 12px;
+    padding: 12px 14px;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.25);
+    color: var(--text-1);
+    z-index: 61;
+}
+
+.calendar-spotlight-step {
+    font-size: 12px;
+    color: var(--text-2);
+    margin-bottom: 6px;
+}
+
+.calendar-spotlight-title {
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.calendar-spotlight-desc {
+    font-size: 13px;
+    color: var(--text-2);
+    margin-bottom: 10px;
+}
+
+.calendar-spotlight-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.calendar-spotlight-dots {
+    display: inline-flex;
+    gap: 6px;
+}
+
+.calendar-spotlight-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(26, 107, 74, 0.2);
+}
+
+.calendar-spotlight-dot.is-active {
+    background: #1a6b4a;
+}
+
+.calendar-spotlight-actions {
+    display: inline-flex;
+    gap: 6px;
+}
+
+.calendar-spotlight-button {
+    border: 1px solid rgba(26, 107, 74, 0.3);
+    background: transparent;
+    color: #1a6b4a;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.calendar-spotlight-button.primary {
+    background: #1a6b4a;
+    color: white;
+    border-color: #1a6b4a;
+}
+
+@keyframes calendar-spotlight-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(26, 107, 74, 0.35);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(26, 107, 74, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(26, 107, 74, 0);
+    }
+}
+
 .rbc-sphinx .rbc-month-view .rbc-day-bg.rbc-day-clickable:hover,
 .rbc-sphinx .rbc-month-view .rbc-day-bg.rbc-day-clickable:focus-within,
 .rbc-sphinx .rbc-time-view .rbc-day-slot.rbc-day-clickable:hover {

@@ -4,9 +4,11 @@ import { Calendar, dateFnsLocalizer, View } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay, isSameDay, addMonths, addWeeks, addDays, endOfWeek } from 'date-fns';
 import { enUS, arSA } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import HintBar from './HintBar';
+import SpotlightGuide from './SpotlightGuide';
 
 const locales = {
     en: enUS,
@@ -65,10 +67,67 @@ export default function CalendarView({
     const [view, setView] = useState<View>('month');
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
     const [isMobile, setIsMobile] = useState(false);
+    const [guideOpen, setGuideOpen] = useState(false);
+    const [currentGuideStep, setCurrentGuideStep] = useState(0);
     const calendarLocale = locale === 'ar' ? arSA : enUS;
     const PrevIcon = locale === 'ar' ? ChevronRight : ChevronLeft;
     const NextIcon = locale === 'ar' ? ChevronLeft : ChevronRight;
     const fullWeekdayFormat = (date: Date) => format(date, 'EEEE', { locale: calendarLocale });
+    const calendarGridRef = useRef<HTMLDivElement | null>(null);
+    const hoveredCellRef = useRef<HTMLElement | null>(null);
+    const createRequestRef = useRef<HTMLButtonElement | null>(null);
+
+    const clearHoveredCell = useCallback(() => {
+        if (!hoveredCellRef.current) return;
+        hoveredCellRef.current.classList.remove('rbc-cell-hover');
+        hoveredCellRef.current = null;
+    }, []);
+
+    const findMonthCellFromPoint = useCallback((x: number, y: number) => {
+        if (view !== 'month') return null;
+        const elements = document.elementsFromPoint(x, y) as HTMLElement[];
+        const match = elements.find((el) => el.classList?.contains('rbc-day-bg'));
+        if (!match) return null;
+        if (!calendarGridRef.current?.contains(match)) return null;
+        if (match.classList.contains('rbc-day-disabled')) return null;
+        return match;
+    }, [view]);
+
+    const handleGridMouseMove = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+        const cell = findMonthCellFromPoint(event.clientX, event.clientY);
+        if (!cell) {
+            clearHoveredCell();
+            return;
+        }
+        if (hoveredCellRef.current === cell) return;
+        clearHoveredCell();
+        cell.classList.add('rbc-cell-hover');
+        hoveredCellRef.current = cell;
+    }, [clearHoveredCell, findMonthCellFromPoint]);
+
+    const handleGridMouseLeave = useCallback(() => {
+        clearHoveredCell();
+    }, [clearHoveredCell]);
+
+    const spawnRipple = useCallback((cell: HTMLElement, x: number, y: number) => {
+        const rect = cell.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        const ripple = document.createElement('div');
+        ripple.className = 'calendar-cell-ripple';
+        ripple.style.width = `${size}px`;
+        ripple.style.height = `${size}px`;
+        ripple.style.left = `${x - rect.left - size / 2}px`;
+        ripple.style.top = `${y - rect.top - size / 2}px`;
+        cell.appendChild(ripple);
+        window.setTimeout(() => ripple.remove(), 500);
+    }, []);
+
+    const handleGridClick = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+        if (guideOpen) return;
+        const cell = findMonthCellFromPoint(event.clientX, event.clientY);
+        if (!cell) return;
+        spawnRipple(cell, event.clientX, event.clientY);
+    }, [findMonthCellFromPoint, guideOpen, spawnRipple]);
 
     const eventPropGetter = (event: CalendarEvent) => {
         const key = event.resource?.key;
@@ -94,6 +153,11 @@ export default function CalendarView({
         }
         return format(currentDate, 'PPPP', { locale: calendarLocale });
     }, [calendarLocale, currentDate, view]);
+
+    const handleSelectDate = useCallback((selected: Date) => {
+        if (selected.getDay() === 5) return;
+        onSelectSlot(selected);
+    }, [onSelectSlot]);
 
     const navigate = (direction: 'prev' | 'next') => {
         const multiplier = direction === 'next' ? 1 : -1;
@@ -123,12 +187,56 @@ export default function CalendarView({
         return () => window.removeEventListener('resize', check);
     }, []);
 
+    useEffect(() => {
+        clearHoveredCell();
+    }, [clearHoveredCell, view]);
+
+    const guideSteps = useMemo(() => ([
+        {
+            titleAr: 'اضغط على اليوم',
+            descAr: 'اضغط على أي خلية في التقويم لإضافة حدث أو مأمورية في ذلك اليوم.',
+            targetSelector: '.rbc-month-view .rbc-day-bg',
+            tooltipPos: 'below' as const,
+        },
+        {
+            titleAr: 'شوف المواعيد الموجودة',
+            descAr: 'الأحداث المجدولة بتظهر كشريط ملون جوه الخلية. اضغط عليها للتفاصيل.',
+            targetSelector: '.rbc-month-view .rbc-event',
+            tooltipPos: 'below' as const,
+        },
+        {
+            titleAr: 'زر "إنشاء طلب"',
+            descAr: 'ممكن كمان تضغط على "إنشاء طلب" في الأعلى لإضافة حدث من غير ما تختار يوم الأول.',
+            targetRef: createRequestRef,
+            tooltipPos: 'below' as const,
+        },
+    ]), []);
+
     return (
         <div className="card calendar-shell p-4">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="space-y-1">
                     <p className="text-xs uppercase tracking-[0.2em] text-ink/50">{t('title')}</p>
-                    <p className="text-lg font-semibold text-ink">{t('createRequest')}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            ref={createRequestRef}
+                            className="btn-primary"
+                            onClick={() => {
+                                handleSelectDate(new Date());
+                            }}
+                        >
+                            {t('createRequest')}
+                        </button>
+                        <button
+                            className="btn-outline"
+                            onClick={() => {
+                                setGuideOpen(true);
+                                setCurrentGuideStep(0);
+                            }}
+                        >
+                            جولة تعريفية
+                        </button>
+                    </div>
                     <p className="text-sm text-ink/70">{title}</p>
                     {ramadanRange && (
                         <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-900">
@@ -173,6 +281,13 @@ export default function CalendarView({
                     </div>
                 </div>
             </div>
+            <HintBar message="💡 اضغط على أي خلية في التقويم لإضافة حدث جديد" />
+            <div
+                ref={calendarGridRef}
+                onMouseMove={handleGridMouseMove}
+                onMouseLeave={handleGridMouseLeave}
+                onClick={handleGridClick}
+            >
             <Calendar
                 localizer={localizer}
                 culture={locale}
@@ -187,8 +302,7 @@ export default function CalendarView({
                 selectable
                 onSelectSlot={(slot) => {
                     const selected = slot.start as Date;
-                    if (selected.getDay() === 5) return;
-                    onSelectSlot(selected);
+                    handleSelectDate(selected);
                 }}
                 onSelectEvent={(event) => {
                     const selected = event.start as Date;
@@ -197,7 +311,7 @@ export default function CalendarView({
                         onSelectEvent(event);
                         return;
                     }
-                    onSelectSlot(selected);
+                    handleSelectDate(selected);
                 }}
                 startAccessor="start"
                 endAccessor="end"
@@ -225,6 +339,14 @@ export default function CalendarView({
                     }
                     return { className: 'rbc-day-clickable rbc-day-default' };
                 }}
+            />
+            </div>
+            <SpotlightGuide
+                open={guideOpen}
+                steps={guideSteps}
+                currentStep={currentGuideStep}
+                onClose={() => setGuideOpen(false)}
+                onStepChange={setCurrentGuideStep}
             />
         </div>
     );
