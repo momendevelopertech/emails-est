@@ -4,7 +4,7 @@ import { Calendar, dateFnsLocalizer, View } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay, isSameDay, addMonths, addWeeks, addDays, endOfWeek } from 'date-fns';
 import { enUS, arSA } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { cloneElement, isValidElement, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import HintBar from './HintBar';
@@ -77,6 +77,14 @@ export default function CalendarView({
     const hoveredCellRef = useRef<HTMLElement | null>(null);
     const createRequestRef = useRef<HTMLButtonElement | null>(null);
 
+    const DateCellWrapper = useCallback(({ value, children }: { value: Date; children: ReactElement }) => {
+        if (!isValidElement(children)) return children;
+        return cloneElement(children, {
+            'data-date': format(value, 'yyyy-MM-dd'),
+            'data-day': value.getDate(),
+        });
+    }, []);
+
     const clearHoveredCell = useCallback(() => {
         if (!hoveredCellRef.current) return;
         hoveredCellRef.current.classList.remove('rbc-cell-hover');
@@ -94,6 +102,7 @@ export default function CalendarView({
     }, [view]);
 
     const handleGridMouseMove = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+        if (guideOpen) return;
         const cell = findMonthCellFromPoint(event.clientX, event.clientY);
         if (!cell) {
             clearHoveredCell();
@@ -103,7 +112,7 @@ export default function CalendarView({
         clearHoveredCell();
         cell.classList.add('rbc-cell-hover');
         hoveredCellRef.current = cell;
-    }, [clearHoveredCell, findMonthCellFromPoint]);
+    }, [clearHoveredCell, findMonthCellFromPoint, guideOpen]);
 
     const handleGridMouseLeave = useCallback(() => {
         clearHoveredCell();
@@ -191,26 +200,48 @@ export default function CalendarView({
         clearHoveredCell();
     }, [clearHoveredCell, view]);
 
-    const guideSteps = useMemo(() => ([
-        {
-            titleAr: 'اضغط على اليوم',
-            descAr: 'اضغط على أي خلية في التقويم لإضافة حدث أو مأمورية في ذلك اليوم.',
-            targetSelector: '.rbc-month-view .rbc-day-bg',
-            tooltipPos: 'below' as const,
-        },
-        {
-            titleAr: 'شوف المواعيد الموجودة',
-            descAr: 'الأحداث المجدولة بتظهر كشريط ملون جوه الخلية. اضغط عليها للتفاصيل.',
-            targetSelector: '.rbc-month-view .rbc-event',
-            tooltipPos: 'below' as const,
-        },
-        {
-            titleAr: 'زر "إنشاء طلب"',
-            descAr: 'ممكن كمان تضغط على "إنشاء طلب" في الأعلى لإضافة حدث من غير ما تختار يوم الأول.',
-            targetRef: createRequestRef,
-            tooltipPos: 'below' as const,
-        },
-    ]), []);
+    useEffect(() => {
+        if (guideOpen) {
+            clearHoveredCell();
+        }
+    }, [clearHoveredCell, guideOpen]);
+
+    const guideEventDate = useMemo(() => {
+        const match = events.find((event) =>
+            event.start &&
+            event.start.getMonth() === currentDate.getMonth() &&
+            event.start.getFullYear() === currentDate.getFullYear(),
+        );
+        if (!match) return null;
+        return format(dateOnly(match.start), 'yyyy-MM-dd');
+    }, [currentDate, events]);
+
+    const guideSteps = useMemo(() => {
+        const dayTenSelector = '.rbc-month-view .rbc-day-bg[data-day="10"]:not(.rbc-off-range-bg)';
+        const eventSelector = guideEventDate
+            ? `.rbc-month-view .rbc-day-bg[data-date="${guideEventDate}"]`
+            : dayTenSelector;
+        return [
+            {
+                titleAr: 'اضغط على اليوم',
+                descAr: 'اضغط على أي خلية في التقويم لإضافة حدث أو مأمورية في ذلك اليوم.',
+                targetSelector: dayTenSelector,
+                tooltipPos: 'below' as const,
+            },
+            {
+                titleAr: 'شوف المواعيد الموجودة',
+                descAr: 'الأحداث المجدولة بتظهر كشريط ملون جوه الخلية. اضغط عليها للتفاصيل.',
+                targetSelector: eventSelector,
+                tooltipPos: 'below' as const,
+            },
+            {
+                titleAr: 'زر "إنشاء طلب"',
+                descAr: 'ممكن كمان تضغط على "إنشاء طلب" في الأعلى لإضافة حدث من غير ما تختار يوم الأول.',
+                targetRef: createRequestRef,
+                tooltipPos: 'below' as const,
+            },
+        ];
+    }, [guideEventDate]);
 
     return (
         <div className="card calendar-shell p-4">
@@ -230,6 +261,7 @@ export default function CalendarView({
                         <button
                             className="btn-outline"
                             onClick={() => {
+                                setView('month');
                                 setGuideOpen(true);
                                 setCurrentGuideStep(0);
                             }}
@@ -316,6 +348,7 @@ export default function CalendarView({
                 startAccessor="start"
                 endAccessor="end"
                 eventPropGetter={eventPropGetter}
+                components={{ dateCellWrapper: DateCellWrapper }}
                 formats={{
                     weekdayFormat: fullWeekdayFormat,
                     dayFormat: fullWeekdayFormat,
