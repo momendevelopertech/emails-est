@@ -147,6 +147,10 @@ body {
     cursor: pointer;
 }
 
+.rbc-sphinx .rbc-month-view .rbc-row-content {
+    cursor: pointer;
+}
+
 .rbc-sphinx .rbc-month-view .rbc-day-bg.rbc-day-clickable:hover,
 .rbc-sphinx .rbc-month-view .rbc-day-bg.rbc-day-clickable:focus-within,
 .rbc-sphinx .rbc-time-view .rbc-day-slot.rbc-day-clickable:hover {
