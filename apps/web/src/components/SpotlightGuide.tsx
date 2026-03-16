@@ -120,12 +120,13 @@ export default function SpotlightGuide({ open, steps, currentStep, onStepChange,
         let left = centerX - width / 2;
         left = Math.min(Math.max(left, margin), window.innerWidth - width - margin);
 
-        const fitsBelow = rect.bottom + margin + height <= window.innerHeight;
+        const rectBottom = rect.top + rect.height;
+        const fitsBelow = rectBottom + margin + height <= window.innerHeight;
         const fitsAbove = rect.top - margin - height >= 0;
         let resolvedPos = tooltipPos;
         if (tooltipPos === 'below' && !fitsBelow && fitsAbove) resolvedPos = 'above';
         if (tooltipPos === 'above' && !fitsAbove && fitsBelow) resolvedPos = 'below';
-        let top = resolvedPos === 'above' ? rect.top - margin - height : rect.bottom + margin;
+        let top = resolvedPos === 'above' ? rect.top - margin - height : rectBottom + margin;
         top = Math.min(Math.max(top, margin), window.innerHeight - height - margin);
         return {
             top,
