@@ -24,38 +24,38 @@ const cardStyles: Record<string, { icon: any; shell: string; iconBg: string }> =
 export default function StatsGrid({ stats }: { stats: Stat[] }) {
     const t = useTranslations('dashboard');
     return (
-        <section className="grid grid-cols-1 gap-3 px-4 sm:px-6 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid grid-cols-1 gap-2 px-4 sm:px-6 sm:grid-cols-2 lg:grid-cols-4">
             {stats.map((stat) => {
                 const style = cardStyles[stat.label] || cardStyles.leaveBalance;
                 const Icon = style.icon;
                 return (
-                    <div key={stat.label} className={`card min-w-0 p-4 min-h-[120px] bg-gradient-to-br ${style.shell}`}>
+                    <div key={stat.label} className={`card min-w-0 p-3 min-h-[96px] bg-gradient-to-br ${style.shell}`}>
                         <div className="flex items-start justify-between gap-3">
-                            <p className="text-[clamp(11px,0.9vw,14px)] uppercase tracking-[0.16em] text-ink/60">
+                            <p className="text-[clamp(10px,0.8vw,12px)] uppercase tracking-[0.12em] text-ink/60">
                                 {t(stat.label as any) ?? stat.label}
                             </p>
-                            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${style.iconBg}`}>
-                                <Icon size={16} />
+                            <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${style.iconBg}`}>
+                                <Icon size={14} />
                             </div>
                         </div>
                         {stat.rows ? (
-                            <div className="mt-2.5 space-y-2">
+                            <div className="mt-2 space-y-1.5">
                                 {stat.rows.map((row) => (
                                     <div key={row.label} className="flex items-center justify-between gap-3">
-                                        <p className="text-[clamp(11px,0.9vw,14px)] uppercase tracking-[0.06em] text-ink/70">
+                                        <p className="text-[clamp(10px,0.8vw,12px)] uppercase tracking-[0.05em] text-ink/70">
                                             {t(row.label as any) ?? row.label}
                                         </p>
-                                        <p className={`text-[clamp(14px,1.1vw,18px)] font-semibold ${row.valueClassName ?? 'text-ink'}`}>
+                                        <p className={`text-[clamp(13px,1vw,16px)] font-semibold ${row.valueClassName ?? 'text-ink'}`}>
                                             {row.value}
                                         </p>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <p className="mt-2.5 text-[clamp(18px,1.8vw,28px)] font-semibold text-ink">{stat.value}</p>
+                            <p className="mt-2 text-[clamp(16px,1.5vw,22px)] font-semibold text-ink">{stat.value}</p>
                         )}
                         {stat.hint && (
-                            <p className="mt-1.5 text-[clamp(11px,0.9vw,14px)] text-ink/70">{stat.hint}</p>
+                            <p className="mt-1 text-[clamp(10px,0.8vw,12px)] text-ink/70">{stat.hint}</p>
                         )}
                     </div>
                 );

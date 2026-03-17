@@ -72,10 +72,38 @@ body {
 }
 .app-main { flex: 1; min-width: 0; }
 .sidebar-top { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); }
-.sidebar-brand { padding: 18px 16px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
-.sidebar-brand-mark { width: 34px; height: 34px; border-radius: 9px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; }
-.sidebar-brand-name { font-size: 14px; font-weight: 700; letter-spacing: -0.2px; }
-.sidebar-brand-sub { font-size: 10px; color: var(--ink3); }
+.sidebar-brand {
+    padding: 18px 16px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(13, 148, 136, 0.06));
+}
+.sidebar-brand-mark {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: linear-gradient(145deg, var(--accent), #3b82f6);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    box-shadow: 0 8px 16px rgba(37, 99, 235, 0.25);
+}
+.sidebar-brand-name {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+.sidebar-brand-sub {
+    font-size: 11px;
+    color: var(--ink2);
+}
 .mini-cal { padding: 14px; }
 .mini-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .mini-month { font-size: 12px; font-weight: 600; }
@@ -386,7 +414,7 @@ body {
 
 .rbc-sphinx .rbc-month-view .rbc-day-bg { border-inline-end: 1px solid var(--border); border-top: 1px solid var(--border); min-height: 88px; }
 .rbc-sphinx .rbc-row-bg { border-inline-start: 1px solid var(--border); }
-.dashboard-body-wrap { display: grid; grid-template-columns: 1fr 300px; gap: 0; }
+.dashboard-body-wrap { display: grid; grid-template-columns: 1fr; gap: 0; }
 .right-panel-ui { background: var(--surface); padding: 20px 16px; border-inline-start: 1px solid var(--border); display: flex; flex-direction: column; gap: 18px; }
 .rp-section-title { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); margin-bottom: 10px; }
 .today-list, .pend-list { display: flex; flex-direction: column; gap: 6px; }
