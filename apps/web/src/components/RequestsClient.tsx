@@ -131,6 +131,8 @@ export default function RequestsClient({ locale }: { locale: string }) {
     const deferredSearch = useDeferredValue(filters.search);
     const [pendingDelete, setPendingDelete] = useState<RequestRow | null>(null);
     const [deleteBusy, setDeleteBusy] = useState(false);
+    const [actionBusy, setActionBusy] = useState<Record<string, boolean>>({});
+    const [latenessBusy, setLatenessBusy] = useState<Record<string, boolean>>({});
     const [salary, setSalary] = useState('');
     const [historyOpen, setHistoryOpen] = useState(false);
     const [, startTabTransition] = useTransition();
@@ -208,12 +210,26 @@ export default function RequestsClient({ locale }: { locale: string }) {
 
     useEffect(() => {
         if (!ready) return;
-        const interval = setInterval(() => {
-            if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-            refreshAll(true);
-        }, 60000);
-        return () => clearInterval(interval);
-    }, [ready, refreshAll]);
+        const visibleInterval = canManage ? 15000 : 30000;
+        const hiddenInterval = 60000;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+
+        const tick = () => {
+            const isVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+            if (isVisible) {
+                refreshAll(true);
+            }
+            timer = setTimeout(tick, isVisible ? visibleInterval : hiddenInterval);
+        };
+
+        timer = setTimeout(tick, visibleInterval);
+        const onFocus = () => refreshAll(true);
+        window.addEventListener('focus', onFocus);
+        return () => {
+            if (timer) clearTimeout(timer);
+            window.removeEventListener('focus', onFocus);
+        };
+    }, [canManage, ready, refreshAll]);
 
     const formatDateOnly = (value: Date) => {
         const year = value.getFullYear();
@@ -282,8 +298,14 @@ export default function RequestsClient({ locale }: { locale: string }) {
     }, [fetchLateness, ready]);
 
     const convertLateness = async (id: string) => {
-        await api.post(`/lateness/${id}/convert`);
-        await fetchLateness(true);
+        if (latenessBusy[id]) return;
+        setLatenessBusyFlag(id, true);
+        try {
+            await api.post(`/lateness/${id}/convert`);
+            await fetchLateness(true);
+        } finally {
+            setLatenessBusyFlag(id, false);
+        }
     };
 
     const approveLeave = (id: string) => api.patch(`/leaves/${id}/approve`).then(fetchAll);
@@ -491,28 +513,70 @@ export default function RequestsClient({ locale }: { locale: string }) {
         }
     }, [activeTab, fetchLateness, ready]);
 
+    const getRowKey = useCallback((row: RequestRow) => `${row.requestType}-${row.id}`, []);
+
+    const setRowBusy = useCallback((key: string, value: boolean) => {
+        setActionBusy((prev) => {
+            if (value) {
+                if (prev[key]) return prev;
+                return { ...prev, [key]: true };
+            }
+            if (!prev[key]) return prev;
+            const next = { ...prev };
+            delete next[key];
+            return next;
+        });
+    }, []);
+
+    const setLatenessBusyFlag = useCallback((key: string, value: boolean) => {
+        setLatenessBusy((prev) => {
+            if (value) {
+                if (prev[key]) return prev;
+                return { ...prev, [key]: true };
+            }
+            if (!prev[key]) return prev;
+            const next = { ...prev };
+            delete next[key];
+            return next;
+        });
+    }, []);
+
     const onApprove = (row: RequestRow) => {
-        if (row.requestType === 'leave') return approveLeave(row.id);
-        return approvePermission(row.id);
+        const key = getRowKey(row);
+        if (actionBusy[key]) return Promise.resolve();
+        setRowBusy(key, true);
+        const action = row.requestType === 'leave' ? approveLeave(row.id) : approvePermission(row.id);
+        return action.finally(() => setRowBusy(key, false));
     };
 
     const onReject = (row: RequestRow) => {
-        if (row.requestType === 'leave') return rejectLeave(row.id);
-        return rejectPermission(row.id);
+        const key = getRowKey(row);
+        if (actionBusy[key]) return Promise.resolve();
+        setRowBusy(key, true);
+        const action = row.requestType === 'leave' ? rejectLeave(row.id) : rejectPermission(row.id);
+        return action.finally(() => setRowBusy(key, false));
     };
 
     const onCancel = (row: RequestRow) => {
-        if (row.requestType === 'leave') return cancelLeave(row.id);
-        return cancelPermission(row.id);
+        const key = getRowKey(row);
+        if (actionBusy[key]) return Promise.resolve();
+        setRowBusy(key, true);
+        const action = row.requestType === 'leave' ? cancelLeave(row.id) : cancelPermission(row.id);
+        return action.finally(() => setRowBusy(key, false));
     };
 
     const onDelete = (row: RequestRow) => {
+        const key = getRowKey(row);
+        if (actionBusy[key]) return;
         setPendingDelete(row);
     };
 
     const confirmDelete = async () => {
         if (!pendingDelete || deleteBusy) return;
+        const key = getRowKey(pendingDelete);
+        if (actionBusy[key]) return;
         setDeleteBusy(true);
+        setRowBusy(key, true);
         try {
             if (pendingDelete.requestType === 'leave') {
                 await deleteLeave(pendingDelete.id);
@@ -521,6 +585,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
             }
         } finally {
             setDeleteBusy(false);
+            setRowBusy(key, false);
             setPendingDelete(null);
         }
     };
@@ -675,8 +740,11 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                 </tr>
                             </thead>
                             <tbody className={tableAlignClass}>
-                                {pagedRows.map((row) => (
-                                    <tr key={`${row.requestType}-${row.id}`} className="border-b border-ink/5">
+                                {pagedRows.map((row) => {
+                                    const rowKey = getRowKey(row);
+                                    const rowBusy = !!actionBusy[rowKey];
+                                    return (
+                                        <tr key={rowKey} className="border-b border-ink/5">
                                         <td className="py-2">
                                             <p className="font-medium">{row.employeeName}</p>
                                             <p className="text-xs text-ink/60">#{row.employeeNumber}</p>
@@ -695,14 +763,14 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                         <td className="py-2">
                                             <div className="flex flex-wrap gap-2">
                                                 <a
-                                                    className={`btn-outline ${row.status === 'HR_APPROVED' ? '' : 'opacity-50 cursor-not-allowed'}`}
+                                                    className={`btn-outline ${row.status === 'HR_APPROVED' && !rowBusy ? '' : 'opacity-50 cursor-not-allowed'}`}
                                                     href={row.printUrl}
                                                     target="_blank"
                                                     rel="noreferrer noopener"
-                                                    aria-disabled={row.status !== 'HR_APPROVED'}
-                                                    tabIndex={row.status === 'HR_APPROVED' ? undefined : -1}
+                                                    aria-disabled={row.status !== 'HR_APPROVED' || rowBusy}
+                                                    tabIndex={row.status === 'HR_APPROVED' && !rowBusy ? undefined : -1}
                                                     onClick={(event) => {
-                                                        if (row.status !== 'HR_APPROVED') {
+                                                        if (row.status !== 'HR_APPROVED' || rowBusy) {
                                                             event.preventDefault();
                                                         }
                                                     }}
@@ -710,7 +778,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                                     {t('printPdf')}
                                                 </a>
                                                 {row.status === 'PENDING' && (
-                                                    <button className="btn-outline" onClick={() => onCancel(row)}>
+                                                    <button className="btn-outline" onClick={() => onCancel(row)} disabled={rowBusy}>
                                                         {t('cancel')}
                                                     </button>
                                                 )}
@@ -719,28 +787,29 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                                         {((isSecretary && row.status === 'PENDING') ||
                                                             (isManager && row.status === 'MANAGER_APPROVED' && !row.approvedByMgrId) ||
                                                             (isHr && row.status === 'MANAGER_APPROVED' && !!row.approvedByMgrId)) && (
-                                                            <button className="btn-primary" onClick={() => onApprove(row)}>
+                                                            <button className="btn-primary" onClick={() => onApprove(row)} disabled={rowBusy}>
                                                                 {isSecretary ? t('verify') : t('approve')}
                                                             </button>
                                                         )}
                                                         {((isSecretary && row.status === 'PENDING') ||
                                                             (isManager && row.status === 'MANAGER_APPROVED' && !row.approvedByMgrId) ||
                                                             (isHr && row.status === 'MANAGER_APPROVED' && !!row.approvedByMgrId)) && (
-                                                            <button className="btn-secondary" onClick={() => onReject(row)}>
+                                                            <button className="btn-secondary" onClick={() => onReject(row)} disabled={rowBusy}>
                                                                 {t('reject')}
                                                             </button>
                                                         )}
                                                     </>
                                                 )}
                                                 {canAdmin && ['PENDING', 'REJECTED', 'CANCELLED'].includes(row.status) && (
-                                                    <button className="btn-outline" onClick={() => onDelete(row)}>
+                                                    <button className="btn-outline" onClick={() => onDelete(row)} disabled={rowBusy}>
                                                         {t('delete')}
                                                     </button>
                                                 )}
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                    );
+                                })}
                                 {pagedRows.length === 0 && (
                                     <tr>
                                         <td className="py-6 text-center text-ink/60" colSpan={6}>
@@ -828,22 +897,27 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                         )}
                                         {!latenessLoading && latenessItems.map((item) => (
                                             <tr key={item.id} className="border-b border-ink/5">
-                                                <td className="py-2">{new Date(item.date).toLocaleDateString(dateLocale)}</td>
-                                                <td className="py-2">{item.minutesLate}</td>
-                                                <td className="py-2">
-                                                    {item.convertedToPermission ? t('latenessConverted') : t('latenessNotConverted')}
-                                                </td>
-                                                <td className="py-2">
-                                                    <button
-                                                        className="btn-outline"
-                                                        disabled={item.convertedToPermission}
-                                                        onClick={() => convertLateness(item.id)}
-                                                    >
-                                                        {item.convertedToPermission ? t('latenessConverted') : t('latenessConvert')}
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                            <td className="py-2">{new Date(item.date).toLocaleDateString(dateLocale)}</td>
+                                            <td className="py-2">{item.minutesLate}</td>
+                                            <td className="py-2">
+                                                {item.convertedToPermission ? t('latenessConverted') : t('latenessNotConverted')}
+                                            </td>
+                                            <td className="py-2">
+                                                {(() => {
+                                                    const itemBusy = !!latenessBusy[item.id];
+                                                    return (
+                                                <button
+                                                    className="btn-outline"
+                                                    disabled={item.convertedToPermission || itemBusy}
+                                                    onClick={() => convertLateness(item.id)}
+                                                >
+                                                    {item.convertedToPermission ? t('latenessConverted') : t('latenessConvert')}
+                                                </button>
+                                                    );
+                                                })()}
+                                            </td>
+                                        </tr>
+                                    ))}
                                     </tbody>
                                 </table>
                             </div>
@@ -864,8 +938,11 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                         </tr>
                                     </thead>
                                     <tbody className={tableAlignClass}>
-                                        {pagedRows.map((row) => (
-                                            <tr key={`${row.requestType}-${row.id}`} className="border-b border-ink/5">
+                                        {pagedRows.map((row) => {
+                                            const rowKey = getRowKey(row);
+                                            const rowBusy = !!actionBusy[rowKey];
+                                            return (
+                                            <tr key={rowKey} className="border-b border-ink/5">
                                                 <td className="py-2">
                                                     <p className="font-medium">{row.employeeName}</p>
                                                     <p className="text-xs text-ink/60">#{row.employeeNumber}</p>
@@ -884,14 +961,14 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                                 <td className="py-2">
                                                     <div className="flex flex-wrap gap-2">
                                                         <a
-                                                            className={`btn-outline ${row.status === 'HR_APPROVED' ? '' : 'opacity-50 cursor-not-allowed'}`}
+                                                            className={`btn-outline ${row.status === 'HR_APPROVED' && !rowBusy ? '' : 'opacity-50 cursor-not-allowed'}`}
                                                             href={row.printUrl}
                                                             target="_blank"
                                                             rel="noreferrer noopener"
-                                                            aria-disabled={row.status !== 'HR_APPROVED'}
-                                                            tabIndex={row.status === 'HR_APPROVED' ? undefined : -1}
+                                                            aria-disabled={row.status !== 'HR_APPROVED' || rowBusy}
+                                                            tabIndex={row.status === 'HR_APPROVED' && !rowBusy ? undefined : -1}
                                                             onClick={(event) => {
-                                                                if (row.status !== 'HR_APPROVED') {
+                                                                if (row.status !== 'HR_APPROVED' || rowBusy) {
                                                                     event.preventDefault();
                                                                 }
                                                             }}
@@ -899,7 +976,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                                             {t('printPdf')}
                                                         </a>
                                                         {row.status === 'PENDING' && (
-                                                            <button className="btn-outline" onClick={() => onCancel(row)}>
+                                                            <button className="btn-outline" onClick={() => onCancel(row)} disabled={rowBusy}>
                                                                 {t('cancel')}
                                                             </button>
                                                         )}
@@ -908,28 +985,29 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                                                 {((isSecretary && row.status === 'PENDING') ||
                                                                     (isManager && row.status === 'MANAGER_APPROVED' && !row.approvedByMgrId) ||
                                                                     (isHr && row.status === 'MANAGER_APPROVED' && !!row.approvedByMgrId)) && (
-                                                                    <button className="btn-primary" onClick={() => onApprove(row)}>
+                                                                    <button className="btn-primary" onClick={() => onApprove(row)} disabled={rowBusy}>
                                                                         {isSecretary ? t('verify') : t('approve')}
                                                                     </button>
                                                                 )}
                                                                 {((isSecretary && row.status === 'PENDING') ||
                                                                     (isManager && row.status === 'MANAGER_APPROVED' && !row.approvedByMgrId) ||
                                                                     (isHr && row.status === 'MANAGER_APPROVED' && !!row.approvedByMgrId)) && (
-                                                                    <button className="btn-secondary" onClick={() => onReject(row)}>
+                                                                    <button className="btn-secondary" onClick={() => onReject(row)} disabled={rowBusy}>
                                                                         {t('reject')}
                                                                     </button>
                                                                 )}
                                                             </>
                                                         )}
                                                         {canAdmin && ['PENDING', 'REJECTED', 'CANCELLED'].includes(row.status) && (
-                                                            <button className="btn-outline" onClick={() => onDelete(row)}>
+                                                            <button className="btn-outline" onClick={() => onDelete(row)} disabled={rowBusy}>
                                                                 {t('delete')}
                                                             </button>
                                                         )}
                                                     </div>
                                                 </td>
                                             </tr>
-                                        ))}
+                                            );
+                                        })}
                                         {pagedRows.length === 0 && (
                                             <tr>
                                                 <td className="py-6 text-center text-ink/60" colSpan={6}>
