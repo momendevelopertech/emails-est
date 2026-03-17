@@ -147,6 +147,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
     const latenessFetchMetaRef = useRef<{ key: string | null; timestamp: number }>({ key: null, timestamp: 0 });
     const latenessInFlightRef = useRef(false);
     const rowActionLocksRef = useRef<Set<string>>(new Set());
+    const rowActionCooldownRef = useRef<Map<string, number>>(new Map());
 
     const backgroundConfig = useMemo(() => ({ headers: { 'x-skip-activity': '1' } }), []);
 
@@ -552,14 +553,21 @@ export default function RequestsClient({ locale }: { locale: string }) {
     const runRowAction = useCallback(
         (row: RequestRow, action: () => Promise<unknown>) => {
             const key = getRowKey(row);
+            const now = Date.now();
+            const last = rowActionCooldownRef.current.get(key) || 0;
+            if (now - last < 1200) return Promise.resolve();
             if (rowActionLocksRef.current.has(key)) return Promise.resolve();
+            rowActionCooldownRef.current.set(key, now);
             rowActionLocksRef.current.add(key);
             setRowBusy(key, true);
             suppressRealtimeRefreshUntilRef.current = Date.now() + 1500;
             try {
                 return Promise.resolve(action()).finally(() => {
                     rowActionLocksRef.current.delete(key);
-                    setRowBusy(key, false);
+                    setTimeout(() => {
+                        rowActionCooldownRef.current.set(key, Date.now());
+                        setRowBusy(key, false);
+                    }, 50);
                 });
             } catch (error) {
                 rowActionLocksRef.current.delete(key);
