@@ -3,14 +3,15 @@
     "version": "1.0.0",
     "description": "SPHINX HR System - NestJS Backend API",
     "scripts": {
-        "dev": "nest start --watch",
-        "build": "prisma generate && nest build",
-        "start": "node dist/main",
-        "start:prod": "node dist/main",
-        "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
-        "test": "jest",
-        "prisma:generate": "prisma generate",
-        "prisma:push": "prisma db push",
+    "dev": "nest start --watch",
+    "build": "prisma generate && nest build",
+    "start": "node dist/main",
+    "start:prod": "node dist/main",
+    "postinstall": "prisma generate",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
+    "test": "jest",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
         "prisma:seed": "ts-node prisma/seed.ts"
     },
     "dependencies": {
