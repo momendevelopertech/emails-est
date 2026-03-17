@@ -513,7 +513,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
         }, 0);
     }, [filteredAbsenceRows]);
 
-    const filteredRows = filteredRowsByTab[activeTab] || [];
+    const filteredRows = useMemo(() => filteredRowsByTab[activeTab] ?? [], [activeTab, filteredRowsByTab]);
 
     const total = filteredRows.length;
     const totalPages = Math.max(1, Math.ceil(total / limit));
