@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import api, { isAuthError } from '@/lib/api';
 import { usePusherChannel } from '@/lib/use-pusher-channel';
-import StatsGrid from './StatsGrid';
 import CalendarView from './CalendarView';
+import DashboardSidePanel from './DashboardSidePanel';
 import RequestModal from './RequestModal';
 import EventDetailsModal from './EventDetailsModal';
 import ChangePasswordModal from './ChangePasswordModal';
@@ -85,6 +85,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     const t = useTranslations('dashboard');
     const tm = useTranslations('requestModal');
     const dateLocale = useMemo(() => (locale === 'ar' ? 'ar-EG' : 'en-US'), [locale]);
+    const isAr = locale === 'ar';
     const { user, ready } = useRequireAuth(locale);
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
     const [permissions, setPermissions] = useState<PermissionRequest[]>([]);
@@ -221,36 +222,105 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         return new Date(year, month - 1, day).toLocaleDateString(dateLocale);
     }, [dateLocale]);
 
-    const stats = useMemo(() => {
+    const dashboardStats = useMemo(() => {
         const annual = balances.find((b) => b.leaveType === 'ANNUAL');
         const totalRemaining = annual?.remainingDays ?? 0;
         const usedPermissions = permissionCycle?.usedHours ?? 0;
         const remainingPermissions = permissionCycle?.remainingHours ?? 4;
-        const pending = [...leaves, ...permissions, ...forms].filter((r) => r.status === 'PENDING').length;
+        const pendingTotal = [...leaves, ...permissions, ...forms].filter((r) => r.status === 'PENDING').length;
         const cycleHint = absenceDeduction?.cycleStart && absenceDeduction?.cycleEnd
             ? `${formatDateOnlyFromIso(absenceDeduction.cycleStart)} - ${formatDateOnlyFromIso(absenceDeduction.cycleEnd)}`
             : undefined;
 
+        return {
+            totalRemaining,
+            usedPermissions,
+            remainingPermissions,
+            pendingTotal,
+            cycleHint,
+        };
+    }, [absenceDeduction?.cycleEnd, absenceDeduction?.cycleStart, balances, formatDateOnlyFromIso, forms, leaves, permissionCycle?.remainingHours, permissionCycle?.usedHours, permissions]);
+
+    const quickGlance = useMemo(() => ([
+        {
+            id: 'leaveBalance',
+            label: isAr ? 'رصيد الإجازات' : t('leaveBalance'),
+            value: `${dashboardStats.totalRemaining} ${t('days')}`,
+            color: 'teal' as const,
+        },
+        {
+            id: 'permissionRemaining',
+            label: isAr ? 'ساعات الأذون المتبقية' : t('permissionRemaining'),
+            value: `${dashboardStats.remainingPermissions}h`,
+            color: 'violet' as const,
+        },
+        {
+            id: 'pendingTotal',
+            label: isAr ? 'بانتظار الموافقة' : t('pendingApprovals'),
+            value: `${dashboardStats.pendingTotal}`,
+            color: 'amber' as const,
+        },
+    ]), [dashboardStats.pendingTotal, dashboardStats.remainingPermissions, dashboardStats.totalRemaining, isAr, t]);
+
+    const pendingStats = useMemo(() => {
+        const pendingLeaves = leaves.filter((r) => r.status === 'PENDING').length;
+        const pendingPermissions = permissions.filter((r) => r.status === 'PENDING').length;
+        const pendingForms = forms.filter((r) => r.status === 'PENDING').length;
+
         return [
-            { label: 'leaveBalance', value: `${totalRemaining} ${t('days')}`, hint: t('leaveBalanceHint', { year: new Date().getFullYear() }) },
-            {
-                label: 'permissionHours',
-                rows: [
-                    { label: 'permissionUsed', value: `${usedPermissions}h`, valueClassName: 'text-rose-600' },
-                    { label: 'permissionRemaining', value: `${remainingPermissions}h`, valueClassName: 'text-emerald-600' },
-                ],
-            },
-            { label: 'pendingApprovals', value: `${pending}` },
-            {
-                label: 'absenceDeduction',
-                rows: [
-                    { label: 'absenceOnly', value: `${absenceDeduction?.absenceDays ?? 0} ${t('days')}`, valueClassName: 'text-rose-700' },
-                    { label: 'latenessOnly', value: `${absenceDeduction?.latenessDeductionDays ?? 0} ${t('days')}`, valueClassName: 'text-amber-700' },
-                ],
-                hint: cycleHint,
-            },
+            { id: 'pending-leaves', label: isAr ? 'الإجازات' : 'Leaves', value: `${pendingLeaves}`, color: 'teal' as const },
+            { id: 'pending-permissions', label: isAr ? 'الأذونات' : 'Permissions', value: `${pendingPermissions}`, color: 'amber' as const },
+            { id: 'pending-forms', label: isAr ? 'النماذج' : 'Forms', value: `${pendingForms}`, color: 'violet' as const },
         ];
-    }, [absenceDeduction?.absenceDays, absenceDeduction?.cycleEnd, absenceDeduction?.cycleStart, absenceDeduction?.latenessDeductionDays, balances, formatDateOnlyFromIso, forms, leaves, permissionCycle?.remainingHours, permissionCycle?.usedHours, permissions, t]);
+    }, [forms, isAr, leaves, permissions]);
+
+    const deductionStats = useMemo(() => ([
+        {
+            id: 'absence',
+            label: t('absenceOnly'),
+            value: `${absenceDeduction?.absenceDays ?? 0} ${t('days')}`,
+            color: 'rose' as const,
+        },
+        {
+            id: 'lateness',
+            label: t('latenessOnly'),
+            value: `${absenceDeduction?.latenessDeductionDays ?? 0} ${t('days')}`,
+            color: 'amber' as const,
+        },
+    ]), [absenceDeduction?.absenceDays, absenceDeduction?.latenessDeductionDays, t]);
+
+    const approvalItems = useMemo(() => {
+        const items: Array<{ id: string; name: string; type: string; color: 'accent' | 'amber' | 'teal' | 'violet' | 'rose' }> = [];
+
+        leaves.filter((r) => r.status === 'PENDING').forEach((leave) => {
+            items.push({
+                id: `leave-${leave.id}`,
+                name: leave.user?.fullName || (isAr ? 'طلب إجازة' : 'Leave request'),
+                type: enumLabels.leaveType(leave.leaveType, locale),
+                color: 'teal',
+            });
+        });
+
+        permissions.filter((r) => r.status === 'PENDING').forEach((permission) => {
+            items.push({
+                id: `permission-${permission.id}`,
+                name: permission.user?.fullName || (isAr ? 'طلب إذن' : 'Permission request'),
+                type: enumLabels.permissionType(permission.permissionType, locale),
+                color: 'amber',
+            });
+        });
+
+        forms.filter((r) => r.status === 'PENDING').forEach((form) => {
+            items.push({
+                id: `form-${form.id}`,
+                name: (form as any)?.user?.fullName || form.form?.name || (isAr ? 'طلب نموذج' : 'Form submission'),
+                type: isAr ? 'نموذج' : 'Form submission',
+                color: 'violet',
+            });
+        });
+
+        return items.slice(0, 4);
+    }, [forms, isAr, leaves, locale, permissions]);
 
     const canBroadcast = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'BRANCH_SECRETARY';
 
@@ -397,6 +467,74 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         return [...leaveEvents, ...permissionEvents, ...formEvents, ...noteEvents, ...latenessEvents];
     }, [forms, latenessItems, leaves, locale, notes, permissions, tm, user]);
 
+    const todayItems = useMemo(() => {
+        const today = new Date();
+        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+
+        const kindLabel = (kind: string) => {
+            switch (kind) {
+                case 'leave':
+                    return isAr ? 'إجازة' : 'Leave';
+                case 'absence':
+                    return isAr ? 'غياب بإذن' : 'Absence';
+                case 'mission':
+                    return isAr ? 'مأمورية' : 'Mission';
+                case 'permission':
+                case 'personal':
+                    return isAr ? 'إذن' : 'Permission';
+                case 'form':
+                    return isAr ? 'نموذج' : 'Form';
+                case 'note':
+                    return isAr ? 'ملاحظة' : 'Note';
+                case 'lateness':
+                    return isAr ? 'تأخير' : 'Lateness';
+                default:
+                    return isAr ? 'حدث' : 'Event';
+            }
+        };
+
+        const kindColor = (kind: string) => {
+            switch (kind) {
+                case 'leave':
+                case 'absence':
+                    return 'teal' as const;
+                case 'permission':
+                case 'personal':
+                    return 'amber' as const;
+                case 'mission':
+                    return 'accent' as const;
+                case 'form':
+                    return 'violet' as const;
+                case 'lateness':
+                    return 'rose' as const;
+                default:
+                    return 'accent' as const;
+            }
+        };
+
+        return events
+            .filter((event) => {
+                const start = new Date(event.start);
+                const end = new Date(event.end);
+                return start <= endOfDay && end >= startOfDay;
+            })
+            .slice(0, 4)
+            .map((event, index) => {
+                const resource: any = event.resource || {};
+                const item = resource.item || {};
+                const kind = resource.kind || resource.key || 'event';
+                const name = item.user?.fullName || item.user?.fullNameAr || event.title || (isAr ? 'حدث' : 'Event');
+
+                return {
+                    id: `today-${index}-${event.title}`,
+                    name,
+                    type: kindLabel(kind),
+                    color: kindColor(kind),
+                };
+            });
+    }, [events, isAr]);
+
 
     if (!ready || loading) {
         return <PageLoader text={locale === 'ar' ? 'جاري تحميل لوحة التحكم...' : 'Loading dashboard...'} />;
@@ -404,7 +542,6 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
 
     return (
         <main className="dashboard-page pb-12">
-            <StatsGrid stats={stats} />
             {canBroadcast && (
                 <div className="px-6 mt-6">
                     <div className="flex flex-wrap items-center gap-2">
@@ -452,6 +589,15 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
                             }}
                         />
                     </div>
+                    <DashboardSidePanel
+                        locale={locale}
+                        quickGlance={quickGlance}
+                        pendingStats={pendingStats}
+                        todayItems={todayItems}
+                        approvalItems={approvalItems}
+                        deductionStats={deductionStats}
+                        deductionHint={dashboardStats.cycleHint}
+                    />
                 </div>
             </div>
             <RequestModal

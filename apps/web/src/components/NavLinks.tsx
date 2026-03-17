@@ -19,7 +19,7 @@ import {
     BarChart3,
 } from 'lucide-react';
 
-export default function NavLinks({ locale }: { locale: string }) {
+export default function NavLinks({ locale, collapsed = false }: { locale: string; collapsed?: boolean }) {
     const t = useTranslations('nav');
     const pathname = usePathname();
     const router = useRouter();
@@ -107,7 +107,7 @@ export default function NavLinks({ locale }: { locale: string }) {
 
     if (!authReady) {
         return (
-            <nav className="nav-scroll" aria-busy="true">
+            <nav className={`nav-scroll${collapsed ? ' is-collapsed' : ''}`} aria-busy="true">
                 {Array.from({ length: 7 }).map((_, index) => (
                     <div
                         key={`nav-skeleton-${index}`}
@@ -119,21 +119,24 @@ export default function NavLinks({ locale }: { locale: string }) {
     }
 
     return (
-        <nav className="nav-scroll">
+        <nav className={`nav-scroll${collapsed ? ' is-collapsed' : ''}`}>
             <div className="nav-section-label">{locale === 'ar' ? 'القائمة' : 'Navigation'}</div>
             {links.map((link) => {
                 const isRoot = link.href === `/${locale}`;
                 const active = isRoot
                     ? pathname === link.href
                     : pathname === link.href || pathname.startsWith(`${link.href}/`);
+                const label = link.label;
                 return (
                     <Link
                         key={link.href}
                         href={link.href}
-                        className={`nav-item ${active ? 'active' : ''}`}
+                        className={`nav-item ${active ? 'active' : ''}${collapsed ? ' is-collapsed' : ''}`}
+                        title={collapsed ? label : undefined}
+                        aria-label={collapsed ? label : undefined}
                     >
                         {link.icon && <link.icon size={14} className="nav-ic" />}
-                        <span>{link.label}</span>
+                        <span className="nav-text">{label}</span>
                         {!!link.badge && (
                             <span className="nb">
                                 {link.badge}
