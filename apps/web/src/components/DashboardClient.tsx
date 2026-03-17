@@ -416,13 +416,13 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         const leaveItems = leaves.filter((item) => item.status === 'PENDING').map((item) => ({
             id: `l-${item.id}`,
             name: item.user.fullName,
-            type: enumLabels.leaveType(locale, item.leaveType),
+            type: enumLabels.leaveType(item.leaveType, locale),
             color: 'accent' as const,
         }));
         const permissionItems = permissions.filter((item) => item.status === 'PENDING').map((item) => ({
             id: `p-${item.id}`,
             name: item.user.fullName,
-            type: enumLabels.permissionType(locale, item.permissionType),
+            type: enumLabels.permissionType(item.permissionType, locale),
             color: 'amber' as const,
         }));
         const formItems = forms.filter((item) => item.status === 'PENDING').map((item) => ({
