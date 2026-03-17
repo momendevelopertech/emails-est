@@ -88,12 +88,11 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     const t = useTranslations('dashboard');
     const tm = useTranslations('requestModal');
     const dateLocale = useMemo(() => (locale === 'ar' ? 'ar-EG' : 'en-US'), [locale]);
-    const isAr = locale === 'ar';
+    const { user, ready } = useRequireAuth(locale);
     const role = user?.role;
     const isSecretary = role === 'BRANCH_SECRETARY';
     const isManager = role === 'MANAGER';
     const isHr = role === 'HR_ADMIN' || role === 'SUPER_ADMIN';
-    const { user, ready } = useRequireAuth(locale);
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
     const [permissions, setPermissions] = useState<PermissionRequest[]>([]);
     const [forms, setForms] = useState<FormSubmission[]>([]);
@@ -251,23 +250,23 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     const quickGlance = useMemo(() => ([
         {
             id: 'leaveBalance',
-            label: isAr ? 'رصيد الإجازات' : t('leaveBalance'),
+            label: t('leaveBalance'),
             value: `${dashboardStats.totalRemaining} ${t('days')}`,
             color: 'teal' as const,
         },
         {
             id: 'permissionRemaining',
-            label: isAr ? 'ساعات الأذون المتبقية' : t('permissionRemaining'),
+            label: t('permissionRemaining'),
             value: `${dashboardStats.remainingPermissions}h`,
             color: 'violet' as const,
         },
         {
             id: 'pendingTotal',
-            label: isAr ? 'بانتظار الموافقة' : t('pendingApprovals'),
+            label: t('pendingApprovals'),
             value: `${dashboardStats.pendingTotal}`,
             color: 'amber' as const,
         },
-    ]), [dashboardStats.pendingTotal, dashboardStats.remainingPermissions, dashboardStats.totalRemaining, isAr, t]);
+    ]), [dashboardStats.pendingTotal, dashboardStats.remainingPermissions, dashboardStats.totalRemaining, t]);
 
     const pendingStats = useMemo(() => {
         const pendingLeaves = leaves.filter((r) => r.status === 'PENDING').length;
@@ -275,11 +274,11 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         const pendingForms = forms.filter((r) => r.status === 'PENDING').length;
 
         return [
-            { id: 'pending-leaves', label: isAr ? 'الإجازات' : 'Leaves', value: `${pendingLeaves}`, color: 'teal' as const },
-            { id: 'pending-permissions', label: isAr ? 'الأذونات' : 'Permissions', value: `${pendingPermissions}`, color: 'amber' as const },
-            { id: 'pending-forms', label: isAr ? 'النماذج' : 'Forms', value: `${pendingForms}`, color: 'violet' as const },
+            { id: 'pending-leaves', label: t('pendingLeavesLabel'), value: `${pendingLeaves}`, color: 'teal' as const },
+            { id: 'pending-permissions', label: t('pendingPermissionsLabel'), value: `${pendingPermissions}`, color: 'amber' as const },
+            { id: 'pending-forms', label: t('pendingFormsLabel'), value: `${pendingForms}`, color: 'violet' as const },
         ];
-    }, [forms, isAr, leaves, permissions]);
+    }, [forms, leaves, permissions, t]);
 
     const deductionStats = useMemo(() => ([
         {
@@ -311,7 +310,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         leaves.filter((r) => isAwaitingApproval(r.status, r.approvedByMgrId)).forEach((leave) => {
             items.push({
                 id: `leave-${leave.id}`,
-                name: leave.user?.fullName || (isAr ? 'طلب إجازة' : 'Leave request'),
+                name: leave.user?.fullName || t('approvalLeaveFallback'),
                 type: enumLabels.leaveType(leave.leaveType, locale),
                 color: 'teal',
             });
@@ -320,7 +319,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         permissions.filter((r) => isAwaitingApproval(r.status, r.approvedByMgrId)).forEach((permission) => {
             items.push({
                 id: `permission-${permission.id}`,
-                name: permission.user?.fullName || (isAr ? 'طلب إذن' : 'Permission request'),
+                name: permission.user?.fullName || t('approvalPermissionFallback'),
                 type: enumLabels.permissionType(permission.permissionType, locale),
                 color: 'amber',
             });
@@ -329,14 +328,14 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         forms.filter((r) => isAwaitingApproval(r.status, r.approvedByMgrId)).forEach((form) => {
             items.push({
                 id: `form-${form.id}`,
-                name: form.user?.fullName || form.form?.name || (isAr ? 'طلب نموذج' : 'Form submission'),
-                type: isAr ? 'نموذج' : 'Form submission',
+                name: form.user?.fullName || form.form?.name || t('approvalFormFallback'),
+                type: t('approvalFormType'),
                 color: 'violet',
             });
         });
 
         return items.slice(0, 4);
-    }, [forms, isAr, isHr, isManager, isSecretary, leaves, locale, permissions]);
+    }, [forms, isHr, isManager, isSecretary, leaves, locale, permissions, t]);
 
     const canBroadcast = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'BRANCH_SECRETARY';
 
@@ -491,22 +490,22 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         const kindLabel = (kind: string) => {
             switch (kind) {
                 case 'leave':
-                    return isAr ? 'إجازة' : 'Leave';
+                    return t('eventLeave');
                 case 'absence':
-                    return isAr ? 'غياب بإذن' : 'Absence';
+                    return t('eventAbsence');
                 case 'mission':
-                    return isAr ? 'مأمورية' : 'Mission';
+                    return t('eventMission');
                 case 'permission':
                 case 'personal':
-                    return isAr ? 'إذن' : 'Permission';
+                    return t('eventPermission');
                 case 'form':
-                    return isAr ? 'نموذج' : 'Form';
+                    return t('eventForm');
                 case 'note':
-                    return isAr ? 'ملاحظة' : 'Note';
+                    return t('eventNote');
                 case 'lateness':
-                    return isAr ? 'تأخير' : 'Lateness';
+                    return t('eventLateness');
                 default:
-                    return isAr ? 'حدث' : 'Event';
+                    return t('eventDefault');
             }
         };
 
@@ -540,7 +539,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
                 const resource: any = event.resource || {};
                 const item = resource.item || {};
                 const kind = resource.kind || resource.key || 'event';
-                const name = item.user?.fullName || item.user?.fullNameAr || event.title || (isAr ? 'حدث' : 'Event');
+                const name = item.user?.fullName || item.user?.fullNameAr || event.title || t('eventDefault');
 
                 return {
                     id: `today-${index}-${event.title}`,
@@ -549,7 +548,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
                     color: kindColor(kind),
                 };
             });
-    }, [events, isAr]);
+    }, [events, t]);
 
 
     if (!ready || loading) {
@@ -606,7 +605,6 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
                         />
                     </div>
                     <DashboardSidePanel
-                        locale={locale}
                         quickGlance={quickGlance}
                         pendingStats={pendingStats}
                         todayItems={todayItems}

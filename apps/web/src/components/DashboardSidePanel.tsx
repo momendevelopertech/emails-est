@@ -1,5 +1,7 @@
 ﻿'use client';
 
+import { useTranslations } from 'next-intl';
+
 type SideItem = {
     id: string;
     name: string;
@@ -16,7 +18,6 @@ type StatItem = {
 };
 
 export default function DashboardSidePanel({
-    locale,
     quickGlance,
     pendingStats,
     todayItems,
@@ -24,7 +25,6 @@ export default function DashboardSidePanel({
     deductionStats,
     deductionHint,
 }: {
-    locale: 'en' | 'ar';
     quickGlance: StatItem[];
     pendingStats: StatItem[];
     todayItems: SideItem[];
@@ -32,14 +32,14 @@ export default function DashboardSidePanel({
     deductionStats: StatItem[];
     deductionHint?: string;
 }) {
-    const isAr = locale === 'ar';
+    const t = useTranslations('dashboard');
     return (
         <aside className="right-panel-ui">
             <div>
-                <div className="rp-section-title">{isAr ? 'نظرة سريعة' : 'Quick glance'}</div>
+                <div className="rp-section-title">{t('quickGlanceTitle')}</div>
                 <div className="glance-grid">
                     {quickGlance.length === 0 && (
-                        <div className="panel-empty">{isAr ? 'لا توجد بيانات بعد.' : 'No data yet.'}</div>
+                        <div className="panel-empty">{t('noDataYet')}</div>
                     )}
                     {quickGlance.map((item) => (
                         <div key={item.id} className={`glance-card tone-${item.color}`}>
@@ -51,10 +51,10 @@ export default function DashboardSidePanel({
             </div>
 
             <div>
-                <div className="rp-section-title">{isAr ? 'طلبات معلقة' : 'Pending requests'}</div>
+                <div className="rp-section-title">{t('pendingRequestsTitle')}</div>
                 <div className="summary-list">
                     {pendingStats.length === 0 && (
-                        <div className="panel-empty">{isAr ? 'لا توجد طلبات معلقة.' : 'No pending requests.'}</div>
+                        <div className="panel-empty">{t('noPendingRequests')}</div>
                     )}
                     {pendingStats.map((item) => (
                         <div key={item.id} className={`summary-row tone-${item.color}`}>
@@ -66,7 +66,7 @@ export default function DashboardSidePanel({
             </div>
 
             <div>
-                <div className="rp-section-title">{isAr ? 'أحداث اليوم' : "Today's events"}</div>
+                <div className="rp-section-title">{t('todayEventsTitle')}</div>
                 <div className="today-list">
                     {todayItems.map((item) => (
                         <div key={item.id} className={`today-item tone-${item.color}`}>
@@ -81,10 +81,10 @@ export default function DashboardSidePanel({
             </div>
 
             <div>
-                <div className="rp-section-title">{isAr ? 'بانتظار موافقتك' : 'Awaiting your approval'}</div>
+                <div className="rp-section-title">{t('awaitingApprovalTitle')}</div>
                 <div className="pend-list">
                     {approvalItems.length === 0 && (
-                        <div className="panel-empty">{isAr ? 'لا توجد طلبات تنتظر الموافقة.' : 'Nothing awaiting approval.'}</div>
+                        <div className="panel-empty">{t('noAwaitingApproval')}</div>
                     )}
                     {approvalItems.map((item) => (
                         <div key={item.id}>
@@ -94,11 +94,11 @@ export default function DashboardSidePanel({
                                     <div className="pend-name">{item.name}</div>
                                     <div className="pend-type">{item.type}</div>
                                 </div>
-                                <span className="pend-tag">{isAr ? 'معلق' : 'Pending'}</span>
+                                <span className="pend-tag">{t('pendingTag')}</span>
                             </div>
                             <div className="action-row">
-                                <button className="act-btn approve" type="button">{isAr ? '✓ موافقة' : '✓ Approve'}</button>
-                                <button className="act-btn reject" type="button">{isAr ? '✕ رفض' : '✕ Reject'}</button>
+                                <button className="act-btn approve" type="button">{t('approveLabel')}</button>
+                                <button className="act-btn reject" type="button">{t('rejectLabel')}</button>
                             </div>
                         </div>
                     ))}
@@ -106,10 +106,10 @@ export default function DashboardSidePanel({
             </div>
 
             <div>
-                <div className="rp-section-title">{isAr ? 'الخصومات' : 'Deductions'}</div>
+                <div className="rp-section-title">{t('deductionsPanelTitle')}</div>
                 <div className="summary-list">
                     {deductionStats.length === 0 && (
-                        <div className="panel-empty">{isAr ? 'لا توجد خصومات.' : 'No deductions.'}</div>
+                        <div className="panel-empty">{t('noDeductions')}</div>
                     )}
                     {deductionStats.map((item) => (
                         <div key={item.id} className={`summary-row tone-${item.color}`}>
