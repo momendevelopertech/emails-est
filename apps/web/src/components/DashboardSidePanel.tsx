@@ -68,12 +68,9 @@ export default function DashboardSidePanel({
             <div>
                 <div className="rp-section-title">{isAr ? 'أحداث اليوم' : "Today's events"}</div>
                 <div className="today-list">
-                    {todayItems.length === 0 && (
-                        <div className="panel-empty">{isAr ? 'لا توجد أحداث اليوم.' : 'No events today.'}</div>
-                    )}
                     {todayItems.map((item) => (
                         <div key={item.id} className={`today-item tone-${item.color}`}>
-                            <div className="ti-time">{item.time || (isAr ? 'طوال اليوم' : 'All day')}</div>
+                            {item.time && <div className="ti-time">{item.time}</div>}
                             <div>
                                 <div className="ti-name">{item.name}</div>
                                 <div className="ti-type">{item.type}</div>
