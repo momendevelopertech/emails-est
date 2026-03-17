@@ -14,6 +14,7 @@ import { useTranslations } from 'next-intl';
 import { enumLabels } from '@/lib/enum-labels';
 import PageLoader from './PageLoader';
 import { Megaphone, Wallet } from 'lucide-react';
+import DashboardSidePanel from './DashboardSidePanel';
 
 type Department = { id: string; name: string; nameAr?: string | null };
 type EmployeeOption = { id: string; fullName: string; fullNameAr?: string | null };
@@ -397,6 +398,42 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         return [...leaveEvents, ...permissionEvents, ...formEvents, ...noteEvents, ...latenessEvents];
     }, [forms, latenessItems, leaves, locale, notes, permissions, tm, user]);
 
+
+    const todayItems = useMemo(() => {
+        const today = new Date();
+        return events
+            .filter((event) => event.start.toDateString() === today.toDateString())
+            .slice(0, 4)
+            .map((event, index) => ({
+                id: `${event.title}-${index}`,
+                name: event.title.split('—')[0]?.trim() || event.title,
+                type: event.title.split('—')[1]?.trim() || event.title,
+                color: ['accent', 'amber', 'teal', 'violet'][index % 4] as 'accent' | 'amber' | 'teal' | 'violet' | 'rose',
+            }));
+    }, [events]);
+
+    const pendingItems = useMemo(() => {
+        const leaveItems = leaves.filter((item) => item.status === 'PENDING').map((item) => ({
+            id: `l-${item.id}`,
+            name: item.user.fullName,
+            type: enumLabels.leaveType(locale, item.leaveType),
+            color: 'accent' as const,
+        }));
+        const permissionItems = permissions.filter((item) => item.status === 'PENDING').map((item) => ({
+            id: `p-${item.id}`,
+            name: item.user.fullName,
+            type: enumLabels.permissionType(locale, item.permissionType),
+            color: 'amber' as const,
+        }));
+        const formItems = forms.filter((item) => item.status === 'PENDING').map((item) => ({
+            id: `f-${item.id}`,
+            name: item.user.fullName,
+            type: item.form.name,
+            color: 'violet' as const,
+        }));
+        return [...leaveItems, ...permissionItems, ...formItems].slice(0, 3);
+    }, [forms, leaves, locale, permissions]);
+
     if (!ready || loading) {
         return <PageLoader text={locale === 'ar' ? 'جاري تحميل لوحة التحكم...' : 'Loading dashboard...'} />;
     }
@@ -438,16 +475,21 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
                 </div>
             )}
             <div className="px-6 mt-6">
-                <CalendarView
-                    locale={locale}
-                    events={events}
-                    schedule={schedule}
-                    onSelectSlot={(d) => setSelectedDate(d)}
-                    onSelectEvent={(event) => {
-                        setSelectedDate(null);
-                        setSelectedEvent(event);
-                    }}
-                />
+                <div className="dashboard-body-wrap">
+                    <div className="min-w-0">
+                        <CalendarView
+                            locale={locale}
+                            events={events}
+                            schedule={schedule}
+                            onSelectSlot={(d) => setSelectedDate(d)}
+                            onSelectEvent={(event) => {
+                                setSelectedDate(null);
+                                setSelectedEvent(event);
+                            }}
+                        />
+                    </div>
+                    <DashboardSidePanel locale={locale} todayItems={todayItems} pendingItems={pendingItems} />
+                </div>
             </div>
             <RequestModal
                 open={!!selectedDate}

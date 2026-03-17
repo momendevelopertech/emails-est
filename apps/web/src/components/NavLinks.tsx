@@ -23,8 +23,6 @@ export default function NavLinks({ locale }: { locale: string }) {
     const t = useTranslations('nav');
     const pathname = usePathname();
     const router = useRouter();
-    const normalizedPath = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
-    const isDashboard = normalizedPath === `/${locale}`;
     const { user, loading, bootstrapped } = useAuthStore();
     const isAdmin = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN';
     const canViewReports = isAdmin || user?.role === 'MANAGER' || user?.role === 'BRANCH_SECRETARY';
@@ -76,19 +74,19 @@ export default function NavLinks({ locale }: { locale: string }) {
     usePusherChannel(user ? `user-${user.id}` : null, pusherHandlers);
 
     const links = useMemo(() => [
-        { href: `/${locale}`, label: t('dashboard'), icon: LayoutDashboard, iconClass: 'nav-icon nav-icon--dashboard' },
-        { href: `/${locale}/requests`, label: t('requests'), icon: ClipboardList, iconClass: 'nav-icon nav-icon--requests' },
-        { href: `/${locale}/chat`, label: t('chat'), badge: unreadChats, icon: MessageCircle, iconClass: 'nav-icon nav-icon--chat' },
-        ...(canManageEmployees ? [{ href: `/${locale}/employees`, label: t('employees'), icon: Users, iconClass: 'nav-icon nav-icon--employees' }] : []),
+        { href: `/${locale}`, label: t('dashboard'), icon: LayoutDashboard },
+        { href: `/${locale}/requests`, label: t('requests'), icon: ClipboardList },
+        { href: `/${locale}/chat`, label: t('chat'), badge: unreadChats, icon: MessageCircle },
+        ...(canManageEmployees ? [{ href: `/${locale}/employees`, label: t('employees'), icon: Users }] : []),
         ...(isAdmin
             ? [
-                { href: `/${locale}/departments`, label: t('departments'), icon: Building2, iconClass: 'nav-icon nav-icon--departments' },
-                { href: `/${locale}/forms`, label: t('forms'), icon: FileText, iconClass: 'nav-icon nav-icon--forms' },
+                { href: `/${locale}/departments`, label: t('departments'), icon: Building2 },
+                { href: `/${locale}/forms`, label: t('forms'), icon: FileText },
             ]
             : []),
-        ...(canViewReports ? [{ href: `/${locale}/reports`, label: t('reports'), icon: BarChart3, iconClass: 'nav-icon nav-icon--reports' }] : []),
-        ...(isAdmin ? [{ href: `/${locale}/settings`, label: t('settings'), icon: Settings, iconClass: 'nav-icon nav-icon--settings' }] : []),
-        { href: `/${locale}/notifications`, label: t('notifications'), badge: unreadNotifications, icon: Bell, iconClass: 'nav-icon nav-icon--notifications' },
+        ...(canViewReports ? [{ href: `/${locale}/reports`, label: t('reports'), icon: BarChart3 }] : []),
+        ...(isAdmin ? [{ href: `/${locale}/settings`, label: t('settings'), icon: Settings }] : []),
+        { href: `/${locale}/notifications`, label: t('notifications'), badge: unreadNotifications, icon: Bell },
     ], [
         canManageEmployees,
         isAdmin,
@@ -109,11 +107,11 @@ export default function NavLinks({ locale }: { locale: string }) {
 
     if (!authReady) {
         return (
-            <nav className={`flex flex-wrap px-4 pb-4 sm:px-6 ${isDashboard ? 'gap-2 max-[1439px]:gap-1' : 'gap-2'}`} aria-busy="true">
-                {Array.from({ length: 6 }).map((_, index) => (
+            <nav className="nav-scroll" aria-busy="true">
+                {Array.from({ length: 7 }).map((_, index) => (
                     <div
                         key={`nav-skeleton-${index}`}
-                        className="h-10 w-28 rounded-xl bg-ink/5 animate-pulse"
+                        className="h-8 rounded-lg bg-ink/5 animate-pulse my-1"
                     />
                 ))}
             </nav>
@@ -121,30 +119,26 @@ export default function NavLinks({ locale }: { locale: string }) {
     }
 
     return (
-        <nav className={`flex flex-wrap px-4 pb-4 sm:px-6 ${isDashboard ? 'gap-2 max-[1439px]:gap-1' : 'gap-2'}`}>
+        <nav className="nav-scroll">
+            <div className="nav-section-label">{locale === 'ar' ? 'القائمة' : 'Navigation'}</div>
             {links.map((link) => {
                 const isRoot = link.href === `/${locale}`;
                 const active = isRoot
                     ? pathname === link.href
                     : pathname === link.href || pathname.startsWith(`${link.href}/`);
-                const compactClass = isDashboard
-                    ? 'max-[1439px]:px-3 max-[1439px]:py-1.5 max-[1439px]:text-[clamp(11px,0.85vw,14px)]'
-                    : '';
                 return (
                     <Link
                         key={link.href}
                         href={link.href}
-                        className={`btn-outline ${active ? 'bg-ink/10' : ''} ${compactClass}`}
+                        className={`nav-item ${active ? 'active' : ''}`}
                     >
-                        <span className={`inline-flex items-center gap-2 ${isDashboard ? 'max-[1439px]:gap-1' : ''}`}>
-                            {link.icon && <link.icon size={16} className={link.iconClass} />}
-                            {link.label}
-                            {!!link.badge && (
-                                <span className="min-w-[20px] rounded-full bg-cactus px-2 py-0.5 text-center text-xs font-semibold text-white">
-                                    {link.badge}
-                                </span>
-                            )}
-                        </span>
+                        {link.icon && <link.icon size={14} className="nav-ic" />}
+                        <span>{link.label}</span>
+                        {!!link.badge && (
+                            <span className="nb">
+                                {link.badge}
+                            </span>
+                        )}
                     </Link>
                 );
             })}
