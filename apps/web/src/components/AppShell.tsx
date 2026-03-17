@@ -9,11 +9,17 @@ export default function AppShell({ locale, children }: { locale: string; childre
     const pathname = usePathname();
     const hideShell = pathname.includes('/requests/print/');
 
+    if (hideShell) {
+        return <div className="min-h-screen">{children}</div>;
+    }
+
     return (
-        <div className="min-h-screen">
-            {!hideShell && <TopNav locale={locale} />}
-            {!hideShell && <NavLinks locale={locale} />}
-            {children}
+        <div className="app-shell min-h-screen">
+            <aside className="app-sidebar">
+                <TopNav locale={locale} />
+                <NavLinks locale={locale} />
+            </aside>
+            <div className="app-main">{children}</div>
         </div>
     );
 }

@@ -143,14 +143,14 @@ export default function CalendarView({
     const eventPropGetter = (event: CalendarEvent) => {
         const key = event.resource?.key;
         const base = { className: 'rbc-event-clickable' };
-        if (key === 'leave') return { ...base, style: { backgroundColor: '#2f6b5f', borderColor: '#2f6b5f' } };
-        if (key === 'absence') return { ...base, style: { backgroundColor: '#b45309', borderColor: '#b45309' } };
-        if (key === 'mission') return { ...base, style: { backgroundColor: '#0f766e', borderColor: '#0f766e' } };
-        if (key === 'personal') return { ...base, style: { backgroundColor: '#1f3a52', borderColor: '#1f3a52' } };
-        if (key === 'form') return { ...base, style: { backgroundColor: '#6b7280', borderColor: '#6b7280' } };
-        if (key === 'note') return { ...base, style: { backgroundColor: '#a16207', borderColor: '#a16207' } };
-        if (key === 'lateness') return { ...base, style: { backgroundColor: '#dc2626', borderColor: '#dc2626' } };
-        return { ...base, style: { backgroundColor: '#475569', borderColor: '#475569' } };
+        if (key === 'leave') return { ...base, style: { backgroundColor: '#eff4ff', borderColor: '#dbeafe', color: '#2563eb' } };
+        if (key === 'absence') return { ...base, style: { backgroundColor: '#fffbeb', borderColor: '#fde68a', color: '#d97706' } };
+        if (key === 'mission') return { ...base, style: { backgroundColor: '#f0fdfa', borderColor: '#99f6e4', color: '#0d9488' } };
+        if (key === 'personal') return { ...base, style: { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe', color: '#7c3aed' } };
+        if (key === 'form') return { ...base, style: { backgroundColor: '#eef2ff', borderColor: '#c7d2fe', color: '#4f46e5' } };
+        if (key === 'note') return { ...base, style: { backgroundColor: '#fff7ed', borderColor: '#fdba74', color: '#c2410c' } };
+        if (key === 'lateness') return { ...base, style: { backgroundColor: '#fff1f2', borderColor: '#fecdd3', color: '#e11d48' } };
+        return { ...base, style: { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1', color: '#475569' } };
     };
 
     const title = useMemo(() => {

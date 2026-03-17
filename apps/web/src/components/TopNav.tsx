@@ -1,21 +1,18 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
 import api, { clearApiCache, clearBrowserRuntimeCache } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
-import BrandLogo from './BrandLogo';
-import PwaInstallButton from './PwaInstallButton';
 import { KeyRound, Languages, LogOut, Moon, Sun } from 'lucide-react';
 import toast from 'react-hot-toast';
+import PwaInstallButton from './PwaInstallButton';
 
 export default function TopNav({ locale }: { locale: string }) {
     const t = useTranslations('nav');
     const router = useRouter();
     const pathname = usePathname();
-    const normalizedPath = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
-    const isDashboard = normalizedPath === `/${locale}`;
     const { user, setUser, setBootstrapped } = useAuthStore();
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const [pwaEnabled, setPwaEnabled] = useState(false);
@@ -96,74 +93,74 @@ export default function TopNav({ locale }: { locale: string }) {
         }
     };
 
+    const miniDays = locale === 'ar' ? ['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج'] : ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    const miniCalendar = useMemo(() => {
+        const today = new Date();
+        const y = today.getFullYear();
+        const m = today.getMonth();
+        const first = new Date(y, m, 1);
+        const start = (first.getDay() + 1) % 7;
+        const daysInMonth = new Date(y, m + 1, 0).getDate();
+        const prevDays = new Date(y, m, 0).getDate();
+        const cells: Array<{ n: number; out: boolean; today: boolean }> = [];
+        for (let i = 0; i < start; i += 1) {
+            cells.push({ n: prevDays - start + i + 1, out: true, today: false });
+        }
+        for (let i = 1; i <= daysInMonth; i += 1) {
+            cells.push({ n: i, out: false, today: i === today.getDate() });
+        }
+        while (cells.length < 35) {
+            cells.push({ n: cells.length - (start + daysInMonth) + 1, out: true, today: false });
+        }
+        return cells;
+    }, []);
+
     return (
-        <header className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-5">
-            <div className="flex flex-wrap items-center gap-3">
-                <BrandLogo locale={locale} compact />
+        <div className="sidebar-top">
+            <div className="sidebar-brand">
+                <div className="sidebar-brand-mark">SX</div>
                 <div>
-                    <p className={`uppercase tracking-[0.2em] text-ink/60 ${isDashboard ? 'text-[clamp(11px,0.9vw,14px)]' : 'text-xs'}`}>
-                        SPHINX HR
-                    </p>
-                    <p className={`font-semibold text-ink ${isDashboard ? 'text-[clamp(14px,1.2vw,18px)]' : 'text-lg'}`}>
-                        {t('dashboard')}
-                    </p>
+                    <div className="sidebar-brand-name">SPHINX HR</div>
+                    <div className="sidebar-brand-sub">{locale === 'ar' ? 'نظام الموارد البشرية' : 'Human Resources System'}</div>
                 </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <button
-                    className="btn-outline text-xs sm:text-sm"
-                    onClick={() => switchLocale(locale === 'ar' ? 'en' : 'ar')}
-                    title={locale === 'ar' ? 'English' : 'العربية'}
-                    aria-label={locale === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}
-                >
-                    <Languages size={16} />
-                </button>
-                <button
-                    className="btn-outline text-xs sm:text-sm"
-                    onClick={toggleTheme}
-                    title={theme === 'dark' ? t('themeLight') : t('themeDark')}
-                    aria-label={theme === 'dark' ? t('themeLight') : t('themeDark')}
-                >
-                    {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-                </button>
-                <PwaInstallButton enabled={pwaEnabled} />
-                <div className="relative" ref={menuRef}>
-                    <button
-                        className="flex items-center gap-3 rounded-xl bg-white/70 px-3 py-2"
-                        onClick={() => setMenuOpen((v) => !v)}
-                    >
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-cactus/20 font-semibold">
-                            {user?.fullName?.slice(0, 1) || 'U'}
+            <div className="mini-cal">
+                <div className="mini-cal-head">
+                    <span className="mini-month">{new Date().toLocaleDateString(locale === 'ar' ? 'ar-EG' : 'en-US', { month: 'long', year: 'numeric' })}</span>
+                </div>
+                <div className="mini-grid">
+                    {miniDays.map((day) => <div key={day} className="mini-dname">{day}</div>)}
+                    {miniCalendar.map((day, index) => (
+                        <div key={`${day.n}-${index}`} className={`mini-day ${day.out ? 'other' : ''} ${day.today ? 'today' : ''}`}>
+                            {day.n}
                         </div>
-                        <div>
-                            <p className="text-sm font-semibold">{user?.fullName || t('profile')}</p>
-                            <p className="text-xs text-ink/60">{user?.role || ''}</p>
-                        </div>
+                    ))}
+                </div>
+            </div>
+            <div className="sidebar-footer" ref={menuRef}>
+                <div className="sidebar-tools">
+                    <button className="tb-icon" onClick={() => switchLocale(locale === 'ar' ? 'en' : 'ar')}>
+                        <Languages size={14} />
                     </button>
-                    {menuOpen && (
-                        <div className="absolute end-0 z-20 mt-2 w-56 rounded-xl border border-ink/10 bg-white p-2 shadow-lg">
-                            <button
-                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-ink/5"
-                                onClick={requestPasswordReset}
-                            >
-                                <KeyRound size={16} />
-                                {locale === 'ar' ? 'تغيير كلمة المرور' : 'Change Password'}
-                            </button>
-                            <button
-                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                                onClick={() => {
-                                    setMenuOpen(false);
-                                    logout();
-                                }}
-                            >
-                                <LogOut size={16} />
-                                {t('logout')}
-                            </button>
-                        </div>
-                    )}
+                    <button className="tb-icon" onClick={toggleTheme}>
+                        {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                    </button>
+                    <PwaInstallButton enabled={pwaEnabled} />
                 </div>
+                <button className="user-row" onClick={() => setMenuOpen((v) => !v)}>
+                    <div className="uav">{user?.fullName?.slice(0, 1) || 'U'}</div>
+                    <div>
+                        <div className="uname">{user?.fullName || t('profile')}</div>
+                        <div className="urole">{user?.role || ''}</div>
+                    </div>
+                </button>
+                {menuOpen && (
+                    <div className="sidebar-menu">
+                        <button className="sidebar-menu-item" onClick={requestPasswordReset}><KeyRound size={14} />{locale === 'ar' ? 'تغيير كلمة المرور' : 'Change Password'}</button>
+                        <button className="sidebar-menu-item text-rose-600" onClick={() => { setMenuOpen(false); logout(); }}><LogOut size={14} />{t('logout')}</button>
+                    </div>
+                )}
             </div>
-        </header>
+        </div>
     );
 }
-
