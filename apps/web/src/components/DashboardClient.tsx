@@ -24,6 +24,7 @@ type LeaveRequest = {
     startDate: string;
     endDate: string;
     status: string;
+    approvedByMgrId?: string | null;
     user: { fullName: string };
 };
 
@@ -32,6 +33,7 @@ type PermissionRequest = {
     permissionType: string;
     requestDate: string;
     status: string;
+    approvedByMgrId?: string | null;
     user: { fullName: string };
 };
 
@@ -39,6 +41,7 @@ type FormSubmission = {
     id: string;
     createdAt: string;
     status: string;
+    approvedByMgrId?: string | null;
     form: { name: string };
     user: { fullName: string };
 };
@@ -86,6 +89,10 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     const tm = useTranslations('requestModal');
     const dateLocale = useMemo(() => (locale === 'ar' ? 'ar-EG' : 'en-US'), [locale]);
     const isAr = locale === 'ar';
+    const role = user?.role;
+    const isSecretary = role === 'BRANCH_SECRETARY';
+    const isManager = role === 'MANAGER';
+    const isHr = role === 'HR_ADMIN' || role === 'SUPER_ADMIN';
     const { user, ready } = useRequireAuth(locale);
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
     const [permissions, setPermissions] = useState<PermissionRequest[]>([]);
@@ -290,9 +297,18 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     ]), [absenceDeduction?.absenceDays, absenceDeduction?.latenessDeductionDays, t]);
 
     const approvalItems = useMemo(() => {
+        if (!isSecretary && !isManager && !isHr) return [];
+
+        const isAwaitingApproval = (status: string, approvedByMgrId?: string | null) => {
+            if (isSecretary) return status === 'PENDING';
+            if (isManager) return status === 'MANAGER_APPROVED' && !approvedByMgrId;
+            if (isHr) return status === 'MANAGER_APPROVED' && !!approvedByMgrId;
+            return false;
+        };
+
         const items: Array<{ id: string; name: string; type: string; color: 'accent' | 'amber' | 'teal' | 'violet' | 'rose' }> = [];
 
-        leaves.filter((r) => r.status === 'PENDING').forEach((leave) => {
+        leaves.filter((r) => isAwaitingApproval(r.status, r.approvedByMgrId)).forEach((leave) => {
             items.push({
                 id: `leave-${leave.id}`,
                 name: leave.user?.fullName || (isAr ? 'طلب إجازة' : 'Leave request'),
@@ -301,7 +317,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
             });
         });
 
-        permissions.filter((r) => r.status === 'PENDING').forEach((permission) => {
+        permissions.filter((r) => isAwaitingApproval(r.status, r.approvedByMgrId)).forEach((permission) => {
             items.push({
                 id: `permission-${permission.id}`,
                 name: permission.user?.fullName || (isAr ? 'طلب إذن' : 'Permission request'),
@@ -310,17 +326,17 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
             });
         });
 
-        forms.filter((r) => r.status === 'PENDING').forEach((form) => {
+        forms.filter((r) => isAwaitingApproval(r.status, r.approvedByMgrId)).forEach((form) => {
             items.push({
                 id: `form-${form.id}`,
-                name: (form as any)?.user?.fullName || form.form?.name || (isAr ? 'طلب نموذج' : 'Form submission'),
+                name: form.user?.fullName || form.form?.name || (isAr ? 'طلب نموذج' : 'Form submission'),
                 type: isAr ? 'نموذج' : 'Form submission',
                 color: 'violet',
             });
         });
 
         return items.slice(0, 4);
-    }, [forms, isAr, leaves, locale, permissions]);
+    }, [forms, isAr, isHr, isManager, isSecretary, leaves, locale, permissions]);
 
     const canBroadcast = user?.role === 'HR_ADMIN' || user?.role === 'SUPER_ADMIN' || user?.role === 'BRANCH_SECRETARY';
 
