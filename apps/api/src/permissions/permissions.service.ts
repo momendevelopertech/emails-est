@@ -246,6 +246,11 @@ export class PermissionsService {
         }
 
         const actorId = actor?.id || targetUserId;
+        const permissionLabels: Record<string, { ar: string; en: string }> = {
+            PERSONAL: { ar: 'طلب إذن شخصي', en: 'personal permission request' },
+            LATE_ARRIVAL: { ar: 'طلب إذن تأخير', en: 'late-arrival permission request' },
+            EARLY_LEAVE: { ar: 'طلب إذن انصراف مبكر', en: 'early-leave permission request' },
+        };
         await this.auditService.log({
             userId: actorId,
             action: 'PERMISSION_REQUESTED',
@@ -255,6 +260,16 @@ export class PermissionsService {
                 ...(actorId === targetUserId ? {} : { requestFor: targetUserId }),
                 ...(isSandbox ? { autoApproved: true, workflowMode: 'SANDBOX' } : {}),
             },
+        });
+
+        const receiptLabel = permissionLabels[request.permissionType] || { ar: 'طلب إذن', en: 'permission request' };
+        await this.notificationsService.sendRequestReceipt({
+            user: request.user,
+            requestType: 'permission',
+            requestId: request.id,
+            requestLabelAr: receiptLabel.ar,
+            requestLabelEn: receiptLabel.en,
+            status: isSandbox ? 'HR_APPROVED' : 'PENDING',
         });
 
         if (isSandbox) {

@@ -46,6 +46,10 @@ const defaultRegisterForm: RegisterFormState = {
     jobTitleAr: '',
 };
 
+const englishFullNamePattern = /^[A-Za-z][A-Za-z\s.'-]{2,}$/;
+const englishJobTitlePattern = /^[A-Za-z0-9][A-Za-z0-9\s.'&()/,-]{1,}$/;
+const normalizePhoneInput = (value: string) => value.replace(/\D/g, '').slice(0, 11);
+
 export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } }) {
     const t = useTranslations('auth');
     const router = useRouter();
@@ -206,8 +210,14 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
     const validateRegister = () => {
         const nextErrors: Record<string, string> = {};
         const phoneDigits = registerForm.phone.replace(/\D/g, '');
+        const normalizedFullName = registerForm.fullName.trim().replace(/\s+/g, ' ');
+        const normalizedJobTitle = registerForm.jobTitle.trim().replace(/\s+/g, ' ');
 
-        if (!registerForm.fullName.trim()) nextErrors.fullName = t('registerFullNameRequired');
+        if (!normalizedFullName) {
+            nextErrors.fullName = t('registerFullNameRequired');
+        } else if (!englishFullNamePattern.test(normalizedFullName)) {
+            nextErrors.fullName = t('registerFullNameEnglishOnly');
+        }
         if (!registerForm.email.trim()) nextErrors.email = t('registerEmailRequired');
         if (!registerForm.password.trim()) {
             nextErrors.registerPassword = t('registerPasswordRequired');
@@ -219,12 +229,18 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
         } else if (registerForm.password !== registerForm.confirmPassword) {
             nextErrors.confirmPassword = t('passwordMismatch');
         }
-        if (registerForm.phone && phoneDigits.length !== 11) {
+        if (!phoneDigits) {
+            nextErrors.phone = t('registerPhoneRequired');
+        } else if (phoneDigits.length !== 11) {
             nextErrors.phone = t('registerPhoneInvalid');
         }
         if (!registerForm.branchId) nextErrors.branchId = t('registerBranchRequired');
         if (!registerForm.departmentId) nextErrors.departmentId = t('registerDepartmentRequired');
-        if (!registerForm.jobTitle.trim()) nextErrors.jobTitle = t('registerJobTitleRequired');
+        if (!normalizedJobTitle) {
+            nextErrors.jobTitle = t('registerJobTitleRequired');
+        } else if (!englishJobTitlePattern.test(normalizedJobTitle)) {
+            nextErrors.jobTitle = t('registerJobTitleEnglishOnly');
+        }
 
         setErrors(nextErrors);
         return Object.keys(nextErrors).length === 0;
@@ -279,14 +295,14 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
         try {
             await api.get('/auth/csrf');
             const res = await api.post('/auth/register', {
-                fullName: registerForm.fullName.trim(),
+                fullName: registerForm.fullName.trim().replace(/\s+/g, ' '),
                 fullNameAr: registerForm.fullNameAr.trim() || undefined,
                 email: registerForm.email.trim(),
-                phone: registerForm.phone.trim() || undefined,
+                phone: normalizePhoneInput(registerForm.phone),
                 password: registerForm.password,
                 branchId: Number(registerForm.branchId),
                 departmentId: registerForm.departmentId,
-                jobTitle: registerForm.jobTitle.trim(),
+                jobTitle: registerForm.jobTitle.trim().replace(/\s+/g, ' '),
                 jobTitleAr: registerForm.jobTitleAr.trim() || undefined,
             });
             if (res.data?.accessToken) {
@@ -308,7 +324,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
 
     const updateRegisterField = (field: keyof RegisterFormState, value: string) => {
         setRegisterForm((prev) => {
-            const next = { ...prev, [field]: value };
+            const next = { ...prev, [field]: field === 'phone' ? normalizePhoneInput(value) : value };
             if (field === 'branchId') {
                 next.departmentId = '';
             }
@@ -457,7 +473,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
 
                         <div className="grid gap-4 md:grid-cols-2">
                             <label className="text-sm">
-                                {t('registerFullName')}
+                                {t('registerFullNameEn')}
                                 <input
                                     type="text"
                                     className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
@@ -489,14 +505,17 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
                                 {t('registerPhone')}
                                 <input
                                     type="tel"
+                                    inputMode="numeric"
+                                    maxLength={11}
                                     className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
                                     value={registerForm.phone}
                                     onChange={(e) => updateRegisterField('phone', e.target.value)}
                                 />
+                                <p className="mt-1 text-xs text-ink/60">{t('registerPhoneHint')}</p>
                                 {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone}</p>}
                             </label>
                             <label className="text-sm">
-                                {t('registerJobTitle')}
+                                {t('registerJobTitleEn')}
                                 <input
                                     type="text"
                                     className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"

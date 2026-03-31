@@ -12,7 +12,7 @@ export default function ForgotPasswordPage({ params }: { params: { locale: 'en' 
     const router = useRouter();
     const pathname = usePathname();
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
@@ -45,12 +45,12 @@ export default function ForgotPasswordPage({ params }: { params: { locale: 'en' 
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!email.trim() || loading) return;
+        if (!identifier.trim() || loading) return;
         setLoading(true);
         setMessage('');
         setError('');
         try {
-            await api.post('/auth/forgot-password', { email: email.trim(), locale: params.locale });
+            await api.post('/auth/forgot-password', { identifier: identifier.trim(), locale: params.locale });
             setMessage(t('resetSent'));
         } catch (err: any) {
             setError(err?.message || t('resetFailed'));
@@ -89,12 +89,13 @@ export default function ForgotPasswordPage({ params }: { params: { locale: 'en' 
                 </div>
                 <form onSubmit={submit} className="space-y-4">
                     <label className="text-sm">
-                        {t('email')}
+                        {t('resetIdentifier')}
                         <input
-                            type="email"
+                            type="text"
                             className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            value={identifier}
+                            onChange={(e) => setIdentifier(e.target.value)}
+                            placeholder={t('resetIdentifierHint')}
                             required
                         />
                     </label>

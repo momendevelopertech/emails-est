@@ -14,6 +14,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { addDays, addMinutes } from 'date-fns';
 import { getJwtKeys } from './jwt-keys';
 import { createHmac } from 'crypto';
+import { normalizeDigits } from '../shared/search-normalization';
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_DURATION_MINUTES = 30;
@@ -33,6 +34,7 @@ export class AuthService {
         return {
             id: user.id,
             email: user.email,
+            phone: user.phone,
             username: user.username,
             fullName: user.fullName,
             fullNameAr: user.fullNameAr,
@@ -62,6 +64,64 @@ export class AuthService {
         return createHmac('sha256', this.getRefreshTokenSecret())
             .update(`${purpose}:${token}`)
             .digest('hex');
+    }
+
+    private normalizeResetIdentifier(identifier?: string | null) {
+        const raw = (identifier || '').trim();
+        if (!raw) return { raw: '', email: '', phone: '' };
+        const digits = normalizeDigits(raw).replace(/\D/g, '');
+        const phone = digits.startsWith('20') && digits.length === 12
+            ? `0${digits.slice(2)}`
+            : digits.startsWith('0020') && digits.length === 14
+                ? `0${digits.slice(4)}`
+                : digits;
+        return {
+            raw,
+            email: raw.includes('@') ? raw.toLowerCase() : '',
+            phone,
+        };
+    }
+
+    private hasEmailConfig() {
+        return !!process.env.MAIL_USER;
+    }
+
+    private async hasWhatsAppConfig() {
+        if (process.env.WHAPI_TOKEN) return true;
+        try {
+            const settings = await this.prisma.workScheduleSettings.findFirst({
+                select: { whapiToken: true },
+            });
+            return !!settings?.whapiToken;
+        } catch (error: any) {
+            if (error?.code === 'P2022') {
+                return !!process.env.WHAPI_TOKEN;
+            }
+            throw error;
+        }
+    }
+
+    private async getResetDeliveryChannel(
+        user: { email: string; phone?: string | null },
+        preferred: 'EMAIL' | 'WHATSAPP',
+    ) {
+        if (preferred === 'WHATSAPP' && user.phone && await this.hasWhatsAppConfig()) {
+            return 'WHATSAPP' as const;
+        }
+
+        if (user.email && this.hasEmailConfig()) {
+            return 'EMAIL' as const;
+        }
+
+        if (user.phone && await this.hasWhatsAppConfig()) {
+            return 'WHATSAPP' as const;
+        }
+
+        return null;
+    }
+
+    private generateResetCode() {
+        return String(Math.floor(100000 + Math.random() * 900000));
     }
 
     private async revokeAllRefreshTokens(userId: string) {
@@ -207,7 +267,7 @@ export class AuthService {
             fullName: string;
             fullNameAr?: string;
             email: string;
-            phone?: string;
+            phone: string;
             password: string;
             branchId: number;
             departmentId: string;
@@ -320,32 +380,49 @@ export class AuthService {
         await this.auditService.log({ userId, action: 'PASSWORD_CHANGED' });
     }
 
-    async requestPasswordReset(email: string, locale = 'en') {
-        const normalizedEmail = email.trim().toLowerCase();
-        const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    async requestPasswordReset(identifier?: string, locale = 'en') {
+        const normalized = this.normalizeResetIdentifier(identifier);
+        if (!normalized.raw) return;
+
+        const user = await this.prisma.user.findFirst({
+            where: normalized.email
+                ? { email: normalized.email }
+                : normalized.phone
+                    ? { phone: normalized.phone }
+                    : { email: '__not_found__' },
+        });
         if (!user) return; // Don't reveal user existence
 
-        const resetToken = uuidv4();
-        const resetHash = this.hashToken(resetToken, 'reset');
+        const preferredChannel = normalized.email ? 'EMAIL' : 'WHATSAPP';
+        const deliveryChannel = await this.getResetDeliveryChannel(user, preferredChannel);
+        if (!deliveryChannel) return;
+
+        await this.prisma.refreshToken.updateMany({
+            where: { userId: user.id, tokenType: 'RESET', isRevoked: false },
+            data: { isRevoked: true },
+        });
+
+        const resetCode = this.generateResetCode();
+        const resetHash = this.hashToken(`${user.id}:${resetCode}`, 'reset');
         await this.prisma.refreshToken.create({
             data: {
                 token: resetHash,
                 tokenType: 'RESET',
                 userId: user.id,
-                expiresAt: addMinutes(new Date(), 60),
+                expiresAt: addMinutes(new Date(), 10),
             },
         });
 
         const safeLocale = ['en', 'ar'].includes(locale) ? locale : 'en';
-        const resetUrl = `${process.env.FRONTEND_URL}/${safeLocale}/reset-password?token=${resetToken}`;
-
-        await this.notificationsService.sendEmail({
-            to: user.email,
-            subject: 'SPHINX HR - Password Reset',
-            html: `<p>Click <a href="${resetUrl}">here</a> to reset your password. Link expires in 1 hour.</p>`,
+        await this.notificationsService.sendPasswordResetCode({
+            user,
+            code: resetCode,
+            locale: safeLocale,
+            channel: deliveryChannel,
         });
 
-        if (user.phone) {
+        const resetUrl = '';
+        if (process.env.NODE_ENV === 'legacy-reset-link' && user.phone) {
             await this.notificationsService.sendWhatsApp(
                 user.phone,
                 `🔐 SPHINX HR: A password reset was requested for your account. If you didn't request this, please contact HR immediately. Reset link: ${resetUrl}`,
@@ -353,11 +430,36 @@ export class AuthService {
         }
     }
 
-    async resetPassword(token: string, newPassword: string) {
-        const resetHash = this.hashToken(token, 'reset');
-        const stored = await this.prisma.refreshToken.findFirst({
-            where: { token: resetHash, tokenType: 'RESET' },
-        });
+    async resetPassword(token: string | undefined, newPassword: string, identifier?: string) {
+        const normalized = this.normalizeResetIdentifier(identifier);
+        const tokenValue = (token || '').trim();
+
+        let stored = null;
+        if (normalized.raw) {
+            const user = await this.prisma.user.findFirst({
+                where: normalized.email
+                    ? { email: normalized.email }
+                    : normalized.phone
+                        ? { phone: normalized.phone }
+                        : { email: '__not_found__' },
+            });
+            if (!user || !tokenValue) {
+                throw new BadRequestException('Invalid or expired reset token');
+            }
+            const resetHash = this.hashToken(`${user.id}:${tokenValue}`, 'reset');
+            stored = await this.prisma.refreshToken.findFirst({
+                where: {
+                    userId: user.id,
+                    token: resetHash,
+                    tokenType: 'RESET',
+                },
+            });
+        } else {
+            const resetHash = this.hashToken(tokenValue, 'reset');
+            stored = await this.prisma.refreshToken.findFirst({
+                where: { token: resetHash, tokenType: 'RESET' },
+            });
+        }
 
         if (!stored || stored.isRevoked || stored.expiresAt < new Date()) {
             throw new BadRequestException('Invalid or expired reset token');
@@ -371,6 +473,11 @@ export class AuthService {
 
         await this.prisma.refreshToken.update({
             where: { id: stored.id },
+            data: { isRevoked: true },
+        });
+
+        await this.prisma.refreshToken.updateMany({
+            where: { userId: stored.userId, tokenType: 'RESET', isRevoked: false },
             data: { isRevoked: true },
         });
 

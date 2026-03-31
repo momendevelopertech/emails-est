@@ -87,16 +87,17 @@ export default function SidebarFooter({
     };
 
     const requestPasswordReset = async () => {
-        if (!user?.email) {
-            toast.error(locale === 'ar' ? 'لا يوجد بريد إلكتروني مسجل لهذا المستخدم.' : 'No email found for this user.');
+        const identifier = user?.phone || user?.email;
+        if (!identifier) {
+            toast.error(locale === 'ar' ? 'لا يوجد رقم موبايل أو بريد إلكتروني مسجل لهذا المستخدم.' : 'No phone number or email is saved for this user.');
             return;
         }
         try {
-            await api.post('/auth/forgot-password', { email: user.email, locale });
-            toast.success(locale === 'ar' ? 'تم إرسال رابط تغيير كلمة المرور إلى بريدك الإلكتروني.' : 'Password reset link sent to your email.');
+            await api.post('/auth/forgot-password', { identifier, locale });
+            toast.success(locale === 'ar' ? 'إذا كان الحساب موجودًا، فسيصلك كود على واتساب أو البريد الإلكتروني.' : 'If the account exists, a reset code will be sent by WhatsApp or email.');
             setMenuOpen(false);
         } catch (error: any) {
-            toast.error(error?.message || (locale === 'ar' ? 'تعذر إرسال الرابط.' : 'Failed to send reset link.'));
+            toast.error(error?.message || (locale === 'ar' ? 'تعذر إرسال كود إعادة التعيين.' : 'Failed to send the reset code.'));
         }
     };
 

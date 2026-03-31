@@ -13,7 +13,10 @@ export default function ResetPasswordPage({ params }: { params: { locale: 'en' |
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const token = useMemo(() => searchParams.get('token') || '', [searchParams]);
+    const hasToken = !!token;
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
+    const [identifier, setIdentifier] = useState('');
+    const [code, setCode] = useState('');
     const [password, setPassword] = useState('');
     const [confirm, setConfirm] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -52,8 +55,8 @@ export default function ResetPasswordPage({ params }: { params: { locale: 'en' |
         if (loading) return;
         setMessage('');
         setError('');
-        if (!token) {
-            setError(t('resetTokenMissing'));
+        if (!hasToken && (!identifier.trim() || !code.trim())) {
+            setError(t('resetCodeRequired'));
             return;
         }
         if (!password.trim() || password.trim().length < 8) {
@@ -66,8 +69,14 @@ export default function ResetPasswordPage({ params }: { params: { locale: 'en' |
         }
         setLoading(true);
         try {
-            await api.post('/auth/reset-password', { token, newPassword: password });
+            await api.post('/auth/reset-password', {
+                token: hasToken ? token : code.trim(),
+                identifier: hasToken ? undefined : identifier.trim(),
+                newPassword: password,
+            });
             setMessage(t('resetDone'));
+            setIdentifier('');
+            setCode('');
             setPassword('');
             setConfirm('');
         } catch (err: any) {
@@ -103,9 +112,37 @@ export default function ResetPasswordPage({ params }: { params: { locale: 'en' |
                         <BrandLogo locale={params.locale} />
                     </div>
                     <h1 className="text-xl font-semibold sm:text-2xl">{t('resetTitle')}</h1>
-                    <p className="text-sm text-ink/60">{t('resetCreateNew')}</p>
+                    <p className="text-sm text-ink/60">{hasToken ? t('resetCreateNew') : t('resetCodeHint')}</p>
                 </div>
                 <form onSubmit={submit} className="space-y-4">
+                    {!hasToken && (
+                        <>
+                            <label className="text-sm">
+                                {t('resetIdentifier')}
+                                <input
+                                    type="text"
+                                    className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                    value={identifier}
+                                    onChange={(e) => setIdentifier(e.target.value)}
+                                    placeholder={t('resetIdentifierHint')}
+                                    required
+                                />
+                            </label>
+                            <label className="text-sm">
+                                {t('resetCode')}
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    maxLength={6}
+                                    className="mt-1 w-full rounded-xl border border-ink/20 bg-white px-3 py-2"
+                                    value={code}
+                                    onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                    placeholder="123456"
+                                    required
+                                />
+                            </label>
+                        </>
+                    )}
                     <label className="text-sm">
                         {t('newPassword')}
                         <div className="relative mt-1">

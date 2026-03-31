@@ -49,4 +49,12 @@ export class UpdateWorkScheduleDto {
     @IsOptional()
     @IsBoolean()
     pwaInstallEnabled?: boolean;
+
+    @IsOptional()
+    @IsString()
+    whapiBaseUrl?: string;
+
+    @IsOptional()
+    @IsString()
+    whapiToken?: string;
 }

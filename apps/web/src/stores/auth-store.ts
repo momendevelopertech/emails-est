@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 export type UserProfile = {
     id: string;
     email: string;
+    phone?: string | null;
     username?: string;
     fullName: string;
     fullNameAr?: string;

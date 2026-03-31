@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS: Prisma.WorkScheduleSettingsCreateInput = {
     ramadanStartDate: null,
     ramadanEndDate: null,
     pwaInstallEnabled: false,
+    whapiBaseUrl: 'https://gate.whapi.cloud/',
+    whapiToken: null,
 };
 
 const BASE_SELECT = {
@@ -33,6 +35,8 @@ const BASE_SELECT = {
 const FULL_SELECT = {
     ...BASE_SELECT,
     pwaInstallEnabled: true,
+    whapiBaseUrl: true,
+    whapiToken: true,
 };
 
 const isMissingColumnError = (error: unknown) => {
@@ -47,6 +51,15 @@ const isMissingColumnError = (error: unknown) => {
 const withPwaFallback = <T extends Record<string, any> | null>(data: T, value?: boolean) => {
     if (!data) return data;
     return { ...data, pwaInstallEnabled: value ?? false } as T & { pwaInstallEnabled: boolean };
+};
+
+const serializeSettings = <T extends Record<string, any> | null>(data: T) => {
+    if (!data) return data;
+    const { whapiToken: _whapiToken, ...rest } = data;
+    return {
+        ...rest,
+        whapiTokenConfigured: !!_whapiToken,
+    };
 };
 
 const getActiveMode = (
@@ -86,6 +99,14 @@ const toCreateInput = (
     if (typeof pwaValue === 'boolean') {
         result.pwaInstallEnabled = pwaValue;
     }
+    const whapiBaseUrl = (data as Record<string, unknown>).whapiBaseUrl;
+    if (typeof whapiBaseUrl === 'string' && whapiBaseUrl.trim()) {
+        result.whapiBaseUrl = whapiBaseUrl.trim();
+    }
+    const whapiToken = (data as Record<string, unknown>).whapiToken;
+    if (typeof whapiToken === 'string') {
+        result.whapiToken = whapiToken.trim() || null;
+    }
     assignIfString('weekdayStart');
     assignIfString('weekdayEnd');
     assignIfString('saturdayStart');
@@ -118,6 +139,8 @@ export class WorkScheduleService {
             if (!isMissingColumnError(error)) throw error;
             const legacyData = { ...data } as Record<string, any>;
             delete legacyData.pwaInstallEnabled;
+            delete legacyData.whapiBaseUrl;
+            delete legacyData.whapiToken;
             const legacy = await this.prisma.workScheduleSettings.create({ data: legacyData, select: BASE_SELECT });
             return withPwaFallback(legacy, false);
         }
@@ -130,6 +153,8 @@ export class WorkScheduleService {
             if (!isMissingColumnError(error)) throw error;
             const legacyData = { ...(data as Record<string, any>) };
             delete legacyData.pwaInstallEnabled;
+            delete legacyData.whapiBaseUrl;
+            delete legacyData.whapiToken;
             const legacy = await this.prisma.workScheduleSettings.update({ where: { id }, data: legacyData, select: BASE_SELECT });
             return withPwaFallback(legacy, false);
         }
@@ -142,15 +167,29 @@ export class WorkScheduleService {
     }
 
     async getSettings() {
-        return this.ensureDefaults();
+        const settings = await this.ensureDefaults();
+        return serializeSettings(settings);
     }
 
     async updateSettings(data: Prisma.WorkScheduleSettingsUpdateInput) {
         const normalized = normalizeSettingsUpdate(data);
+        const rawWhapiBaseUrl = (data as Record<string, unknown>).whapiBaseUrl;
+        const rawWhapiToken = (data as Record<string, unknown>).whapiToken;
+        const updateData: Prisma.WorkScheduleSettingsUpdateInput = {
+            ...normalized,
+            ...(typeof rawWhapiBaseUrl === 'string' && rawWhapiBaseUrl.trim()
+                ? { whapiBaseUrl: rawWhapiBaseUrl.trim() }
+                : {}),
+            ...(typeof rawWhapiToken === 'string' && rawWhapiToken.trim()
+                ? { whapiToken: rawWhapiToken.trim() }
+                : {}),
+        };
         const existing = await this.safeFindFirst();
         if (!existing) {
-            return this.safeCreate(toCreateInput(normalized));
+            const created = await this.safeCreate(toCreateInput(updateData));
+            return serializeSettings(created);
         }
-        return this.safeUpdate(existing.id, normalized);
+        const updated = await this.safeUpdate(existing.id, updateData);
+        return serializeSettings(updated);
     }
 }

@@ -468,6 +468,8 @@ model WorkScheduleSettings {
   ramadanStartDate String?
   ramadanEndDate   String?
   pwaInstallEnabled Boolean         @default(false)
+  whapiBaseUrl     String           @default("https://gate.whapi.cloud/")
+  whapiToken       String?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 }

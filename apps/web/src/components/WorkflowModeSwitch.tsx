@@ -100,7 +100,7 @@ export default function WorkflowModeSwitch({
                     ? 'border-emerald-200 bg-emerald-50/90'
                     : 'border-slate-200 bg-slate-50/90'
                     }`}>
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center justify-between gap-3">
                         <div>
                             <p className="text-[11px] uppercase tracking-[0.2em] text-ink/50">{labels.title}</p>
                             <p className="mt-1 text-sm font-semibold">{isSandbox ? labels.sandbox : labels.workflow}</p>
@@ -108,12 +108,17 @@ export default function WorkflowModeSwitch({
                         </div>
                         <button
                             type="button"
-                            className={`relative h-7 w-14 rounded-full transition ${isSandbox ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                            className={`relative h-7 w-14 shrink-0 rounded-full border transition-all duration-200 ${isSandbox
+                                ? 'border-emerald-500 bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.16)]'
+                                : 'border-slate-300 bg-slate-200'
+                                }`}
                             onClick={requestToggle}
                             aria-label={labels.title}
+                            aria-pressed={isSandbox}
                         >
                             <span
-                                className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition ${isSandbox ? 'start-8' : 'start-1'}`}
+                                className="absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-all duration-200"
+                                style={{ insetInlineStart: isSandbox ? '2rem' : '0.25rem' }}
                             />
                         </button>
                     </div>

@@ -241,6 +241,13 @@ export class LeavesService {
         }
 
         const actorId = actor?.id || targetUserId;
+        const leaveLabels: Record<string, { ar: string; en: string }> = {
+            ANNUAL: { ar: 'طلب إجازة اعتيادية', en: 'annual leave request' },
+            CASUAL: { ar: 'طلب إجازة عارضة', en: 'casual leave request' },
+            EMERGENCY: { ar: 'طلب إجازة طارئة', en: 'emergency leave request' },
+            MISSION: { ar: 'طلب مأمورية', en: 'mission request' },
+            ABSENCE_WITH_PERMISSION: { ar: 'طلب غياب بإذن', en: 'absence-with-permission request' },
+        };
         await this.auditService.log({
             userId: actorId,
             action: 'LEAVE_REQUESTED',
@@ -250,6 +257,16 @@ export class LeavesService {
                 ...(actorId === targetUserId ? {} : { requestFor: targetUserId }),
                 ...(isSandbox ? { autoApproved: true, workflowMode: 'SANDBOX' } : {}),
             },
+        });
+
+        const receiptLabel = leaveLabels[request.leaveType] || { ar: 'طلب إجازة', en: 'leave request' };
+        await this.notificationsService.sendRequestReceipt({
+            user: request.user,
+            requestType: 'leave',
+            requestId: request.id,
+            requestLabelAr: receiptLabel.ar,
+            requestLabelEn: receiptLabel.en,
+            status: isSandbox ? 'HR_APPROVED' : 'PENDING',
         });
 
         if (isSandbox) {

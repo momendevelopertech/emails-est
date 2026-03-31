@@ -159,14 +159,14 @@ export class AuthController {
     @UseGuards(ThrottlerGuard)
     @HttpCode(HttpStatus.OK)
     async forgotPassword(@Body() dto: ResetPasswordRequestDto) {
-        await this.authService.requestPasswordReset(dto.email, dto.locale);
-        return { message: 'If the email exists, a reset link has been sent.' };
+        await this.authService.requestPasswordReset(dto.identifier || dto.email, dto.locale);
+        return { message: 'If the account exists, a reset code has been sent.' };
     }
 
     @Post('reset-password')
     @HttpCode(HttpStatus.OK)
     async resetPassword(@Body() dto: ResetPasswordDto) {
-        await this.authService.resetPassword(dto.token, dto.newPassword);
+        await this.authService.resetPassword(dto.token, dto.newPassword, dto.identifier);
         return { message: 'Password reset successfully' };
     }
 
@@ -190,6 +190,7 @@ export class AuthController {
             jobTitle: user.jobTitle,
             jobTitleAr: user.jobTitleAr,
             workflowMode: user.workflowMode,
+            phone: user.phone,
         };
     }
 

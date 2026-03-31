@@ -26,8 +26,13 @@ export class ChangePasswordDto {
 }
 
 export class ResetPasswordRequestDto {
-    @IsEmail()
-    email: string;
+    @IsOptional()
+    @IsString()
+    identifier?: string;
+
+    @IsOptional()
+    @IsString()
+    email?: string;
 
     @IsOptional()
     @IsString()
@@ -35,8 +40,13 @@ export class ResetPasswordRequestDto {
 }
 
 export class ResetPasswordDto {
+    @IsOptional()
     @IsString()
-    token: string;
+    token?: string;
+
+    @IsOptional()
+    @IsString()
+    identifier?: string;
 
     @IsString()
     @MinLength(8)
@@ -55,9 +65,8 @@ export class RegisterDto {
     @IsEmail()
     email: string;
 
-    @IsOptional()
     @IsString()
-    phone?: string;
+    phone: string;
 
     @IsString()
     @MinLength(8)

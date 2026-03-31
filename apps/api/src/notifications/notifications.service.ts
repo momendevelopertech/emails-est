@@ -4,6 +4,7 @@ import { endOfDay, startOfDay } from 'date-fns';
 import { PusherService } from '../pusher/pusher.service';
 import axios from 'axios';
 import * as nodemailer from 'nodemailer';
+import { normalizeDigits } from '../shared/search-normalization';
 
 @Injectable()
 export class NotificationsService {
@@ -23,6 +24,51 @@ export class NotificationsService {
                 pass: process.env.MAIL_PASS,
             },
         });
+    }
+
+    private async getWhatsAppConfig() {
+        const envToken = process.env.WHAPI_TOKEN?.trim();
+        const envBaseUrl = process.env.WHAPI_BASE_URL?.trim() || 'https://gate.whapi.cloud/';
+
+        try {
+            const settings = await this.prisma.workScheduleSettings.findFirst({
+                select: { whapiToken: true, whapiBaseUrl: true },
+            });
+            const token = settings?.whapiToken?.trim() || envToken;
+            const baseUrl = settings?.whapiBaseUrl?.trim() || envBaseUrl;
+            return token ? { token, baseUrl } : null;
+        } catch (error: any) {
+            if (error?.code !== 'P2022') {
+                throw error;
+            }
+            return envToken ? { token: envToken, baseUrl: envBaseUrl } : null;
+        }
+    }
+
+    private normalizeWhatsAppPhone(phone?: string | null) {
+        const digits = normalizeDigits(phone || '').replace(/\D/g, '');
+        if (!digits) return '';
+        if (digits.startsWith('20') && digits.length === 12) return digits;
+        if (digits.startsWith('0020') && digits.length === 14) return digits.slice(2);
+        if (digits.startsWith('0') && digits.length === 11) return `20${digits.slice(1)}`;
+        return digits;
+    }
+
+    private getPublicAppUrl(locale = 'ar') {
+        const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
+        return `${baseUrl}/${locale}`;
+    }
+
+    private getPreferredLocale(user?: { fullNameAr?: string | null }) {
+        return user?.fullNameAr ? 'ar' : 'en';
+    }
+
+    private buildRequestPrintUrl(
+        requestType: 'leave' | 'permission',
+        requestId: string,
+        locale = 'ar',
+    ) {
+        return `${this.getPublicAppUrl(locale)}/requests/print/${requestType}/${requestId}`;
     }
 
     async createInApp(data: {
@@ -217,19 +263,30 @@ export class NotificationsService {
     }
 
     async sendWhatsApp(phone: string, message: string) {
-        if (!phone || !process.env.WHAPI_TOKEN) {
+        if (!phone) {
+            this.logger.warn('WhatsApp phone is missing');
+            return;
+        }
+
+        const config = await this.getWhatsAppConfig();
+        if (!config) {
             this.logger.warn('WhatsApp not configured or phone missing');
             return;
         }
 
         try {
-            const formattedPhone = phone.startsWith('+') ? phone.slice(1) : phone;
+            const formattedPhone = this.normalizeWhatsAppPhone(phone);
+            if (!formattedPhone) {
+                this.logger.warn('WhatsApp phone is invalid');
+                return;
+            }
+            const baseUrl = config.baseUrl.replace(/\/?$/, '/');
             await axios.post(
-                `${process.env.WHAPI_BASE_URL || 'https://gate.whapi.cloud/'}messages/text`,
+                `${baseUrl}messages/text`,
                 { to: `${formattedPhone}@s.whatsapp.net`, body: message },
                 {
                     headers: {
-                        Authorization: `Bearer ${process.env.WHAPI_TOKEN}`,
+                        Authorization: `Bearer ${config.token}`,
                         'Content-Type': 'application/json',
                     },
                 },
@@ -237,6 +294,117 @@ export class NotificationsService {
             this.logger.log(`WhatsApp sent to ${formattedPhone}`);
         } catch (err: any) {
             this.logger.error(`WhatsApp send failed: ${err.message}`);
+        }
+    }
+
+    async sendAccountCreatedMessage(user: {
+        fullName: string;
+        fullNameAr?: string | null;
+        email: string;
+        phone?: string | null;
+        employeeNumber?: string | null;
+        username?: string | null;
+        workflowMode?: string | null;
+    }) {
+        const locale = this.getPreferredLocale(user);
+        const loginUrl = this.getPublicAppUrl(locale);
+        const isArabic = locale === 'ar';
+        const message = isArabic
+            ? `تم إنشاء حسابك في SPHINX HR بنجاح.\nرقم الموظف: ${user.employeeNumber || '-'}\nاسم المستخدم: ${user.username || user.email}\nوضع الطلبات الحالي: ${user.workflowMode === 'SANDBOX' ? 'وضع التجربة' : 'سير الموافقات'}\nرابط الدخول: ${loginUrl}`
+            : `Welcome to SPHINX HR.\nEmployee #: ${user.employeeNumber || '-'}\nUsername: ${user.username || user.email}\nCurrent request mode: ${user.workflowMode === 'SANDBOX' ? 'Sandbox Mode' : 'Approval Workflow'}\nLogin: ${loginUrl}`;
+
+        const emailSubject = isArabic ? 'تم إنشاء حسابك على SPHINX HR' : 'Your SPHINX HR account is ready';
+        const emailBody = isArabic
+            ? `<div style="font-family:sans-serif;max-width:600px"><h2>تم إنشاء حسابك بنجاح</h2><p>رقم الموظف: ${user.employeeNumber || '-'}</p><p>اسم المستخدم: ${user.username || user.email}</p><p>وضع الطلبات الحالي: ${user.workflowMode === 'SANDBOX' ? 'وضع التجربة' : 'سير الموافقات'}</p><p><a href="${loginUrl}">الدخول إلى النظام</a></p></div>`
+            : `<div style="font-family:sans-serif;max-width:600px"><h2>Your account is ready</h2><p>Employee #: ${user.employeeNumber || '-'}</p><p>Username: ${user.username || user.email}</p><p>Request mode: ${user.workflowMode === 'SANDBOX' ? 'Sandbox Mode' : 'Approval Workflow'}</p><p><a href="${loginUrl}">Open SPHINX HR</a></p></div>`;
+
+        const jobs: Promise<unknown>[] = [];
+        if (user.phone) {
+            jobs.push(this.sendWhatsApp(user.phone, message));
+        }
+        if (user.email) {
+            jobs.push(this.sendEmail({
+                to: user.email,
+                subject: emailSubject,
+                html: emailBody,
+            }));
+        }
+
+        if (jobs.length) {
+            this.runInBackground(Promise.allSettled(jobs), 'Deferred account-created notification failed');
+        }
+    }
+
+    async sendPasswordResetCode(options: {
+        user: { id: string; email: string; phone?: string | null; fullName?: string | null; fullNameAr?: string | null };
+        code: string;
+        locale?: string;
+        channel: 'EMAIL' | 'WHATSAPP';
+    }) {
+        const locale = options.locale === 'en' ? 'en' : 'ar';
+        const resetUrl = `${this.getPublicAppUrl(locale)}/reset-password`;
+        const isArabic = locale === 'ar';
+        const message = isArabic
+            ? `رمز إعادة تعيين كلمة المرور في SPHINX HR هو: ${options.code}\nصلاحية الرمز: 10 دقائق.\nصفحة التعيين: ${resetUrl}`
+            : `Your SPHINX HR password reset code is: ${options.code}\nThis code expires in 10 minutes.\nReset page: ${resetUrl}`;
+
+        if (options.channel === 'WHATSAPP' && options.user.phone) {
+            await this.sendWhatsApp(options.user.phone, message);
+            return;
+        }
+
+        await this.sendEmail({
+            to: options.user.email,
+            subject: isArabic ? 'رمز إعادة تعيين كلمة المرور' : 'Password reset code',
+            html: isArabic
+                ? `<div style="font-family:sans-serif;max-width:600px"><h2>رمز إعادة التعيين</h2><p>رمز التحقق: <strong>${options.code}</strong></p><p>صلاحية الرمز 10 دقائق.</p><p><a href="${resetUrl}">افتح صفحة إعادة التعيين</a></p></div>`
+                : `<div style="font-family:sans-serif;max-width:600px"><h2>Password reset code</h2><p>Your verification code is <strong>${options.code}</strong>.</p><p>The code expires in 10 minutes.</p><p><a href="${resetUrl}">Open reset page</a></p></div>`,
+        });
+    }
+
+    async sendRequestReceipt(options: {
+        user: {
+            email: string;
+            phone?: string | null;
+            fullName?: string | null;
+            fullNameAr?: string | null;
+        };
+        requestType: 'leave' | 'permission';
+        requestId: string;
+        requestLabelAr: string;
+        requestLabelEn: string;
+        status: 'PENDING' | 'HR_APPROVED';
+    }) {
+        const locale = this.getPreferredLocale(options.user);
+        const printUrl = this.buildRequestPrintUrl(options.requestType, options.requestId, locale);
+        const isArabic = locale === 'ar';
+        const statusLabel = options.status === 'HR_APPROVED'
+            ? (isArabic ? 'تم الاعتماد تلقائيًا' : 'Auto-approved')
+            : (isArabic ? 'تم تسجيل الطلب وهو قيد المراجعة' : 'Submitted and pending review');
+        const message = isArabic
+            ? `تم استلام ${options.requestLabelAr} بنجاح.\nالحالة: ${statusLabel}\nرابط الطباعة: ${printUrl}`
+            : `Your ${options.requestLabelEn} has been received.\nStatus: ${statusLabel}\nPrint link: ${printUrl}`;
+
+        const emailSubject = isArabic
+            ? `تم استلام ${options.requestLabelAr}`
+            : `${options.requestLabelEn} received`;
+
+        const jobs: Promise<unknown>[] = [];
+        if (options.user.phone) {
+            jobs.push(this.sendWhatsApp(options.user.phone, message));
+        }
+        if (options.user.email) {
+            jobs.push(this.sendEmail({
+                to: options.user.email,
+                subject: emailSubject,
+                html: isArabic
+                    ? `<div style="font-family:sans-serif;max-width:600px"><h2>تم استلام ${options.requestLabelAr}</h2><p>الحالة: ${statusLabel}</p><p><a href="${printUrl}">رابط الطباعة</a></p></div>`
+                    : `<div style="font-family:sans-serif;max-width:600px"><h2>${options.requestLabelEn} received</h2><p>Status: ${statusLabel}</p><p><a href="${printUrl}">Open print preview</a></p></div>`,
+            }));
+        }
+
+        if (jobs.length) {
+            this.runInBackground(Promise.allSettled(jobs), `Deferred request receipt failed (${options.requestType})`);
         }
     }
 

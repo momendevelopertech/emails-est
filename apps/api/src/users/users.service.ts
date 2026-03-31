@@ -26,7 +26,7 @@ export class UsersService {
 
     private normalizePhone(phone?: string) {
         if (!phone) return undefined;
-        return phone.replace(/\D/g, '');
+        return normalizeDigits(phone).replace(/\D/g, '');
     }
 
     private validatePhone(phone?: string) {
@@ -72,6 +72,32 @@ export class UsersService {
             .replace(/^-+|-+$/g, '')
             .slice(0, 24);
         return normalized || 'employee';
+    }
+
+    private normalizeText(value?: string | null) {
+        return (value || '').replace(/\s+/g, ' ').trim();
+    }
+
+    private validateEnglishFullName(value?: string | null) {
+        const normalized = this.normalizeText(value);
+        if (!normalized) {
+            throw new BadRequestException('Full name is required');
+        }
+        if (!/^[A-Za-z][A-Za-z\s.'-]{2,}$/.test(normalized)) {
+            throw new BadRequestException('Full name must be entered in English');
+        }
+        return normalized;
+    }
+
+    private validateEnglishJobTitle(value?: string | null) {
+        const normalized = this.normalizeText(value);
+        if (!normalized) {
+            throw new BadRequestException('Job title is required');
+        }
+        if (!/^[A-Za-z0-9][A-Za-z0-9\s.'&()/,-]{1,}$/.test(normalized)) {
+            throw new BadRequestException('Job title must be entered in English');
+        }
+        return normalized;
     }
 
     private async generateUniqueUsername(fullName: string, email: string) {
@@ -149,7 +175,7 @@ export class UsersService {
         fullName: string;
         fullNameAr?: string;
         email: string;
-        phone?: string;
+        phone: string;
         password: string;
         branchId: number;
         departmentId: string;
@@ -157,11 +183,12 @@ export class UsersService {
         jobTitleAr?: string;
     }) {
         const normalizedEmail = data.email.trim().toLowerCase();
+        const fullName = this.validateEnglishFullName(data.fullName);
         const normalizedPhone = this.validatePhone(data.phone);
-        const jobTitle = data.jobTitle?.trim();
-        if (!jobTitle) {
-            throw new BadRequestException('Job title is required');
+        if (!normalizedPhone) {
+            throw new BadRequestException('Phone number is required');
         }
+        const jobTitle = this.validateEnglishJobTitle(data.jobTitle);
 
         const branchId = this.parseBranchId(data.branchId);
         if (!branchId) {
@@ -191,15 +218,18 @@ export class UsersService {
             where: {
                 OR: [
                     { email: normalizedEmail },
+                    ...(normalizedPhone ? [{ phone: normalizedPhone }] : []),
                 ],
             },
         });
         if (existing) {
-            throw new ConflictException('Employee with this email already exists');
+            throw new ConflictException(existing.phone === normalizedPhone
+                ? 'Employee with this phone number already exists'
+                : 'Employee with this email already exists');
         }
 
         const employeeNumber = await this.generateEmployeeNumber();
-        const username = await this.generateUniqueUsername(data.fullName, normalizedEmail);
+        const username = await this.generateUniqueUsername(fullName, normalizedEmail);
         const passwordHash = await bcrypt.hash(data.password, 12);
         const governorate = this.inferGovernorateFromBranchName(branch.name);
 
@@ -207,7 +237,7 @@ export class UsersService {
             data: {
                 employeeNumber,
                 username,
-                fullName: data.fullName.trim(),
+                fullName,
                 fullNameAr: data.fullNameAr?.trim() || null,
                 email: normalizedEmail,
                 phone: normalizedPhone,
@@ -249,6 +279,16 @@ export class UsersService {
             body: 'Your account is ready in Sandbox Mode. New requests will be approved automatically.',
             bodyAr: 'حسابك جاهز في وضع التجربة. أي طلبات جديدة سيتم اعتمادها تلقائيًا.',
             metadata: { workflowMode: user.workflowMode, selfRegistered: true },
+        });
+
+        await this.notificationsService.sendAccountCreatedMessage({
+            fullName: user.fullName,
+            fullNameAr: user.fullNameAr,
+            email: user.email,
+            phone: user.phone,
+            employeeNumber: user.employeeNumber,
+            username: user.username,
+            workflowMode: user.workflowMode,
         });
 
         return user;
@@ -307,10 +347,15 @@ export class UsersService {
                     { email: normalizedEmail },
                     { employeeNumber: data.employeeNumber },
                     { username: generatedUsername },
+                    ...(normalizedPhone ? [{ phone: normalizedPhone }] : []),
                 ],
             },
         });
-        if (existing) throw new ConflictException('Employee with this email, employee number, or username already exists');
+        if (existing) {
+            throw new ConflictException(existing.phone === normalizedPhone
+                ? 'Employee with this phone number already exists'
+                : 'Employee with this email, employee number, or username already exists');
+        }
 
         const passwordHash = await bcrypt.hash(password, 12);
 
@@ -550,6 +595,19 @@ export class UsersService {
 
         const existing = await this.prisma.user.findUnique({ where: { id } });
         if (!existing) throw new NotFoundException('Employee not found');
+
+        if (normalizedPhone && normalizedPhone !== existing.phone) {
+            const duplicatePhone = await this.prisma.user.findFirst({
+                where: {
+                    phone: normalizedPhone,
+                    id: { not: id },
+                },
+                select: { id: true },
+            });
+            if (duplicatePhone) {
+                throw new ConflictException('Employee with this phone number already exists');
+            }
+        }
 
         const finalJobTitle = data.jobTitle !== undefined ? data.jobTitle?.trim() : existing.jobTitle;
         if (!finalJobTitle) {
