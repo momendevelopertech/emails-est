@@ -8,6 +8,8 @@ import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import PageLoader from './PageLoader';
 import ConfirmDialog from './ConfirmDialog';
+import NotificationTemplatesManager from './NotificationTemplatesManager';
+import { getDefaultNotificationTemplates, NotificationTemplateMap } from '@/lib/notification-template-catalog';
 
 type WorkScheduleSettings = {
     id: string;
@@ -23,6 +25,7 @@ type WorkScheduleSettings = {
     pwaInstallEnabled: boolean;
     evolutionApiBaseUrl: string;
     evolutionApiKeyConfigured?: boolean;
+    notificationTemplates: NotificationTemplateMap;
 };
 
 const DEFAULT_SETTINGS: WorkScheduleSettings = {
@@ -39,6 +42,7 @@ const DEFAULT_SETTINGS: WorkScheduleSettings = {
     pwaInstallEnabled: false,
     evolutionApiBaseUrl: '',
     evolutionApiKeyConfigured: false,
+    notificationTemplates: getDefaultNotificationTemplates(),
 };
 
 export default function SettingsClient({ locale }: { locale: string }) {
@@ -59,7 +63,11 @@ export default function SettingsClient({ locale }: { locale: string }) {
         setLoading(true);
         try {
             const res = await api.get('/settings/work-schedule');
-            setSettings((prev) => ({ ...prev, ...res.data }));
+            setSettings((prev) => ({
+                ...prev,
+                ...res.data,
+                notificationTemplates: res.data.notificationTemplates || prev.notificationTemplates,
+            }));
             setEvolutionApiKey('');
         } finally {
             setLoading(false);
@@ -313,6 +321,18 @@ export default function SettingsClient({ locale }: { locale: string }) {
                     </button>
                 </div>
             </section>
+
+            <NotificationTemplatesManager
+                locale={locale}
+                value={settings.notificationTemplates}
+                onChange={(notificationTemplates) => update('notificationTemplates', notificationTemplates)}
+            />
+
+            <div className="flex justify-end">
+                <button className="btn-primary" onClick={save} disabled={saving}>
+                    {saving ? t('saving') : t('save')}
+                </button>
+            </div>
 
             <section className="card p-5 space-y-3">
                 <div>

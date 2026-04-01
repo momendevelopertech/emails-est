@@ -470,6 +470,7 @@ model WorkScheduleSettings {
   pwaInstallEnabled Boolean         @default(false)
   evolutionApiBaseUrl String        @default("") @map("whapiBaseUrl")
   evolutionApiKey     String?       @map("whapiToken")
+  notificationTemplates Json?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 }

@@ -9,6 +9,9 @@ describe('NotificationsService', () => {
             count: jest.fn(),
             updateMany: jest.fn(),
         },
+        workScheduleSettings: {
+            findFirst: jest.fn(),
+        },
         user: {
             findMany: jest.fn(),
             findUnique: jest.fn(),
@@ -27,6 +30,7 @@ describe('NotificationsService', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         prisma.notification.create.mockResolvedValue({});
+        prisma.workScheduleSettings.findFirst.mockResolvedValue({ notificationTemplates: null });
         pusher.triggerToUser.mockResolvedValue(undefined);
         whatsAppService.sendWhatsApp.mockResolvedValue({ ok: true, phone: '201012345678' });
         service = new NotificationsService(prisma as any, pusher as any, whatsAppService as any);

@@ -1,5 +1,5 @@
-import { IsBoolean, IsEnum, IsOptional, IsString, Matches } from 'class-validator';
-import { WorkScheduleMode } from '@prisma/client';
+import { IsBoolean, IsEnum, IsObject, IsOptional, IsString, Matches } from 'class-validator';
+import { Prisma, WorkScheduleMode } from '@prisma/client';
 
 const timePattern = /^\d{2}:\d{2}$/;
 
@@ -57,4 +57,8 @@ export class UpdateWorkScheduleDto {
     @IsOptional()
     @IsString()
     evolutionApiKey?: string;
+
+    @IsOptional()
+    @IsObject()
+    notificationTemplates?: Prisma.InputJsonValue;
 }

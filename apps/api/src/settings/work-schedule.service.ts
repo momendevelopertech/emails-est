@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, WorkScheduleMode } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_EVOLUTION_API_BASE_URL } from './whatsapp-defaults';
+import { getDefaultNotificationTemplates, normalizeNotificationTemplates } from './notification-template-defaults';
 
 const DEFAULT_SETTINGS: Prisma.WorkScheduleSettingsCreateInput = {
     activeMode: WorkScheduleMode.NORMAL,
@@ -16,6 +17,7 @@ const DEFAULT_SETTINGS: Prisma.WorkScheduleSettingsCreateInput = {
     pwaInstallEnabled: false,
     evolutionApiBaseUrl: DEFAULT_EVOLUTION_API_BASE_URL,
     evolutionApiKey: null,
+    notificationTemplates: getDefaultNotificationTemplates(),
 };
 
 const BASE_SELECT = {
@@ -38,12 +40,13 @@ const FULL_SELECT = {
     pwaInstallEnabled: true,
     evolutionApiBaseUrl: true,
     evolutionApiKey: true,
+    notificationTemplates: true,
 };
 
 const isMissingColumnError = (error: unknown) => {
     const err = error as { code?: string; message?: string };
     if (err?.code === 'P2022') return true;
-    if (typeof err?.message === 'string' && err.message.includes('pwaInstallEnabled') && err.message.includes('does not exist')) {
+    if (typeof err?.message === 'string' && err.message.includes('does not exist')) {
         return true;
     }
     return false;
@@ -56,9 +59,14 @@ const withPwaFallback = <T extends Record<string, any> | null>(data: T, value?: 
 
 const serializeSettings = <T extends Record<string, any> | null>(data: T) => {
     if (!data) return data;
-    const { evolutionApiKey: _evolutionApiKey, ...rest } = data;
+    const {
+        evolutionApiKey: _evolutionApiKey,
+        notificationTemplates,
+        ...rest
+    } = data;
     return {
         ...rest,
+        notificationTemplates: normalizeNotificationTemplates(notificationTemplates),
         evolutionApiKeyConfigured: !!_evolutionApiKey,
     };
 };
@@ -108,6 +116,10 @@ const toCreateInput = (
     if (typeof evolutionApiKey === 'string') {
         result.evolutionApiKey = evolutionApiKey.trim() || null;
     }
+    const notificationTemplates = (data as Record<string, unknown>).notificationTemplates;
+    if (notificationTemplates && typeof notificationTemplates === 'object' && !Array.isArray(notificationTemplates)) {
+        result.notificationTemplates = normalizeNotificationTemplates(notificationTemplates);
+    }
     assignIfString('weekdayStart');
     assignIfString('weekdayEnd');
     assignIfString('saturdayStart');
@@ -142,6 +154,7 @@ export class WorkScheduleService {
             delete legacyData.pwaInstallEnabled;
             delete legacyData.evolutionApiBaseUrl;
             delete legacyData.evolutionApiKey;
+            delete legacyData.notificationTemplates;
             const legacy = await this.prisma.workScheduleSettings.create({ data: legacyData, select: BASE_SELECT });
             return withPwaFallback(legacy, false);
         }
@@ -156,6 +169,7 @@ export class WorkScheduleService {
             delete legacyData.pwaInstallEnabled;
             delete legacyData.evolutionApiBaseUrl;
             delete legacyData.evolutionApiKey;
+            delete legacyData.notificationTemplates;
             const legacy = await this.prisma.workScheduleSettings.update({ where: { id }, data: legacyData, select: BASE_SELECT });
             return withPwaFallback(legacy, false);
         }
@@ -176,6 +190,7 @@ export class WorkScheduleService {
         const normalized = normalizeSettingsUpdate(data);
         const rawEvolutionApiBaseUrl = (data as Record<string, unknown>).evolutionApiBaseUrl;
         const rawEvolutionApiKey = (data as Record<string, unknown>).evolutionApiKey;
+        const rawNotificationTemplates = (data as Record<string, unknown>).notificationTemplates;
         const updateData: Prisma.WorkScheduleSettingsUpdateInput = {
             ...normalized,
             ...(typeof rawEvolutionApiBaseUrl === 'string'
@@ -183,6 +198,9 @@ export class WorkScheduleService {
                 : {}),
             ...(typeof rawEvolutionApiKey === 'string'
                 ? { evolutionApiKey: rawEvolutionApiKey.trim() || null }
+                : {}),
+            ...(rawNotificationTemplates && typeof rawNotificationTemplates === 'object' && !Array.isArray(rawNotificationTemplates)
+                ? { notificationTemplates: normalizeNotificationTemplates(rawNotificationTemplates) }
                 : {}),
         };
         const existing = await this.safeFindFirst();
