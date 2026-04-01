@@ -2,6 +2,7 @@ import { PrismaClient, Role, Governorate } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { DEFAULT_WHAPI_SETTINGS } from '../src/settings/whapi-defaults';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -415,6 +416,24 @@ async function resetLeaveBalances(userIds: string[], year: number) {
     }
 }
 
+async function syncWorkScheduleSettings() {
+    const existing = await prisma.workScheduleSettings.findFirst({
+        select: { id: true },
+    });
+
+    if (existing) {
+        await prisma.workScheduleSettings.update({
+            where: { id: existing.id },
+            data: DEFAULT_WHAPI_SETTINGS,
+        });
+        return;
+    }
+
+    await prisma.workScheduleSettings.create({
+        data: DEFAULT_WHAPI_SETTINGS,
+    });
+}
+
 async function main() {
     console.log('Seeding SPHINX HR database (deduplicated)...');
 
@@ -459,6 +478,8 @@ async function main() {
             skipDuplicates: true,
         });
     }
+
+    await syncWorkScheduleSettings();
 
     for (const user of requiredUsers) {
         const passwordHash = await bcrypt.hash(user.password, 12);
