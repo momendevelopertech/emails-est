@@ -80,7 +80,7 @@ export class WhatsAppService {
                             text: message,
                         },
                         {
-                            headers: this.buildHeaders(config.apiKey),
+                            headers: this.buildHeaders(config.baseUrl, config.apiKey),
                             timeout: this.getRequestTimeout(),
                             validateStatus: () => true,
                         },
@@ -192,15 +192,20 @@ export class WhatsAppService {
         return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
     }
 
-    private buildHeaders(apiKey?: string | null) {
-        if (!apiKey) {
-            return { 'Content-Type': 'application/json' };
+    private buildHeaders(baseUrl: string, apiKey?: string | null) {
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+
+        if (/\.ngrok(-free)?\.(app|dev)$/i.test(baseUrl)) {
+            headers['ngrok-skip-browser-warning'] = '1';
         }
 
-        return {
-            'Content-Type': 'application/json',
-            apikey: apiKey,
-        };
+        if (apiKey) {
+            headers.apikey = apiKey;
+        }
+
+        return headers;
     }
 
     private extractErrorMessage(payload: any, status?: number, fallback?: string) {
