@@ -527,8 +527,8 @@ body {
     }
 
     html[dir='rtl'] .app-sidebar {
-        inset-inline-start: auto;
-        inset-inline-end: 0;
+        inset-inline-start: 0;
+        inset-inline-end: auto;
         transform: translateX(110%);
     }
 

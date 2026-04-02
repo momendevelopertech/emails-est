@@ -18,4 +18,4 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package.json ./package.json
 EXPOSE 3001
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main.js"]
