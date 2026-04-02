@@ -95,7 +95,7 @@ export class EmailService {
                 host: this.getMailHost(),
                 port: this.getMailPort(),
                 secure: this.isSecure(),
-                pool: true,
+                pool: this.shouldUsePool(),
                 maxConnections: this.getMaxConnections(),
                 maxMessages: this.getMaxMessages(),
                 auth: {
@@ -173,6 +173,11 @@ export class EmailService {
     private getMaxMessages() {
         const parsed = parseInt(process.env.MAIL_POOL_MAX_MESSAGES || '', 10);
         return Number.isFinite(parsed) && parsed > 0 ? parsed : 100;
+    }
+
+    private shouldUsePool() {
+        const configured = this.parseBoolean(process.env.MAIL_USE_POOL);
+        return configured ?? true;
     }
 
     private parseBoolean(value?: string | null) {
