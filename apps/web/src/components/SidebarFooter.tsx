@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
-import api, { clearApiCache, clearBrowserRuntimeCache } from '@/lib/api';
+import { clearApiCache, clearBrowserRuntimeCache } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import { KeyRound, Languages, LogOut, Moon, Sun } from 'lucide-react';
 import toast from 'react-hot-toast';

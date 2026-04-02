@@ -15,10 +15,16 @@ export default function AppShell({ locale, children }: { locale: string; childre
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
+        const syncViewport = () => setViewportWidth(window.innerWidth);
+        syncViewport();
+        window.addEventListener('resize', syncViewport);
         const stored = window.localStorage.getItem('sphinx-sidebar-collapsed');
         if (stored !== null) {
             setSidebarCollapsed(stored === '1');
+        } else {
+            setSidebarCollapsed(window.innerWidth < 1024 && window.innerWidth >= 768);
         }
+        return () => window.removeEventListener('resize', syncViewport);
     }, []);
 
     useEffect(() => {
