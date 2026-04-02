@@ -10,11 +10,22 @@ export type AuthCookieSettings = {
 
 const hasScheme = (value: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
 const isLocalhost = (value: string) => /^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(value);
+const DEFAULT_PROD_FRONTEND_ORIGIN = 'https://hr-web-ten.vercel.app';
 
 const normalizeOrigin = (value?: string) => {
-    if (!value) return 'http://localhost:3000';
+    if (!value) {
+        if (process.env.NODE_ENV === 'production') {
+            return DEFAULT_PROD_FRONTEND_ORIGIN;
+        }
+        return 'http://localhost:3000';
+    }
     const trimmed = value.trim();
-    if (!trimmed) return 'http://localhost:3000';
+    if (!trimmed) {
+        if (process.env.NODE_ENV === 'production') {
+            return DEFAULT_PROD_FRONTEND_ORIGIN;
+        }
+        return 'http://localhost:3000';
+    }
     if (hasScheme(trimmed)) return trimmed;
     if (trimmed.startsWith('//')) return `https:${trimmed}`;
     if (isLocalhost(trimmed)) return `http://${trimmed.replace(/^https?:\/\//i, '')}`;
@@ -36,7 +47,8 @@ const getConfiguredSameSite = (): CookieSameSite => {
     const configured = (process.env.AUTH_COOKIE_SAMESITE || '').trim().toLowerCase();
     if (configured === 'strict') return 'strict';
     if (configured === 'none') return 'none';
-    return 'lax';
+    if (configured === 'lax') return 'lax';
+    return 'none';
 };
 
 export const getFrontendOrigin = () => normalizeOrigin(process.env.FRONTEND_URL);
@@ -63,7 +75,8 @@ export const getAllowedOrigins = () => {
 export const getCookieSettings = (): AuthCookieSettings => {
     const frontendOrigin = getFrontendOrigin();
     const isLocal = isLocalhost(frontendOrigin);
-    const isHttps = frontendOrigin.startsWith('https://');
+    const isProd = process.env.NODE_ENV === 'production';
+    const isHttps = frontendOrigin.startsWith('https://') || isProd || !!process.env.VERCEL;
     const mode = getCookieMode();
     const domain = normalizeDomain(process.env.AUTH_COOKIE_DOMAIN);
 
@@ -71,17 +84,13 @@ export const getCookieSettings = (): AuthCookieSettings => {
         return { sameSite: 'lax', secure: false, path: '/' };
     }
 
-    if (!isHttps) {
-        return { sameSite: 'lax', secure: false, domain, path: '/' };
-    }
-
-    if (mode === 'cross-site') {
+    if (isHttps && mode === 'cross-site') {
         return { sameSite: 'none', secure: true, domain, path: '/' };
     }
 
     return {
-        sameSite: getConfiguredSameSite() === 'none' ? 'lax' : getConfiguredSameSite(),
-        secure: true,
+        sameSite: isHttps ? getConfiguredSameSite() : 'lax',
+        secure: isHttps,
         domain,
         path: '/',
     };

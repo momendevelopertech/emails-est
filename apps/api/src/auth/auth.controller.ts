@@ -23,6 +23,12 @@ import { getCookieSettings } from '../shared/cookie-settings';
 export class AuthController {
     constructor(private authService: AuthService) { }
 
+    private applyPrivateNoStore(res: Response) {
+        res.setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
+
     private getCookieAges(rememberMe = false) {
         const accessMs = 15 * 60 * 1000; // 15m
         const refreshMs = 7 * 24 * 60 * 60 * 1000;
@@ -62,6 +68,7 @@ export class AuthController {
     @UseGuards(ThrottlerGuard)
     @HttpCode(HttpStatus.OK)
     async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+        this.applyPrivateNoStore(res);
         const rememberMe = !!dto.rememberMe;
         const result = await this.authService.login(
             dto.identifier,
@@ -94,6 +101,7 @@ export class AuthController {
     @UseGuards(ThrottlerGuard)
     @HttpCode(HttpStatus.CREATED)
     async register(@Body() dto: RegisterDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+        this.applyPrivateNoStore(res);
         const result = await this.authService.register(dto, req.ip, req.headers['user-agent']);
         const ages = this.getCookieAges(false);
 
@@ -107,6 +115,7 @@ export class AuthController {
     @Post('logout')
     @HttpCode(HttpStatus.OK)
     async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+        this.applyPrivateNoStore(res);
         const refreshToken = req.cookies?.refresh_token;
         await this.authService.logout((req as any).user?.id, refreshToken);
 
@@ -121,6 +130,7 @@ export class AuthController {
     @Post('refresh')
     @HttpCode(HttpStatus.OK)
     async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+        this.applyPrivateNoStore(res);
         const refreshToken = req.cookies?.refresh_token;
         const rememberMe = req.cookies?.remember_me === '1';
         const tokens = await this.authService.refreshTokens(
@@ -172,7 +182,8 @@ export class AuthController {
 
     @Get('me')
     @UseGuards(JwtAuthGuard)
-    async me(@Req() req: Request) {
+    async me(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+        this.applyPrivateNoStore(res);
         const user = (req as any).user;
         return {
             id: user.id,
@@ -196,7 +207,8 @@ export class AuthController {
 
     @Get('csrf')
     @HttpCode(HttpStatus.OK)
-    getCsrfToken(@Req() req: Request) {
+    getCsrfToken(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+        this.applyPrivateNoStore(res);
         const token = (req as Request & { csrfToken: () => string }).csrfToken();
         return { csrfToken: token };
     }

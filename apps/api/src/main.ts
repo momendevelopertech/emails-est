@@ -7,8 +7,26 @@ import cookieParser = require('cookie-parser');
 import helmet from 'helmet';
 import csurf = require('csurf');
 import { HttpExceptionFilter } from './shared/http-exception.filter';
-import { getAllowedOrigins, getCookieSettings, getFrontendOrigin } from './shared/cookie-settings';
+import { getAllowedOrigins, getCookieSettings } from './shared/cookie-settings';
 import { assertSecurityEnv } from './shared/env-check';
+
+const formatDebugCookies = (cookies?: Record<string, unknown>) => {
+    const entries = Object.entries(cookies || {});
+    return entries.reduce<Record<string, string>>((acc, [key, value]) => {
+        if (value === undefined || value === null || value === '') {
+            acc[key] = '[missing]';
+            return acc;
+        }
+
+        if (key === 'access_token' || key === 'refresh_token' || key === 'csrf_secret') {
+            acc[key] = '[present]';
+            return acc;
+        }
+
+        acc[key] = String(value);
+        return acc;
+    }, {});
+};
 
 async function bootstrap() {
     const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -20,9 +38,25 @@ async function bootstrap() {
     // Security
     app.use(helmet());
     app.use(cookieParser(process.env.CSRF_SECRET || 'sphinx-csrf'));
-    const frontendOrigin = getFrontendOrigin();
     const allowedOrigins = getAllowedOrigins();
     const { sameSite, secure, domain, path } = getCookieSettings();
+    const authDebugCookies = process.env.AUTH_DEBUG_COOKIES === '1';
+
+    if (authDebugCookies) {
+        app.use((req, _res, next) => {
+            if (req.path?.startsWith('/api/auth/')) {
+                console.log('[auth] Cookies:', {
+                    path: req.path,
+                    origin: req.headers.origin,
+                    host: req.headers.host,
+                    forwardedHost: req.headers['x-forwarded-host'],
+                    forwardedProto: req.headers['x-forwarded-proto'],
+                    cookies: formatDebugCookies(req.cookies),
+                });
+            }
+            next();
+        });
+    }
 
     const csrfProtection = csurf({
         cookie: {
@@ -58,7 +92,14 @@ async function bootstrap() {
 
     // CORS
     app.enableCors({
-        origin: allowedOrigins,
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+                return;
+            }
+
+            callback(new Error(`Origin ${origin} is not allowed by CORS`));
+        },
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: [
@@ -69,6 +110,7 @@ async function bootstrap() {
             'X-Allow-Cache',
             'X-Skip-Activity',
         ],
+        optionsSuccessStatus: 204,
     });
 
     // Global validation
