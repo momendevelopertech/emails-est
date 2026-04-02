@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
-import api, { clearApiCache, clearBrowserRuntimeCache } from '@/lib/api';
+import { clearApiCache, clearBrowserRuntimeCache } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import { KeyRound, Languages, LogOut, Moon, Sun } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -34,13 +34,6 @@ export default function SidebarFooter({
             document.documentElement.dataset.theme = next;
         }
     }, []);
-
-    useEffect(() => {
-        if (!user) return;
-        api.get('/settings/work-schedule')
-            .then((res) => setPwaEnabled(!!res.data?.pwaInstallEnabled))
-            .catch(() => null);
-    }, [user]);
 
     useEffect(() => {
         const handler = (event: MouseEvent) => {

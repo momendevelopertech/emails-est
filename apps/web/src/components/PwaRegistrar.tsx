@@ -19,12 +19,16 @@ export default function PwaRegistrar() {
         if (!('serviceWorker' in navigator)) return;
 
         const disabled = process.env.NEXT_PUBLIC_DISABLE_SERVICE_WORKER === '1';
-        if (!disabled) {
+
+        if (disabled) {
+            unregisterAllServiceWorkers().catch(() => {
+                // ignore unregister/cleanup failures during recovery
+            });
             return;
         }
 
-        unregisterAllServiceWorkers().catch(() => {
-            // ignore unregister/cleanup failures during recovery
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+            // ignore register errors in unsupported/temporary runtime states
         });
     }, []);
 
