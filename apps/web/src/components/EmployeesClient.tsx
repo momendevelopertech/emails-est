@@ -64,6 +64,14 @@ export default function EmployeesClient({ locale }: { locale: string }) {
     const [historyUser, setHistoryUser] = useState<User | null>(null);
     const [createOpen, setCreateOpen] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [notice, setNotice] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
+    const [dialog, setDialog] = useState<{
+        title?: string;
+        message: string;
+        confirmLabel?: string;
+        cancelLabel?: string;
+        onConfirm: () => void;
+    } | null>(null);
     const [page, setPage] = useState(1);
     const [limit, setLimit] = useState(20);
     const [totalPages, setTotalPages] = useState(1);
@@ -158,6 +166,21 @@ export default function EmployeesClient({ locale }: { locale: string }) {
         setPage(1);
     }, [debouncedSearch]);
 
+    const showNotice = (message: string, type: 'info' | 'success' | 'error' = 'info') => {
+        setNotice({ message, type });
+        setTimeout(() => setNotice((current) => (current?.message === message ? null : current)), 4500);
+    };
+
+    const openConfirm = (message: string, onConfirm: () => void, title?: string, confirmLabel?: string) => {
+        setDialog({
+            title,
+            message,
+            confirmLabel: confirmLabel || (locale === 'ar' ? 'تأكيد' : 'Confirm'),
+            cancelLabel,
+            onConfirm,
+        });
+    };
+
     if (!ready || loading) {
         return <PageLoader text={locale === 'ar' ? 'جاري تحميل الموظفين...' : 'Loading employees...'} />;
     }
@@ -165,21 +188,21 @@ export default function EmployeesClient({ locale }: { locale: string }) {
 
     const createEmployee = async () => {
         if (!isValidPhone(form.phone)) {
-            alert(phoneValidationMessage);
+            showNotice(phoneValidationMessage, 'error');
             return;
         }
         const role = form.role || 'EMPLOYEE';
         if (!form.branchId) {
-            alert(locale === 'ar' ? 'يجب اختيار الفرع.' : 'Branch is required.');
+            showNotice(locale === 'ar' ? 'يجب اختيار الفرع.' : 'Branch is required.', 'error');
             return;
         }
         const departmentRequired = role === 'EMPLOYEE' || role === 'MANAGER';
         if (departmentRequired && !form.departmentId) {
-            alert(locale === 'ar' ? 'يجب اختيار القسم.' : 'Department is required.');
+            showNotice(locale === 'ar' ? 'يجب اختيار القسم.' : 'Department is required.', 'error');
             return;
         }
         if (!form.jobTitle) {
-            alert(locale === 'ar' ? 'يجب إدخال المسمى الوظيفي.' : 'Job title is required.');
+            showNotice(locale === 'ar' ? 'يجب إدخال المسمى الوظيفي.' : 'Job title is required.', 'error');
             return;
         }
         const res = await api.post('/users', {
@@ -202,9 +225,9 @@ export default function EmployeesClient({ locale }: { locale: string }) {
                 : `\nWhatsApp delivery failed: ${res.data.whatsAppDelivery.error || 'Unknown failure'}`)
             : '';
         const msg = locale === 'ar'
-            ? `تم إنشاء المستخدم بنجاح\nاسم المستخدم: ${res.data.generatedUsername}\nكلمة المرور: ${res.data.defaultPassword}${whatsAppWarning}`
-            : `Employee created successfully\nUsername: ${res.data.generatedUsername}\nPassword: ${res.data.defaultPassword}${whatsAppWarning}`;
-        alert(msg);
+            ? `تم إنشاء المستخدم بنجاح. اسم المستخدم: ${res.data.generatedUsername} | كلمة المرور: ${res.data.defaultPassword}${whatsAppWarning}`
+            : `Employee created successfully. Username: ${res.data.generatedUsername} | Password: ${res.data.defaultPassword}${whatsAppWarning}`;
+        showNotice(msg, 'success');
 
         setForm({});
         setCreateOpen(false);
@@ -238,21 +261,21 @@ export default function EmployeesClient({ locale }: { locale: string }) {
     const saveEdit = async () => {
         if (!editingUser) return;
         if (!isValidPhone(editForm.phone)) {
-            alert(phoneValidationMessage);
+            showNotice(phoneValidationMessage, 'error');
             return;
         }
         const role = editForm.role || 'EMPLOYEE';
         if (!editForm.branchId) {
-            alert(locale === 'ar' ? 'يجب اختيار الفرع.' : 'Branch is required.');
+            showNotice(locale === 'ar' ? 'يجب اختيار الفرع.' : 'Branch is required.', 'error');
             return;
         }
         const departmentRequired = role === 'EMPLOYEE' || role === 'MANAGER';
         if (departmentRequired && !editForm.departmentId) {
-            alert(locale === 'ar' ? 'يجب اختيار القسم.' : 'Department is required.');
+            showNotice(locale === 'ar' ? 'يجب اختيار القسم.' : 'Department is required.', 'error');
             return;
         }
         if (!editForm.jobTitle) {
-            alert(locale === 'ar' ? 'يجب إدخال المسمى الوظيفي.' : 'Job title is required.');
+            showNotice(locale === 'ar' ? 'يجب إدخال المسمى الوظيفي.' : 'Job title is required.', 'error');
             return;
         }
         setSavingEdit(true);
@@ -281,6 +304,7 @@ export default function EmployeesClient({ locale }: { locale: string }) {
             setEditingUser(null);
             setEditForm({});
             await fetchAll();
+            showNotice(locale === 'ar' ? 'تم حفظ التعديلات.' : 'Changes saved.', 'success');
         } finally {
             setSavingEdit(false);
         }
@@ -312,54 +336,102 @@ export default function EmployeesClient({ locale }: { locale: string }) {
         const confirmText = locale === 'ar'
             ? 'هل أنت متأكد من مسح جميع بيانات الموظف؟ سيتم حذف الإجازات والأذونات والطلبات والسجلات.'
             : 'Are you sure you want to delete all employee data? This will remove leaves, permissions, requests, and records.';
-        if (!window.confirm(confirmText)) return;
-        await api.post(`/users/${emp.id}/reset-data`);
-        alert(locale === 'ar' ? 'تم مسح بيانات الموظف بنجاح.' : 'Employee data has been reset.');
-        await fetchAll();
+        openConfirm(confirmText, async () => {
+            await api.post(`/users/${emp.id}/reset-data`);
+            showNotice(locale === 'ar' ? 'تم مسح بيانات الموظف بنجاح.' : 'Employee data has been reset.', 'success');
+            await fetchAll();
+        }, locale === 'ar' ? 'تأكيد مسح البيانات' : 'Confirm data reset', resetLabel);
     };
 
-    const deleteEmployee = async (emp: User) => {
+    const deleteEmployee = (emp: User) => {
         if (!canDeleteEmployee(emp)) {
-            alert(t('deleteProtected'));
+            showNotice(t('deleteProtected'), 'error');
             return;
         }
-        if (!window.confirm(t('deleteConfirm'))) return;
 
-        setDeletingId(emp.id);
-        try {
-            await api.delete(`/users/${emp.id}`);
-            alert(t('deleteSuccess'));
+        openConfirm(
+            t('deleteConfirm'),
+            async () => {
+                setDeletingId(emp.id);
+                try {
+                    await api.delete(`/users/${emp.id}`);
+                    showNotice(t('deleteSuccess'), 'success');
 
-            if (editingUser?.id === emp.id) {
-                setEditOpen(false);
-                setEditingUser(null);
-                setEditForm({});
-            }
-            if (statsUser?.id === emp.id) {
-                setStatsOpen(false);
-                setStatsUser(null);
-                setStatsData(null);
-            }
-            if (historyUser?.id === emp.id) {
-                setHistoryOpen(false);
-                setHistoryUser(null);
-            }
+                    if (editingUser?.id === emp.id) {
+                        setEditOpen(false);
+                        setEditingUser(null);
+                        setEditForm({});
+                    }
+                    if (statsUser?.id === emp.id) {
+                        setStatsOpen(false);
+                        setStatsUser(null);
+                        setStatsData(null);
+                    }
+                    if (historyUser?.id === emp.id) {
+                        setHistoryOpen(false);
+                        setHistoryUser(null);
+                    }
 
-            if (employees.length === 1 && page > 1) {
-                setPage((current) => Math.max(1, current - 1));
-            } else {
-                await fetchAll();
-            }
-        } catch (error) {
-            const err = error as { message?: string };
-            alert(err.message || t('deleteFailed'));
-        } finally {
-            setDeletingId(null);
-        }
+                    if (employees.length === 1 && page > 1) {
+                        setPage((current) => Math.max(1, current - 1));
+                    } else {
+                        await fetchAll();
+                    }
+                } catch (error) {
+                    const err = error as { message?: string };
+                    showNotice(err.message || t('deleteFailed'), 'error');
+                } finally {
+                    setDeletingId(null);
+                }
+            },
+            locale === 'ar' ? 'تأكيد حذف الموظف' : 'Confirm delete',
+            t('delete'),
+        );
     };
 
     return (
         <main className="px-4 pb-12 sm:px-6 space-y-6">
+            {notice && (
+                <div className={`fixed z-50 top-4 ${locale === 'ar' ? 'left-4' : 'right-4'} max-w-md`}>
+                    <div
+                        className={`rounded-xl px-4 py-3 shadow-lg text-sm border ${
+                            notice.type === 'success'
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                                : notice.type === 'error'
+                                    ? 'bg-rose-50 border-rose-200 text-rose-900'
+                                    : 'bg-white border-ink/10 text-ink'
+                        }`}
+                    >
+                        <div className="flex items-start gap-3">
+                            <span className="mt-0.5 text-lg">{notice.type === 'success' ? '✅' : notice.type === 'error' ? '⚠️' : 'ℹ️'}</span>
+                            <p className="flex-1 whitespace-pre-line">{notice.message}</p>
+                            <button className="text-ink/50 hover:text-ink" onClick={() => setNotice(null)}>×</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {dialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                    <div className="card w-full max-w-lg p-6 space-y-4">
+                        {dialog.title && <h3 className="text-lg font-semibold">{dialog.title}</h3>}
+                        <p className="text-sm text-ink/80 whitespace-pre-line">{dialog.message}</p>
+                        <div className="flex justify-end gap-2">
+                            <button className="btn-outline" onClick={() => setDialog(null)}>{dialog.cancelLabel || cancelLabel}</button>
+                            <button
+                                className="btn-danger"
+                                onClick={() => {
+                                    dialog.onConfirm();
+                                    setDialog(null);
+                                }}
+                            >
+                                {dialog.confirmLabel || (locale === 'ar' ? 'تأكيد' : 'Confirm')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {canAdmin && (
                 <section className="card p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
