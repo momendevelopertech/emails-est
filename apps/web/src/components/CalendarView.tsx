@@ -112,6 +112,12 @@ export default function CalendarView({
         </span>
     ), []);
 
+    const DateHeader = useCallback(({ date }: { date: Date }) => (
+        <span className="calendar-date-number" data-day-number={format(date, 'd')}>
+            {format(date, 'd')}
+        </span>
+    ), []);
+
     const clearHoveredCell = useCallback(() => {
         if (!hoveredCellRef.current) return;
         hoveredCellRef.current.classList.remove('rbc-cell-hover');
