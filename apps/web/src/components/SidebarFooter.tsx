@@ -106,7 +106,14 @@ export default function SidebarFooter({
                 </button>
                 <PwaInstallButton enabled={pwaEnabled} collapsed={collapsed} />
             </div>
-            <button className={`user-row${collapsed ? ' is-collapsed' : ''}`} type="button" onClick={() => setMenuOpen((v) => !v)}>
+            <button
+                className={`user-row${collapsed ? ' is-collapsed' : ''}`}
+                type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-expanded={menuOpen}
+                aria-controls="sidebar-user-menu"
+                title={collapsed ? (locale === 'ar' ? 'حسابي' : 'My account') : undefined}
+            >
                 <div className="uav">{user?.fullName?.slice(0, 1) || 'U'}</div>
                 {!collapsed && (
                     <div>
@@ -116,7 +123,7 @@ export default function SidebarFooter({
                 )}
             </button>
             {menuOpen && (
-                <div className="sidebar-menu">
+                <div className="sidebar-menu" id="sidebar-user-menu" role="menu">
                     <button className="sidebar-menu-item" type="button" onClick={requestPasswordReset}>
                         <KeyRound size={14} />
                         {locale === 'ar' ? 'تغيير كلمة المرور' : 'Change Password'}
