@@ -6,7 +6,14 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiTags } from '@nestjs/swagger';
-import { CreateUserDto, UpdateLeaveBalanceDto, UpdateUserDto, UserHistoryQueryDto, UsersQueryDto } from './dto/users.dto';
+import {
+    CreateUserDto,
+    UpdateLeaveBalanceDto,
+    UpdateUserDto,
+    UpdateUserPasswordDto,
+    UserHistoryQueryDto,
+    UsersQueryDto,
+} from './dto/users.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -68,6 +75,13 @@ export class UsersController {
     @Roles('SUPER_ADMIN', 'HR_ADMIN')
     update(@Param('id') id: string, @Body() body: UpdateUserDto, @Req() req: any) {
         return this.usersService.update(id, body, req.user.id);
+    }
+
+    @Patch(':id/password')
+    @UseGuards(RolesGuard)
+    @Roles('SUPER_ADMIN', 'HR_ADMIN')
+    updatePassword(@Param('id') id: string, @Body() body: UpdateUserPasswordDto, @Req() req: any) {
+        return this.usersService.updatePassword(id, body, req.user.id, req.user.role);
     }
 
     @Patch(':id/leave-balance')

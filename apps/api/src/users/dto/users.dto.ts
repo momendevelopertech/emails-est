@@ -80,6 +80,10 @@ export class UpdateUserDto {
     fullNameAr?: string;
 
     @IsOptional()
+    @IsEmail()
+    email?: string;
+
+    @IsOptional()
     @IsString()
     phone?: string;
 
@@ -123,6 +127,12 @@ export class UpdateUserDto {
     @IsOptional()
     @IsString()
     profileImage?: string;
+}
+
+export class UpdateUserPasswordDto {
+    @IsString()
+    @MinLength(8)
+    newPassword: string;
 }
 
 export class UpdateLeaveBalanceDto {

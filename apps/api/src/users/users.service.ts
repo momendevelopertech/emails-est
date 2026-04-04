@@ -14,7 +14,7 @@ import { isEgyptianMobilePhone, normalizeEgyptMobilePhone } from '../shared/egyp
 import { matchesEmployeeSearch, normalizeDigits, normalizeSearchText } from '../shared/search-normalization';
 import * as bcrypt from 'bcrypt';
 import { getCycleRange } from '../shared/cycle';
-import { CreateUserDto, UpdateUserDto } from './dto/users.dto';
+import { CreateUserDto, UpdateUserDto, UpdateUserPasswordDto } from './dto/users.dto';
 
 type SelfRegisteredUserCreationResult = {
     user: any;
@@ -622,9 +622,18 @@ export class UsersService {
 
     async update(id: string, data: UpdateUserDto, updatedById?: string) {
         const normalizedPhone = data.phone !== undefined ? this.validatePhone(data.phone) : undefined;
+        const normalizedEmail = data.email !== undefined ? data.email.trim().toLowerCase() : undefined;
+        const normalizedFullName = data.fullName !== undefined ? this.normalizeText(data.fullName) : undefined;
+        const normalizedFullNameAr = data.fullNameAr !== undefined ? this.normalizeText(data.fullNameAr) : undefined;
+        const normalizedJobTitleAr = data.jobTitleAr !== undefined ? this.normalizeText(data.jobTitleAr) : undefined;
+        const normalizedFingerprintId = data.fingerprintId !== undefined ? this.normalizeText(data.fingerprintId) : undefined;
 
         const existing = await this.prisma.user.findUnique({ where: { id } });
         if (!existing) throw new NotFoundException('Employee not found');
+
+        if (normalizedEmail !== undefined && !normalizedEmail) {
+            throw new BadRequestException('Email is required');
+        }
 
         if (normalizedPhone && normalizedPhone !== existing.phone) {
             const duplicatePhone = await this.prisma.user.findFirst({
@@ -639,9 +648,27 @@ export class UsersService {
             }
         }
 
+        if (normalizedEmail && normalizedEmail !== existing.email) {
+            const duplicateEmail = await this.prisma.user.findFirst({
+                where: {
+                    email: normalizedEmail,
+                    id: { not: id },
+                },
+                select: { id: true },
+            });
+            if (duplicateEmail) {
+                throw new ConflictException('Employee with this email already exists');
+            }
+        }
+
         const finalJobTitle = data.jobTitle !== undefined ? data.jobTitle?.trim() : existing.jobTitle;
         if (!finalJobTitle) {
             throw new BadRequestException('Job title is required');
+        }
+
+        const finalFullName = normalizedFullName !== undefined ? normalizedFullName : existing.fullName;
+        if (!finalFullName) {
+            throw new BadRequestException('Full name is required');
         }
 
         const role = data.role || existing.role;
@@ -693,13 +720,14 @@ export class UsersService {
         }
 
         const updateData: any = {
-            ...(data.fullName && { fullName: data.fullName }),
-            ...(data.fullNameAr && { fullNameAr: data.fullNameAr }),
+            ...(normalizedFullName !== undefined && { fullName: finalFullName }),
+            ...(normalizedFullNameAr !== undefined && { fullNameAr: normalizedFullNameAr || null }),
+            ...(normalizedEmail !== undefined && { email: normalizedEmail }),
             ...(data.phone !== undefined && { phone: normalizedPhone }),
             ...(data.role && { role: data.role }),
             ...(data.jobTitle !== undefined && { jobTitle: finalJobTitle }),
-            ...(data.jobTitleAr && { jobTitleAr: data.jobTitleAr }),
-            ...(data.fingerprintId && { fingerprintId: data.fingerprintId }),
+            ...(normalizedJobTitleAr !== undefined && { jobTitleAr: normalizedJobTitleAr || null }),
+            ...(normalizedFingerprintId !== undefined && { fingerprintId: normalizedFingerprintId || existing.employeeNumber }),
             ...(data.isActive !== undefined && { isActive: data.isActive }),
             ...(data.profileImage && { profileImage: data.profileImage }),
         };
@@ -729,6 +757,65 @@ export class UsersService {
         await this.clearUserCaches();
 
         return user;
+    }
+
+    async updatePassword(targetUserId: string, data: UpdateUserPasswordDto, adminId: string, adminRole: string) {
+        const target = await this.prisma.user.findUnique({
+            where: { id: targetUserId },
+            select: {
+                id: true,
+                role: true,
+                employeeNumber: true,
+                fullName: true,
+            },
+        });
+        if (!target) throw new NotFoundException('Employee not found');
+
+        if (target.id === adminId) {
+            throw new BadRequestException('Use the change password endpoint to update your own password');
+        }
+
+        if (adminRole === 'HR_ADMIN' && (target.role === 'HR_ADMIN' || target.role === 'SUPER_ADMIN')) {
+            throw new ForbiddenException('HR admins can only change passwords for non-admin accounts');
+        }
+
+        const passwordHash = await bcrypt.hash(data.newPassword, 12);
+
+        await this.prisma.user.update({
+            where: { id: targetUserId },
+            data: {
+                passwordHash,
+                mustChangePass: true,
+                failedLoginCount: 0,
+                lockedUntil: null,
+            },
+        });
+
+        await this.prisma.refreshToken.updateMany({
+            where: {
+                userId: targetUserId,
+                isRevoked: false,
+            },
+            data: { isRevoked: true },
+        });
+
+        await this.auditService.log({
+            userId: adminId,
+            action: 'PASSWORD_CHANGED',
+            entity: 'User',
+            entityId: targetUserId,
+            details: {
+                changedByAdmin: true,
+                targetEmployeeNumber: target.employeeNumber,
+                targetFullName: target.fullName,
+                targetRole: target.role,
+                mustChangePass: true,
+            },
+        });
+
+        await this.clearUserCaches();
+
+        return { message: 'Employee password updated successfully' };
     }
 
     async deletePermanently(targetUserId: string, adminId: string, adminRole: string) {
