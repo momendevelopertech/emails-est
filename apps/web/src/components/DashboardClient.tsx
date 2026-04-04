@@ -283,7 +283,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     }, [leaves, permissions, t]);
 
     const quickGlance = useMemo(() => {
-        const items = [
+        const items: Array<{ id: string; label: string; value: string; color: 'teal' | 'violet' | 'amber' }> = [
             {
                 id: 'leaveBalance',
                 label: t('leaveBalance'),
