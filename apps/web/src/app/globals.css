@@ -203,6 +203,10 @@ body {
     inset-inline-start: calc(100% + 8px);
     inset-inline-end: auto;
 }
+.sidebar-menu.is-collapsed.is-ltr {
+    inset-inline-start: calc(100% + 8px);
+    inset-inline-end: auto;
+}
 .tb-icon { width: 32px; height: 32px; border: 1px solid var(--border); border-radius: var(--r-sm); display: inline-flex; align-items: center; justify-content: center; }
 
 .font-base {
