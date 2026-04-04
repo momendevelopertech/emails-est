@@ -1,17 +1,35 @@
+import { BadRequestException } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 
 describe('PermissionsService', () => {
     const prisma = {
+        $transaction: jest.fn(),
         permissionCycle: {
             findUnique: jest.fn(),
             create: jest.fn(),
+            update: jest.fn(),
         },
         permissionRequest: {
             aggregate: jest.fn(),
+            findUnique: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            delete: jest.fn(),
+        },
+        lateness: {
+            updateMany: jest.fn(),
+        },
+        user: {
+            findUnique: jest.fn(),
+            findMany: jest.fn(),
         },
     };
     const notificationsService = {
         emitRealtimeToUsers: jest.fn(),
+        sendRequestReceipt: jest.fn(),
+        notifyPermissionAction: jest.fn(),
+        createInApp: jest.fn(),
+        createInAppBulk: jest.fn(),
     };
     const auditService = {
         log: jest.fn(),
@@ -21,6 +39,35 @@ describe('PermissionsService', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        prisma.$transaction.mockImplementation(async (callback: any) => callback({
+            lateness: prisma.lateness,
+            permissionRequest: prisma.permissionRequest,
+        }));
+        prisma.permissionCycle.create.mockResolvedValue({
+            id: 'cycle-created',
+            userId: 'user-1',
+            cycleStart: new Date('2026-04-11T00:00:00.000Z'),
+            cycleEnd: new Date('2026-05-10T00:00:00.000Z'),
+            totalHours: 4,
+            usedHours: 0,
+            remainingHours: 4,
+        });
+        prisma.permissionCycle.update.mockResolvedValue({});
+        prisma.permissionRequest.create.mockResolvedValue({});
+        prisma.permissionRequest.update.mockResolvedValue({});
+        prisma.permissionRequest.delete.mockResolvedValue({});
+        prisma.lateness.updateMany.mockResolvedValue({ count: 0 });
+        prisma.user.findMany.mockResolvedValue([]);
+        notificationsService.emitRealtimeToUsers.mockResolvedValue(undefined);
+        notificationsService.sendRequestReceipt.mockResolvedValue({
+            emailDelivery: null,
+            whatsAppDelivery: null,
+        });
+        notificationsService.notifyPermissionAction.mockResolvedValue(undefined);
+        notificationsService.createInApp.mockResolvedValue(undefined);
+        notificationsService.createInAppBulk.mockResolvedValue(undefined);
+        auditService.log.mockResolvedValue(undefined);
+
         service = new PermissionsService(prisma as any, notificationsService as any, auditService as any);
     });
 
@@ -60,5 +107,90 @@ describe('PermissionsService', () => {
                 status: 'HR_APPROVED',
             }),
         }));
+    });
+
+    it('blocks creating another permission when cycle hours are exhausted', async () => {
+        prisma.user.findUnique.mockResolvedValue({
+            id: 'user-1',
+            workflowMode: 'APPROVAL_WORKFLOW',
+        });
+        prisma.permissionCycle.findUnique.mockResolvedValue({
+            id: 'cycle-1',
+            userId: 'user-1',
+            cycleStart: new Date('2026-04-11T00:00:00.000Z'),
+            cycleEnd: new Date('2026-05-10T00:00:00.000Z'),
+            totalHours: 4,
+            usedHours: 4,
+            remainingHours: 0,
+        });
+        prisma.permissionRequest.aggregate.mockResolvedValue({ _sum: { hoursUsed: 4 } });
+
+        await expect(service.createRequest('user-1', {
+            permissionType: 'LATE_ARRIVAL',
+            requestDate: '2026-04-14',
+            permissionScope: 'ARRIVAL',
+            durationMinutes: 60,
+            reason: '',
+        } as any)).rejects.toBeInstanceOf(BadRequestException);
+
+        expect(prisma.permissionRequest.create).not.toHaveBeenCalled();
+    });
+
+    it('allows a sandbox employee to delete their own permission and re-syncs cycle state', async () => {
+        prisma.permissionRequest.findUnique.mockResolvedValue({
+            id: 'perm-1',
+            userId: 'user-1',
+            cycleId: 'cycle-1',
+            status: 'HR_APPROVED',
+            hoursUsed: 2,
+            requestDate: new Date('2026-04-14T00:00:00.000Z'),
+            user: {
+                governorate: null,
+                departmentId: null,
+            },
+        });
+        prisma.user.findUnique.mockResolvedValue({
+            workflowMode: 'SANDBOX',
+        });
+        prisma.permissionCycle.findUnique.mockResolvedValue({
+            id: 'cycle-1',
+            userId: 'user-1',
+            cycleStart: new Date('2026-04-11T00:00:00.000Z'),
+            cycleEnd: new Date('2026-05-10T00:00:00.000Z'),
+            totalHours: 4,
+            usedHours: 2,
+            remainingHours: 2,
+        });
+        prisma.permissionRequest.aggregate
+            .mockResolvedValueOnce({ _sum: { hoursUsed: 0 } })
+            .mockResolvedValueOnce({ _sum: { hoursUsed: 0 } });
+
+        const result = await service.deleteRequest('perm-1', 'user-1', 'EMPLOYEE');
+
+        expect(prisma.$transaction).toHaveBeenCalled();
+        expect(prisma.lateness.updateMany).toHaveBeenCalledWith({
+            where: { permissionId: 'perm-1' },
+            data: {
+                convertedToPermission: false,
+                permissionId: null,
+            },
+        });
+        expect(prisma.permissionRequest.delete).toHaveBeenCalledWith({ where: { id: 'perm-1' } });
+        expect(prisma.permissionCycle.update).toHaveBeenCalledWith({
+            where: { id: 'cycle-1' },
+            data: {
+                usedHours: 0,
+                remainingHours: 4,
+            },
+        });
+        expect(notificationsService.emitRealtimeToUsers).toHaveBeenCalledWith(
+            ['user-1'],
+            expect.objectContaining({
+                type: 'REQUEST_UPDATED',
+                requestType: 'permission',
+                requestId: 'perm-1',
+            }),
+        );
+        expect(result).toEqual({ message: 'Deleted' });
     });
 });

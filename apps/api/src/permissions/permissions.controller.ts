@@ -66,7 +66,7 @@ export class PermissionsController {
 
     @Delete(':id')
     @UseGuards(RolesGuard)
-    @Roles('SUPER_ADMIN', 'HR_ADMIN')
+    @Roles('SUPER_ADMIN', 'HR_ADMIN', 'EMPLOYEE')
     delete(@Param('id') id: string, @Req() req: any) {
         return this.permissionsService.deleteRequest(id, req.user.id, req.user.role);
     }

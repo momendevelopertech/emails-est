@@ -76,6 +76,19 @@ export class LeavesService {
         return targetUserId;
     }
 
+    private async canDeleteOwnSandboxRequest(actorId: string, role: string, requestUserId: string) {
+        if (role !== 'EMPLOYEE' || actorId !== requestUserId) {
+            return false;
+        }
+
+        const actor = await this.prisma.user.findUnique({
+            where: { id: actorId },
+            select: { workflowMode: true },
+        });
+
+        return actor?.workflowMode === 'SANDBOX';
+    }
+
     private async ensureYearBalances(userId: string, year: number) {
         const defaults: Array<{ leaveType: any; days: number }> = [
             { leaveType: 'ANNUAL', days: 21 },
@@ -405,6 +418,7 @@ export class LeavesService {
             include: {
                 user: {
                     select: {
+                        id: true,
                         fullName: true,
                         fullNameAr: true,
                         employeeNumber: true,
@@ -574,7 +588,17 @@ export class LeavesService {
     }
 
     async cancelRequest(id: string, userId: string, role: string) {
-        const request = await this.prisma.leaveRequest.findUnique({ where: { id } });
+        const request = await this.prisma.leaveRequest.findUnique({
+            where: { id },
+            include: {
+                user: {
+                    select: {
+                        governorate: true,
+                        departmentId: true,
+                    },
+                },
+            },
+        });
         if (!request) throw new NotFoundException('Not found');
         if (request.userId !== userId) {
             throw new ForbiddenException('Only request owner can cancel');
@@ -585,6 +609,7 @@ export class LeavesService {
 
         await this.prisma.leaveRequest.update({ where: { id }, data: { status: 'CANCELLED' } });
         await this.auditService.log({ userId, action: 'LEAVE_CANCELLED', entity: 'LeaveRequest', entityId: id });
+        await this.emitWorkflowUpdate(request, userId);
         return { message: 'Cancelled' };
     }
 
@@ -638,14 +663,52 @@ export class LeavesService {
     }
 
     async deleteRequest(id: string, actorId: string, role: string) {
-        if (!(role === 'HR_ADMIN' || role === 'SUPER_ADMIN')) throw new ForbiddenException();
-        const request = await this.prisma.leaveRequest.findUnique({ where: { id }, select: { status: true } });
+        const request = await this.prisma.leaveRequest.findUnique({
+            where: { id },
+            include: {
+                user: {
+                    select: {
+                        governorate: true,
+                        departmentId: true,
+                    },
+                },
+            },
+        });
         if (!request) throw new NotFoundException('Not found');
-        if (['MANAGER_APPROVED', 'HR_APPROVED'].includes(request.status)) {
+
+        const isAdmin = role === 'HR_ADMIN' || role === 'SUPER_ADMIN';
+        const canDeleteOwnSandboxRequest = await this.canDeleteOwnSandboxRequest(actorId, role, request.userId);
+
+        if (!isAdmin && !canDeleteOwnSandboxRequest) {
+            throw new ForbiddenException();
+        }
+
+        if (isAdmin && ['MANAGER_APPROVED', 'HR_APPROVED'].includes(request.status)) {
             throw new BadRequestException('Cannot delete an approved request');
         }
-        await this.prisma.leaveRequest.delete({ where: { id } });
+
+        await this.prisma.$transaction(async (tx) => {
+            if (canDeleteOwnSandboxRequest && request.status === 'HR_APPROVED' && request.leaveType !== 'ABSENCE_WITH_PERMISSION') {
+                await tx.leaveBalance.update({
+                    where: {
+                        userId_year_leaveType: {
+                            userId: request.userId,
+                            year: new Date(request.startDate).getFullYear(),
+                            leaveType: request.leaveType,
+                        },
+                    },
+                    data: {
+                        usedDays: { decrement: request.totalDays },
+                        remainingDays: { increment: request.totalDays },
+                    },
+                });
+            }
+
+            await tx.leaveRequest.delete({ where: { id } });
+        });
+
         await this.auditService.log({ userId: actorId, action: 'REQUEST_DELETED', entity: 'LeaveRequest', entityId: id });
+        await this.emitWorkflowUpdate(request, actorId);
         return { message: 'Deleted' };
     }
 

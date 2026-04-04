@@ -17,6 +17,7 @@ import AsyncActionButton from './AsyncActionButton';
 
 type Department = { id: string; name: string; nameAr?: string | null };
 type RequestUser = {
+    id: string;
     fullName: string;
     fullNameAr?: string | null;
     employeeNumber: string;
@@ -50,6 +51,7 @@ type PermissionRequest = {
 
 type RequestRow = {
     id: string;
+    ownerId: string;
     requestType: 'leave' | 'permission';
     leaveType?: string;
     subtype: string;
@@ -114,6 +116,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
     const isSecretary = role === 'BRANCH_SECRETARY';
     const isManager = role === 'MANAGER';
     const isHr = role === 'HR_ADMIN' || role === 'SUPER_ADMIN';
+    const isSandboxEmployee = role === 'EMPLOYEE' && user?.workflowMode === 'SANDBOX';
     const canManage = isHr || isManager || isSecretary;
     const canAdmin = isHr;
     const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
@@ -230,41 +233,6 @@ export default function RequestsClient({ locale }: { locale: string }) {
         fetchDepartments();
     }, [canAdmin, fetchDepartments, ready]);
 
-    const notificationHandlers = useMemo(
-        () => ({
-            notification: () => {
-                if (Date.now() < suppressRealtimeRefreshUntilRef.current) return;
-                refreshAll(true);
-            },
-        }),
-        [refreshAll],
-    );
-
-    usePusherChannel(user ? `user-${user.id}` : null, notificationHandlers);
-
-    useEffect(() => {
-        if (!ready) return;
-        const visibleInterval = canManage ? 15000 : 30000;
-        const hiddenInterval = 60000;
-        let timer: ReturnType<typeof setTimeout> | null = null;
-
-        const tick = () => {
-            const isVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
-            if (isVisible) {
-                refreshAll(true);
-            }
-            timer = setTimeout(tick, isVisible ? visibleInterval : hiddenInterval);
-        };
-
-        timer = setTimeout(tick, visibleInterval);
-        const onFocus = () => refreshAll(true);
-        window.addEventListener('focus', onFocus);
-        return () => {
-            if (timer) clearTimeout(timer);
-            window.removeEventListener('focus', onFocus);
-        };
-    }, [canManage, ready, refreshAll]);
-
     const formatDateOnly = (value: Date) => {
         const year = value.getFullYear();
         const month = String(value.getMonth() + 1).padStart(2, '0');
@@ -331,26 +299,75 @@ export default function RequestsClient({ locale }: { locale: string }) {
         fetchLateness();
     }, [fetchLateness, ready]);
 
+    const refreshRequestsAndLateness = useCallback(
+        async (forceLateness = true) => {
+            await Promise.all([
+                refreshAll(true),
+                fetchLateness(forceLateness),
+            ]);
+        },
+        [fetchLateness, refreshAll],
+    );
+
+    const notificationHandlers = useMemo(
+        () => ({
+            notification: () => {
+                if (Date.now() < suppressRealtimeRefreshUntilRef.current) return;
+                void refreshRequestsAndLateness(true);
+            },
+        }),
+        [refreshRequestsAndLateness],
+    );
+
+    usePusherChannel(user ? `user-${user.id}` : null, notificationHandlers);
+
+    useEffect(() => {
+        if (!ready) return;
+        const visibleInterval = canManage ? 15000 : 30000;
+        const hiddenInterval = 60000;
+        let timer: ReturnType<typeof setTimeout> | null = null;
+
+        const tick = () => {
+            const isVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+            if (isVisible) {
+                void refreshAll(true);
+                void fetchLateness();
+            }
+            timer = setTimeout(tick, isVisible ? visibleInterval : hiddenInterval);
+        };
+
+        timer = setTimeout(tick, visibleInterval);
+        const onFocus = () => {
+            void refreshAll(true);
+            void fetchLateness();
+        };
+        window.addEventListener('focus', onFocus);
+        return () => {
+            if (timer) clearTimeout(timer);
+            window.removeEventListener('focus', onFocus);
+        };
+    }, [canManage, fetchLateness, ready, refreshAll]);
+
     const convertLateness = async (id: string) => {
         if (latenessBusy[id]) return;
         setLatenessBusyFlag(id, true);
         try {
             await api.post(`/lateness/${id}/convert`);
-            await fetchLateness(true);
+            await refreshRequestsAndLateness(true);
         } finally {
             setLatenessBusyFlag(id, false);
         }
     };
 
-    const approveLeave = (id: string) => api.patch(`/leaves/${id}/approve`).then(() => refreshAll(true));
-    const rejectLeave = (id: string) => api.patch(`/leaves/${id}/reject`).then(() => refreshAll(true));
-    const cancelLeave = (id: string) => api.patch(`/leaves/${id}/cancel`).then(() => refreshAll(true));
-    const deleteLeave = (id: string) => api.delete(`/leaves/${id}`).then(() => refreshAll(true));
+    const approveLeave = (id: string) => api.patch(`/leaves/${id}/approve`).then(() => refreshRequestsAndLateness(true));
+    const rejectLeave = (id: string) => api.patch(`/leaves/${id}/reject`).then(() => refreshRequestsAndLateness(true));
+    const cancelLeave = (id: string) => api.patch(`/leaves/${id}/cancel`).then(() => refreshRequestsAndLateness(true));
+    const deleteLeave = (id: string) => api.delete(`/leaves/${id}`).then(() => refreshRequestsAndLateness(true));
 
-    const approvePermission = (id: string) => api.patch(`/permissions/${id}/approve`).then(() => refreshAll(true));
-    const rejectPermission = (id: string) => api.patch(`/permissions/${id}/reject`).then(() => refreshAll(true));
-    const cancelPermission = (id: string) => api.patch(`/permissions/${id}/cancel`).then(() => refreshAll(true));
-    const deletePermission = (id: string) => api.delete(`/permissions/${id}`).then(() => refreshAll(true));
+    const approvePermission = (id: string) => api.patch(`/permissions/${id}/approve`).then(() => refreshRequestsAndLateness(true));
+    const rejectPermission = (id: string) => api.patch(`/permissions/${id}/reject`).then(() => refreshRequestsAndLateness(true));
+    const cancelPermission = (id: string) => api.patch(`/permissions/${id}/cancel`).then(() => refreshRequestsAndLateness(true));
+    const deletePermission = (id: string) => api.delete(`/permissions/${id}`).then(() => refreshRequestsAndLateness(true));
 
     const leaveRows = useMemo<RequestRow[]>(
         () =>
@@ -364,6 +381,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 const createdAtTs = new Date(leave.createdAt).getTime();
                 return {
                     id: leave.id,
+                    ownerId: leave.user.id,
                     requestType: 'leave',
                     leaveType: leave.leaveType,
                     subtype,
@@ -399,6 +417,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
                 const createdAtTs = new Date(perm.createdAt).getTime();
                 return {
                     id: perm.id,
+                    ownerId: perm.user.id,
                     requestType: 'permission',
                     subtype,
                     employeeName: primaryName,
@@ -636,6 +655,17 @@ export default function RequestsClient({ locale }: { locale: string }) {
         setPendingDelete(row);
     };
 
+    const canDeleteRow = useCallback(
+        (row: RequestRow) => {
+            if (canAdmin && ['PENDING', 'REJECTED', 'CANCELLED'].includes(row.status)) {
+                return true;
+            }
+
+            return Boolean(isSandboxEmployee && row.ownerId === user?.id);
+        },
+        [canAdmin, isSandboxEmployee, user?.id],
+    );
+
     const confirmDelete = async () => {
         if (!pendingDelete || deleteBusy) return;
         const key = getRowKey(pendingDelete);
@@ -867,7 +897,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                                         )}
                                                     </>
                                                 )}
-                                                {canAdmin && ['PENDING', 'REJECTED', 'CANCELLED'].includes(row.status) && (
+                                                {canDeleteRow(row) && (
                                                     <AsyncActionButton className="btn-outline" onClick={() => onDelete(row)} externalPending={rowBusy}>
                                                         {t('delete')}
                                                     </AsyncActionButton>
@@ -1066,7 +1096,7 @@ export default function RequestsClient({ locale }: { locale: string }) {
                                                                 )}
                                                             </>
                                                         )}
-                                                        {canAdmin && ['PENDING', 'REJECTED', 'CANCELLED'].includes(row.status) && (
+                                                        {canDeleteRow(row) && (
                                                             <AsyncActionButton className="btn-outline" onClick={() => onDelete(row)} externalPending={rowBusy}>
                                                                 {t('delete')}
                                                             </AsyncActionButton>

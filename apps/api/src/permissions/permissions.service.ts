@@ -76,6 +76,19 @@ export class PermissionsService {
         return targetUserId;
     }
 
+    private async canDeleteOwnSandboxRequest(actorId: string, role: string, requestUserId: string) {
+        if (role !== 'EMPLOYEE' || actorId !== requestUserId) {
+            return false;
+        }
+
+        const actor = await this.prisma.user.findUnique({
+            where: { id: actorId },
+            select: { workflowMode: true },
+        });
+
+        return actor?.workflowMode === 'SANDBOX';
+    }
+
     // Permission cycle: day 11 to day 10 next month.
     private getCycleForDate(date: Date): { start: Date; end: Date } {
         return getCycleRange(date, { endOfDay: false });
@@ -181,6 +194,23 @@ export class PermissionsService {
         };
     }
 
+    private async syncCycleUsage(cycleId: string) {
+        const cycle = await this.prisma.permissionCycle.findUnique({ where: { id: cycleId } });
+        if (!cycle) return null;
+
+        const snapshot = await this.buildCycleSnapshot(cycle);
+
+        await this.prisma.permissionCycle.update({
+            where: { id: cycle.id },
+            data: {
+                usedHours: snapshot.usedHours,
+                remainingHours: snapshot.remainingHours,
+            },
+        });
+
+        return snapshot;
+    }
+
     async getOrCreateCycle(userId: string, date: Date = new Date()) {
         const { start, end } = this.getCycleForDate(date);
 
@@ -273,15 +303,7 @@ export class PermissionsService {
             include: { user: { include: { department: true } } },
         });
 
-        if (isSandbox) {
-            await this.prisma.permissionCycle.update({
-                where: { id: cycle.id },
-                data: {
-                    usedHours: { increment: hoursUsed },
-                    remainingHours: { decrement: hoursUsed },
-                },
-            });
-        }
+        await this.syncCycleUsage(cycle.id);
 
         const actorId = actor?.id || targetUserId;
         const permissionLabels: Record<string, { ar: string; en: string }> = {
@@ -421,6 +443,7 @@ export class PermissionsService {
             include: {
                 user: {
                     select: {
+                        id: true,
                         fullName: true,
                         fullNameAr: true,
                         employeeNumber: true,
@@ -512,18 +535,12 @@ export class PermissionsService {
 
                 updateData.approvedByHrId = actorId;
                 updateData.approvedByHrAt = new Date();
-                await this.prisma.permissionCycle.update({
-                    where: { id: request.cycleId },
-                    data: {
-                        usedHours: approvedHours + request.hoursUsed,
-                        remainingHours: Math.max(0, cycle.totalHours - approvedHours - request.hoursUsed),
-                    },
-                });
             }
         }
 
         updateData.status = newStatus;
         const updated = await this.prisma.permissionRequest.update({ where: { id }, data: updateData });
+        await this.syncCycleUsage(request.cycleId);
 
         await this.auditService.log({
             userId: actorId,
@@ -645,30 +662,76 @@ export class PermissionsService {
                 reason: data.reason ?? request.reason,
             },
         });
+        if (request.cycleId !== cycle.id) {
+            await this.syncCycleUsage(request.cycleId);
+        }
+        await this.syncCycleUsage(cycle.id);
 
         await this.auditService.log({ userId: actorId, action: 'REQUEST_EDITED', entity: 'PermissionRequest', entityId: id });
         return updated;
     }
 
     async cancelRequest(id: string, actorId: string, role: string) {
-        const request = await this.prisma.permissionRequest.findUnique({ where: { id } });
+        const request = await this.prisma.permissionRequest.findUnique({
+            where: { id },
+            include: {
+                user: {
+                    select: {
+                        governorate: true,
+                        departmentId: true,
+                    },
+                },
+            },
+        });
         if (!request) throw new NotFoundException('Not found');
         if (request.userId !== actorId) throw new ForbiddenException('Only request owner can cancel');
         if (request.status !== 'PENDING') throw new BadRequestException('Can only cancel pending requests');
         await this.prisma.permissionRequest.update({ where: { id }, data: { status: 'CANCELLED' } });
+        await this.syncCycleUsage(request.cycleId);
         await this.auditService.log({ userId: actorId, action: 'PERMISSION_CANCELLED', entity: 'PermissionRequest', entityId: id });
+        await this.emitWorkflowUpdate(request, actorId);
         return { message: 'Cancelled' };
     }
 
     async deleteRequest(id: string, actorId: string, role: string) {
-        if (!(role === 'HR_ADMIN' || role === 'SUPER_ADMIN')) throw new ForbiddenException();
-        const request = await this.prisma.permissionRequest.findUnique({ where: { id }, select: { status: true } });
+        const request = await this.prisma.permissionRequest.findUnique({
+            where: { id },
+            include: {
+                user: {
+                    select: {
+                        governorate: true,
+                        departmentId: true,
+                    },
+                },
+            },
+        });
         if (!request) throw new NotFoundException('Not found');
-        if (['MANAGER_APPROVED', 'HR_APPROVED'].includes(request.status)) {
+
+        const isAdmin = role === 'HR_ADMIN' || role === 'SUPER_ADMIN';
+        const canDeleteOwnSandboxRequest = await this.canDeleteOwnSandboxRequest(actorId, role, request.userId);
+
+        if (!isAdmin && !canDeleteOwnSandboxRequest) {
+            throw new ForbiddenException();
+        }
+
+        if (isAdmin && ['MANAGER_APPROVED', 'HR_APPROVED'].includes(request.status)) {
             throw new BadRequestException('Cannot delete an approved request');
         }
-        await this.prisma.permissionRequest.delete({ where: { id } });
+
+        await this.prisma.$transaction(async (tx) => {
+            await tx.lateness.updateMany({
+                where: { permissionId: id },
+                data: {
+                    convertedToPermission: false,
+                    permissionId: null,
+                },
+            });
+            await tx.permissionRequest.delete({ where: { id } });
+        });
+
+        await this.syncCycleUsage(request.cycleId);
         await this.auditService.log({ userId: actorId, action: 'REQUEST_DELETED', entity: 'PermissionRequest', entityId: id });
+        await this.emitWorkflowUpdate(request, actorId);
         return { message: 'Deleted' };
     }
 
