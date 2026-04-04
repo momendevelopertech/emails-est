@@ -62,6 +62,8 @@ export default function CalendarView({
     schedule?: WorkSchedule | null;
 }) {
     const t = useTranslations('calendar');
+    const tDashboard = useTranslations('dashboard');
+    const tRequestModal = useTranslations('requestModal');
     const localizer = useMemo(
         () =>
             dateFnsLocalizer({
@@ -77,6 +79,7 @@ export default function CalendarView({
     const [view, setView] = useState<View>('month');
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
     const [isMobile, setIsMobile] = useState(false);
+    const [mobileSelectedDate, setMobileSelectedDate] = useState<Date>(dateOnly(new Date()));
     const [guideOpen, setGuideOpen] = useState(false);
     const [currentGuideStep, setCurrentGuideStep] = useState(0);
     const calendarLocale = locale === 'ar' ? arSA : enUS;
@@ -196,7 +199,7 @@ export default function CalendarView({
     }, [schedule]);
 
     useEffect(() => {
-        const check = () => setIsMobile(window.innerWidth < 640);
+        const check = () => setIsMobile(window.innerWidth <= 768);
         check();
         window.addEventListener('resize', check);
         return () => window.removeEventListener('resize', check);
@@ -228,6 +231,27 @@ export default function CalendarView({
         if (!match) return null;
         return format(dateOnly(match.start), 'yyyy-MM-dd');
     }, [currentDate, events]);
+
+    const mobileStripDates = useMemo(() => {
+        const weekStart = startOfWeek(currentDate, { weekStartsOn: 6 });
+        return Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+    }, [currentDate]);
+
+    const mobileEvents = useMemo(() => {
+        if (!(isMobile && (view === 'week' || view === 'day'))) return [];
+        return events.filter((event) => isSameDay(event.start, mobileSelectedDate));
+    }, [events, isMobile, mobileSelectedDate, view]);
+
+    const mobileStats = useMemo(() => {
+        const lateCount = mobileEvents.filter((event) => event.resource?.key === 'lateness').length;
+        const absentCount = mobileEvents.filter((event) => event.resource?.key === 'absence').length;
+        const attendanceCount = mobileEvents.length - lateCount - absentCount;
+        return { attendanceCount, lateCount, absentCount };
+    }, [mobileEvents]);
+
+    useEffect(() => {
+        setMobileSelectedDate(dateOnly(currentDate));
+    }, [currentDate, view]);
 
     const guideSteps = useMemo(() => {
         const dayTenSelector = '.rbc-month-view .rbc-day-bg[data-day="10"]:not(.rbc-off-range-bg)';
@@ -294,31 +318,31 @@ export default function CalendarView({
                     )}
                 </div>
                 <div className="calendar-controls flex flex-wrap items-center gap-2 sm:justify-end">
-                    <div className="inline-flex items-center rounded-xl border border-ink/15 bg-white/80 p-1 shadow-sm">
-                        <button className="btn-outline border-0 bg-transparent px-3 py-1.5 text-[clamp(11px,0.9vw,14px)]" onClick={() => navigate('prev')}>
+                    <div className="calendar-pill-group inline-flex items-center p-1 shadow-sm">
+                        <button className="calendar-pill-btn btn-outline border-0 bg-transparent px-3 py-1.5 text-[clamp(11px,0.9vw,14px)]" onClick={() => navigate('prev')}>
                             <PrevIcon className="size-4" aria-hidden="true" />
                             <span>{t('previous')}</span>
                         </button>
-                        <button className="btn-outline border-0 bg-transparent px-3 py-1.5 text-[clamp(11px,0.9vw,14px)]" onClick={() => navigate('next')}>
+                        <button className="calendar-pill-btn btn-outline border-0 bg-transparent px-3 py-1.5 text-[clamp(11px,0.9vw,14px)]" onClick={() => navigate('next')}>
                             <span>{t('next')}</span>
                             <NextIcon className="size-4" aria-hidden="true" />
                         </button>
                     </div>
-                    <div className="inline-flex items-center rounded-xl border border-ink/15 bg-white/80 p-1 shadow-sm">
+                    <div className="calendar-pill-group inline-flex items-center p-1 shadow-sm">
                         <button
-                            className={`btn-outline border-0 px-3 py-1.5 text-[clamp(11px,0.9vw,14px)] ${view === 'month' ? 'bg-cactus/15 text-cactus' : 'bg-transparent'}`}
+                            className={`calendar-pill-btn btn-outline border-0 px-3 py-1.5 text-[clamp(11px,0.9vw,14px)] ${view === 'month' ? 'is-active' : 'bg-transparent'}`}
                             onClick={() => setView('month')}
                         >
                             {t('month')}
                         </button>
                         <button
-                            className={`btn-outline border-0 px-3 py-1.5 text-[clamp(11px,0.9vw,14px)] ${view === 'week' ? 'bg-cactus/15 text-cactus' : 'bg-transparent'}`}
+                            className={`calendar-pill-btn btn-outline border-0 px-3 py-1.5 text-[clamp(11px,0.9vw,14px)] ${view === 'week' ? 'is-active' : 'bg-transparent'}`}
                             onClick={() => setView('week')}
                         >
                             {t('week')}
                         </button>
                         <button
-                            className={`btn-outline border-0 px-3 py-1.5 text-[clamp(11px,0.9vw,14px)] ${view === 'day' ? 'bg-cactus/15 text-cactus' : 'bg-transparent'}`}
+                            className={`calendar-pill-btn btn-outline border-0 px-3 py-1.5 text-[clamp(11px,0.9vw,14px)] ${view === 'day' ? 'is-active' : 'bg-transparent'}`}
                             onClick={() => setView('day')}
                         >
                             {t('day')}
@@ -327,67 +351,133 @@ export default function CalendarView({
                 </div>
             </div>
             <HintBar message="💡 اضغط على أي خلية في التقويم لإضافة حدث جديد" />
-            <div
-                ref={calendarGridRef}
-                onMouseMove={handleGridMouseMove}
-                onMouseLeave={handleGridMouseLeave}
-                onClick={handleGridClick}
-                className="w-full overflow-x-auto sm:overflow-visible"
-            >
-            <Calendar
-                localizer={localizer}
-                culture={locale}
-                rtl={locale === 'ar'}
-                events={events}
-                view={view}
-                views={['month', 'week', 'day']}
-                toolbar={false}
-                date={currentDate}
-                onNavigate={(date) => setCurrentDate(date)}
-                onView={setView}
-                selectable
-                onSelectSlot={(slot) => {
-                    const selected = slot.start as Date;
-                    handleSelectDate(selected);
-                }}
-                onSelectEvent={(event) => {
-                    const selected = event.start as Date;
-                    if (selected.getDay() === 5) return;
-                    if (onSelectEvent) {
-                        onSelectEvent(event);
-                        return;
-                    }
-                    handleSelectDate(selected);
-                }}
-                startAccessor="start"
-                endAccessor="end"
-                eventPropGetter={eventPropGetter}
-                components={{ dateCellWrapper: DateCellWrapper }}
-                formats={{
-                    weekdayFormat: fullWeekdayFormat,
-                    dayFormat: fullWeekdayFormat,
-                    dayHeaderFormat: (date: Date) => `${fullWeekdayFormat(date)} ${format(date, 'd MMM', { locale: calendarLocale })}`,
-                }}
-                className="rbc-sphinx"
-                style={{ height: isMobile ? 440 : 540, width: '100%' }}
-                dayPropGetter={(date) => {
-                    const isRamadan =
-                        !!ramadanRange &&
-                        dateOnly(date) >= ramadanRange.start &&
-                        dateOnly(date) <= ramadanRange.end;
-                    if (date.getDay() === 5) {
-                        return { className: 'rbc-day-disabled rbc-day-friday', style: { color: 'var(--calendar-day-disabled-text)' } };
-                    }
-                    if (isSameDay(date, new Date())) {
-                        return { className: `rbc-day-clickable rbc-day-today${isRamadan ? ' rbc-day-ramadan' : ''}` };
-                    }
-                    if (isRamadan) {
-                        return { className: 'rbc-day-clickable rbc-day-ramadan' };
-                    }
-                    return { className: 'rbc-day-clickable rbc-day-default' };
-                }}
-            />
-            </div>
+            {isMobile && (view === 'week' || view === 'day') ? (
+                <div className="calendar-mobile-view">
+                    <div className="day-strip" role="tablist" aria-label={title}>
+                        {mobileStripDates.map((date) => {
+                            const isActive = isSameDay(date, mobileSelectedDate);
+                            const isToday = isSameDay(date, new Date());
+                            const hasEvents = events.some((event) => isSameDay(event.start, date));
+                            const isFriday = date.getDay() === 5;
+                            return (
+                                <button
+                                    key={date.toISOString()}
+                                    type="button"
+                                    className={`day-pill${isActive ? ' is-active' : ''}${isToday ? ' today' : ''}${isFriday ? ' is-friday' : ''}`}
+                                    onClick={() => setMobileSelectedDate(date)}
+                                >
+                                    <span className="day-pill-name">{format(date, 'EEE', { locale: calendarLocale })}</span>
+                                    <span className="day-pill-date">{format(date, 'd', { locale: calendarLocale })}</span>
+                                    {hasEvents ? <span className="day-dot" aria-hidden="true" /> : <span className="day-dot day-dot-empty" aria-hidden="true" />}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="calendar-mobile-events">
+                        {mobileEvents.map((event, index) => {
+                            const tone = event.resource?.key;
+                            const badgeClass = tone === 'lateness' ? 'event-badge-warning' : 'event-badge-info';
+                            return (
+                                <button
+                                    key={`${event.title}-${event.start.toISOString()}-${index}`}
+                                    className="event-card"
+                                    onClick={() => {
+                                        const selected = event.start as Date;
+                                        if (selected.getDay() === 5) return;
+                                        if (onSelectEvent) {
+                                            onSelectEvent(event);
+                                            return;
+                                        }
+                                        handleSelectDate(selected);
+                                    }}
+                                >
+                                    <span className="day-dot" aria-hidden="true" />
+                                    <span className="event-card-title">{event.title}</span>
+                                    <span className={badgeClass}>{event.title}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="calendar-mobile-stats">
+                        <div className="stat-card">
+                            <p>{tRequestModal('permissionArrival')}</p>
+                            <p className="stat-value">{mobileStats.attendanceCount}</p>
+                        </div>
+                        <div className="stat-card">
+                            <p>{tDashboard('eventLateness')}</p>
+                            <p className="stat-value warn">{mobileStats.lateCount}</p>
+                        </div>
+                        <div className="stat-card">
+                            <p>{tDashboard('eventAbsence')}</p>
+                            <p className="stat-value">{mobileStats.absentCount}</p>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div
+                    ref={calendarGridRef}
+                    onMouseMove={handleGridMouseMove}
+                    onMouseLeave={handleGridMouseLeave}
+                    onClick={handleGridClick}
+                    className="w-full overflow-x-auto sm:overflow-visible"
+                >
+                    <Calendar
+                        localizer={localizer}
+                        culture={locale}
+                        rtl={locale === 'ar'}
+                        events={events}
+                        view={view}
+                        views={['month', 'week', 'day']}
+                        toolbar={false}
+                        date={currentDate}
+                        onNavigate={(date) => setCurrentDate(date)}
+                        onView={setView}
+                        selectable
+                        onSelectSlot={(slot) => {
+                            const selected = slot.start as Date;
+                            handleSelectDate(selected);
+                        }}
+                        onSelectEvent={(event) => {
+                            const selected = event.start as Date;
+                            if (selected.getDay() === 5) return;
+                            if (onSelectEvent) {
+                                onSelectEvent(event);
+                                return;
+                            }
+                            handleSelectDate(selected);
+                        }}
+                        startAccessor="start"
+                        endAccessor="end"
+                        eventPropGetter={eventPropGetter}
+                        components={{ dateCellWrapper: DateCellWrapper }}
+                        formats={{
+                            weekdayFormat: fullWeekdayFormat,
+                            dayFormat: fullWeekdayFormat,
+                            dayHeaderFormat: (date: Date) => `${fullWeekdayFormat(date)} ${format(date, 'd MMM', { locale: calendarLocale })}`,
+                        }}
+                        className="rbc-sphinx"
+                        style={{ height: isMobile ? 440 : 540, width: '100%' }}
+                        dayPropGetter={(date) => {
+                            const isRamadan =
+                                !!ramadanRange &&
+                                dateOnly(date) >= ramadanRange.start &&
+                                dateOnly(date) <= ramadanRange.end;
+                            if (date.getDay() === 5) {
+                                return { className: 'rbc-day-disabled rbc-day-friday', style: { color: 'var(--calendar-day-disabled-text)' } };
+                            }
+                            if (isSameDay(date, new Date())) {
+                                return { className: `rbc-day-clickable rbc-day-today${isRamadan ? ' rbc-day-ramadan' : ''}` };
+                            }
+                            if (isRamadan) {
+                                return { className: 'rbc-day-clickable rbc-day-ramadan' };
+                            }
+                            return { className: 'rbc-day-clickable rbc-day-default' };
+                        }}
+                    />
+                </div>
+            )}
             <SpotlightGuide
                 open={guideOpen}
                 steps={guideSteps}
