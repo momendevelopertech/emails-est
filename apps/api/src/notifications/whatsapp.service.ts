@@ -207,13 +207,33 @@ export class WhatsAppService {
     }
 
     private extractErrorMessage(payload: any, status?: number, fallback?: string) {
-        return (
-            payload?.response?.message
+        const candidate = payload?.response?.message
             || payload?.message
             || payload?.error
             || fallback
-            || (status ? `WhatsApp send failed with status ${status}` : 'Unknown WhatsApp error')
-        );
+            || (status ? `WhatsApp send failed with status ${status}` : 'Unknown WhatsApp error');
+
+        if (typeof candidate === 'string') {
+            return candidate;
+        }
+
+        if (Array.isArray(candidate)) {
+            const first = candidate[0] as any;
+            if (first && typeof first === 'object' && first.exists === false) {
+                return `WhatsApp number is not registered (${first.number || 'unknown'}).`;
+            }
+            return JSON.stringify(candidate);
+        }
+
+        if (typeof candidate === 'object' && candidate !== null) {
+            const details = candidate as any;
+            if (details.exists === false) {
+                return `WhatsApp number is not registered (${details.number || 'unknown'}).`;
+            }
+            return JSON.stringify(candidate);
+        }
+
+        return String(candidate);
     }
 
     private waitBeforeRetry() {

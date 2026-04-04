@@ -20,6 +20,7 @@ type SendEmailOptions = {
 
 const DEFAULT_RETRY_ATTEMPTS = 3;
 const DEFAULT_RETRY_DELAY_MS = 500;
+const SIMPLE_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 @Injectable()
 export class EmailService {
@@ -34,6 +35,10 @@ export class EmailService {
         if (!options.to?.trim()) {
             this.logger.warn('Email recipient is missing');
             return { ok: false, recipient: '', attempts: 0, error: 'Email recipient is missing' };
+        }
+        if (!SIMPLE_EMAIL_REGEX.test(options.to.trim())) {
+            this.logger.warn(`Email recipient is invalid: ${options.to}`);
+            return { ok: false, recipient: options.to, attempts: 0, error: 'Email address format is invalid' };
         }
 
         if (!options.subject?.trim()) {
