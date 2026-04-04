@@ -592,6 +592,30 @@ export class NotificationsService {
         }
     }
 
+    private normalizeDeliveryError(error: unknown) {
+        if (error === null || error === undefined) return null;
+        if (typeof error === 'string') return error;
+
+        if (Array.isArray(error)) {
+            const first = error[0] as any;
+            if (first && typeof first === 'object' && first.exists === false) {
+                return `WhatsApp number is not registered (${first.number || 'unknown'}).`;
+            }
+            return JSON.stringify(error);
+        }
+
+        if (typeof error === 'object') {
+            const maybeAny = error as any;
+            if (maybeAny.exists === false) {
+                return `WhatsApp number is not registered (${maybeAny.number || 'unknown'}).`;
+            }
+            if (typeof maybeAny.message === 'string') return maybeAny.message;
+            return JSON.stringify(error);
+        }
+
+        return String(error);
+    }
+
     private async sendLoggedEmail(options: ExternalDeliveryLogOptions & { subject: string; html: string }) {
         const recipient = options.recipient?.trim();
         if (!recipient) return null;
@@ -610,7 +634,7 @@ export class NotificationsService {
         await this.updateDeliveryLog(log?.id, {
             status: result.ok ? 'SENT' : 'FAILED',
             attempts: result.attempts,
-            lastError: result.error || null,
+            lastError: this.normalizeDeliveryError(result.error),
             providerMessageId: result.messageId || null,
             sentAt: result.ok ? new Date() : null,
             metadata: {
@@ -635,7 +659,7 @@ export class NotificationsService {
         await this.updateDeliveryLog(log?.id, {
             status: result.ok ? 'SENT' : 'FAILED',
             attempts: result.attempts,
-            lastError: result.error || null,
+            lastError: this.normalizeDeliveryError(result.error),
             providerMessageId: null,
             sentAt: result.ok ? new Date() : null,
             metadata: {
