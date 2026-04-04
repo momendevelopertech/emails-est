@@ -44,10 +44,13 @@ type ExternalDeliveryLogOptions = {
     metadata?: Record<string, any>;
 };
 
-export type AccountCreatedDeliverySummary = {
+export type ExternalDeliverySummary = {
     emailDelivery: EmailDeliveryResult | null;
     whatsAppDelivery: WhatsAppDeliveryResult | null;
 };
+
+export type AccountCreatedDeliverySummary = ExternalDeliverySummary;
+export type RequestReceiptDeliverySummary = ExternalDeliverySummary;
 
 @Injectable()
 export class NotificationsService {
@@ -1067,7 +1070,8 @@ export class NotificationsService {
         requestLabelEn: string;
         status: 'PENDING' | 'HR_APPROVED';
         requestDetails: RequestDetails;
-    }) {
+        waitForExternalDeliveries?: boolean;
+    }): Promise<RequestReceiptDeliverySummary> {
         const locale = this.getPreferredLocale(options.user);
         const isArabic = locale === 'ar';
         const templateKey = options.requestType === 'leave' ? 'leaveReceipt' : 'permissionReceipt';
@@ -1112,23 +1116,24 @@ export class NotificationsService {
         const relatedEntityType = options.requestType === 'leave' ? 'LeaveRequest' : 'PermissionRequest';
         const workflowKey = `${options.requestType}.receipt`;
 
-        const jobs: Promise<unknown>[] = [];
-        if (options.user.phone) {
-            jobs.push(this.sendLoggedWhatsApp({
+        const whatsAppRecipient = options.user.phone?.trim();
+        const emailRecipient = options.user.email?.trim();
+        const whatsAppJob = whatsAppRecipient
+            ? this.sendLoggedWhatsApp({
                 channel: 'WHATSAPP',
-                recipient: options.user.phone,
+                recipient: whatsAppRecipient,
                 message: externalContent.whatsAppMessage,
                 workflowKey,
                 templateKey,
                 relatedEntityType,
                 relatedEntityId: options.requestId,
                 metadata: { locale, status: options.status },
-            }));
-        }
-        if (options.user.email) {
-            jobs.push(this.sendLoggedEmail({
+            }).catch((error) => this.buildUnexpectedWhatsAppFailure(whatsAppRecipient, error))
+            : Promise.resolve(null);
+        const emailJob = emailRecipient
+            ? this.sendLoggedEmail({
                 channel: 'EMAIL',
-                recipient: options.user.email,
+                recipient: emailRecipient,
                 workflowKey,
                 templateKey,
                 subject: emailSubject,
@@ -1136,12 +1141,33 @@ export class NotificationsService {
                 relatedEntityType,
                 relatedEntityId: options.requestId,
                 metadata: { locale, status: options.status },
-            }));
+            }).catch((error) => this.buildUnexpectedEmailFailure(emailRecipient, error))
+            : Promise.resolve(null);
+
+        if (options.waitForExternalDeliveries) {
+            const [whatsAppDelivery, emailDelivery] = await Promise.all([whatsAppJob, emailJob]);
+            return {
+                emailDelivery,
+                whatsAppDelivery,
+            };
+        }
+
+        const jobs: Promise<unknown>[] = [];
+        if (whatsAppRecipient) {
+            jobs.push(whatsAppJob);
+        }
+        if (emailRecipient) {
+            jobs.push(emailJob);
         }
 
         if (jobs.length) {
             this.runInBackground(Promise.allSettled(jobs), `Deferred request receipt failed (${options.requestType})`);
         }
+
+        return {
+            emailDelivery: null,
+            whatsAppDelivery: null,
+        };
     }
 
 

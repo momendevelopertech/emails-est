@@ -263,7 +263,7 @@ export class PermissionsService {
         });
 
         const receiptLabel = permissionLabels[request.permissionType] || { ar: 'طلب إذن', en: 'permission request' };
-        await this.notificationsService.sendRequestReceipt({
+        const deliverySummary = await this.notificationsService.sendRequestReceipt({
             user: request.user,
             requestType: 'permission',
             requestId: request.id,
@@ -278,6 +278,7 @@ export class PermissionsService {
                 hoursUsed: request.hoursUsed,
                 reason: request.reason,
             },
+            waitForExternalDeliveries: true,
         });
 
         if (isSandbox) {
@@ -299,7 +300,11 @@ export class PermissionsService {
                 requestType: 'permission',
                 requestId: request.id,
             });
-            return request;
+            return {
+                ...request,
+                emailDelivery: deliverySummary.emailDelivery,
+                whatsAppDelivery: deliverySummary.whatsAppDelivery,
+            };
         }
 
         await this.notificationsService.notifyPermissionAction(request, 'submitted');
@@ -328,7 +333,11 @@ export class PermissionsService {
 
         await this.emitWorkflowUpdate(request, actorId);
 
-        return request;
+        return {
+            ...request,
+            emailDelivery: deliverySummary.emailDelivery,
+            whatsAppDelivery: deliverySummary.whatsAppDelivery,
+        };
     }
 
     async findAll(userId: string, role: string, filters?: { includeSelf?: boolean }) {

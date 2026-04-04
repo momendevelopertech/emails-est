@@ -260,7 +260,7 @@ export class LeavesService {
         });
 
         const receiptLabel = leaveLabels[request.leaveType] || { ar: 'طلب إجازة', en: 'leave request' };
-        await this.notificationsService.sendRequestReceipt({
+        const deliverySummary = await this.notificationsService.sendRequestReceipt({
             user: request.user,
             requestType: 'leave',
             requestId: request.id,
@@ -274,6 +274,7 @@ export class LeavesService {
                 totalDays: request.totalDays,
                 reason: request.reason,
             },
+            waitForExternalDeliveries: true,
         });
 
         if (isSandbox) {
@@ -295,7 +296,11 @@ export class LeavesService {
                 requestType: 'leave',
                 requestId: request.id,
             });
-            return request;
+            return {
+                ...request,
+                emailDelivery: deliverySummary.emailDelivery,
+                whatsAppDelivery: deliverySummary.whatsAppDelivery,
+            };
         }
 
         await this.notificationsService.notifyLeaveAction(request, 'submitted');
@@ -324,7 +329,11 @@ export class LeavesService {
 
         await this.emitWorkflowUpdate(request, actorId);
 
-        return request;
+        return {
+            ...request,
+            emailDelivery: deliverySummary.emailDelivery,
+            whatsAppDelivery: deliverySummary.whatsAppDelivery,
+        };
     }
 
     async findAll(userId: string, role: string, filters?: { status?: any; userId?: string; includeSelf?: boolean }) {

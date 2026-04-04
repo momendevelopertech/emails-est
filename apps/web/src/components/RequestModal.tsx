@@ -20,6 +20,13 @@ type EmployeeOption = {
     isActive?: boolean;
 };
 
+type ChannelDelivery = {
+    ok: boolean;
+    recipient?: string;
+    phone?: string;
+    error?: string;
+};
+
 type Props = {
     open: boolean;
     locale: 'en' | 'ar';
@@ -215,6 +222,46 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
         }
         return raw;
     };
+    const getRequestSubmissionNotice = (response: any, summaryLine: string) => {
+        const emailDelivery = response?.emailDelivery as ChannelDelivery | null | undefined;
+        const whatsAppDelivery = response?.whatsAppDelivery as ChannelDelivery | null | undefined;
+        const unknownReason = locale === 'ar' ? 'فشل غير معروف' : 'Unknown failure';
+        const lines = [summaryLine];
+
+        if (emailDelivery?.ok) {
+            lines.push(tm('emailSentToast', {
+                recipient: emailDelivery.recipient || '-',
+            }));
+        } else if (emailDelivery) {
+            lines.push(tm('emailFailedToast', {
+                recipient: emailDelivery.recipient || '-',
+                reason: emailDelivery.error || unknownReason,
+            }));
+        }
+
+        if (whatsAppDelivery?.ok) {
+            lines.push(tm('whatsAppSentToast', {
+                phone: whatsAppDelivery.phone || '-',
+            }));
+        } else if (whatsAppDelivery) {
+            lines.push(tm('whatsAppFailedToast', {
+                phone: whatsAppDelivery.phone || '-',
+                reason: whatsAppDelivery.error || unknownReason,
+            }));
+        }
+
+        if (emailDelivery === undefined && whatsAppDelivery === undefined) {
+            lines.push(tm('deliveryStatusUnavailable'));
+        }
+
+        return {
+            message: lines.join('\n'),
+            hasFailure: Boolean(
+                (emailDelivery && !emailDelivery.ok)
+                || (whatsAppDelivery && !whatsAppDelivery.ok),
+            ),
+        };
+    };
 
     const submit = async () => {
         if (!date || !type) return;
@@ -225,24 +272,26 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
         const requestUserPayload = isSecretary && selectedEmployeeId ? { userId: selectedEmployeeId } : {};
         setLoading(true);
         try {
+            let responseData: any = null;
+
             if (type === 'leave') {
-                await api.post('/leaves', {
+                responseData = (await api.post('/leaves', {
                     leaveType: formData.leaveType || 'ANNUAL',
                     startDate: formData.startDate || dateValue,
                     endDate: formData.endDate || dateValue,
                     reason: '',
                     ...requestUserPayload,
-                });
+                })).data;
             }
 
             if (type === 'absence') {
-                await api.post('/leaves', {
+                responseData = (await api.post('/leaves', {
                     leaveType: 'ABSENCE_WITH_PERMISSION',
                     startDate: formData.startDate || dateValue,
                     endDate: formData.endDate || dateValue,
                     reason: '',
                     ...requestUserPayload,
-                });
+                })).data;
             }
 
             if (type === 'permission') {
@@ -256,14 +305,14 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
                     return;
                 }
                 const permissionScope = formData.permissionScope || 'ARRIVAL';
-                await api.post('/permissions', {
+                responseData = (await api.post('/permissions', {
                     permissionScope,
                     durationMinutes,
                     permissionType: permissionScope === 'ARRIVAL' ? 'LATE_ARRIVAL' : 'EARLY_LEAVE',
                     requestDate: dateValue,
                     reason: '',
                     ...requestUserPayload,
-                });
+                })).data;
             }
 
             if (type === 'mission') {
@@ -272,13 +321,13 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
                 const missionPurpose = formData.missionPurpose || '';
                 const payloadReason = `Mission Type: ${missionType}\nMission To: ${missionTo}\nPurpose: ${missionPurpose}`;
 
-                await api.post('/leaves', {
+                responseData = (await api.post('/leaves', {
                     leaveType: 'MISSION',
                     startDate: formData.startDate || dateValue,
                     endDate: formData.endDate || dateValue,
                     reason: payloadReason,
                     ...requestUserPayload,
-                });
+                })).data;
             }
 
             if (type === 'note') {
@@ -313,10 +362,16 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
                 toast.success(tm('noteSaved'));
             } else if (type === 'lateness') {
                 toast.success(tm('latenessSaved'));
-            } else if (!isSecretary && isSandbox) {
-                toast.success(tm('autoApprovedToast'));
             } else {
-                toast.success(tm('pendingToast'));
+                const summaryLine = !isSecretary && isSandbox
+                    ? tm('autoApprovedToast')
+                    : tm('pendingToast');
+                const notice = getRequestSubmissionNotice(responseData, summaryLine);
+                if (notice.hasFailure) {
+                    toast(notice.message, { icon: '⚠️', duration: 12000 });
+                } else {
+                    toast.success(notice.message, { duration: 12000 });
+                }
             }
         } catch (error: any) {
             toast.error(resolveErrorMessage(error));

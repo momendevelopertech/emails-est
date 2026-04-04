@@ -184,6 +184,58 @@ describe('NotificationsService', () => {
         expect(emailService.sendEmail).toHaveBeenCalledTimes(1);
     });
 
+    it('returns request receipt delivery status when waiting for external deliveries', async () => {
+        const delivery = await service.sendRequestReceipt({
+            user: {
+                email: 'employee@example.com',
+                phone: '01012345678',
+                fullName: 'Mona Samir',
+            },
+            requestType: 'leave',
+            requestId: 'leave-receipt-1',
+            requestLabelAr: 'طلب إجازة اعتيادية',
+            requestLabelEn: 'Annual leave request',
+            status: 'HR_APPROVED',
+            requestDetails: {
+                leaveType: 'ANNUAL',
+                startDate: '2026-04-14',
+                endDate: '2026-04-14',
+                totalDays: 1,
+                reason: '',
+            },
+            waitForExternalDeliveries: true,
+        });
+
+        expect(delivery).toEqual({
+            emailDelivery: {
+                ok: true,
+                recipient: 'employee@example.com',
+                attempts: 1,
+                messageId: 'message-1',
+                response: '250 queued',
+            },
+            whatsAppDelivery: { ok: true, phone: '201012345678', attempts: 1 },
+        });
+        expect(prisma.notificationDelivery.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                channel: 'EMAIL',
+                workflowKey: 'leave.receipt',
+                templateKey: 'leaveReceipt',
+                relatedEntityType: 'LeaveRequest',
+                relatedEntityId: 'leave-receipt-1',
+            }),
+        }));
+        expect(prisma.notificationDelivery.create).toHaveBeenCalledWith(expect.objectContaining({
+            data: expect.objectContaining({
+                channel: 'WHATSAPP',
+                workflowKey: 'leave.receipt',
+                templateKey: 'leaveReceipt',
+                relatedEntityType: 'LeaveRequest',
+                relatedEntityId: 'leave-receipt-1',
+            }),
+        }));
+    });
+
     it('sends permission approval through both external channels and stores related request logs', async () => {
         await service.notifyPermissionAction({
             id: 'perm-1',
