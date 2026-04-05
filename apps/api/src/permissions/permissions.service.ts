@@ -450,7 +450,7 @@ export class PermissionsService {
                 hoursUsed: request.hoursUsed,
                 reason: request.reason,
             },
-            waitForExternalDeliveries: false,
+            waitForExternalDeliveries: true,
         });
 
         if (isSandbox) {
