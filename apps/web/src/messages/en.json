@@ -52,7 +52,9 @@
     "introMessageSecretary": "Hi, I'm {name}, branch secretary.\nBranch: {branch}\nPosition: {position}",
     "introMessageHr": "Hi, I'm {name} from HR.\nDepartment: {department}\nBranch: {branch}\nPosition: {position}",
     "searchEmpty": "No matching employees found.",
-    "historyEmpty": "No previous conversations yet."
+    "historyEmpty": "No previous conversations yet.",
+    "replyingTo": "Replying to",
+    "cancelReply": "Cancel reply"
   },
   "auth": {
     "welcome": "Welcome back",
@@ -306,7 +308,12 @@
     "note": "Note",
     "noteTitle": "Note title",
     "form": "Form",
-    "notAvailable": "N/A"
+    "notAvailable": "N/A",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel",
+    "lateMinutes": "Minutes late"
   },
   "notifications": {
     "title": "Notifications",

@@ -478,14 +478,18 @@ body {
 }
 
 .rbc-day-disabled {
-    cursor: not-allowed;
+    cursor: default;
     opacity: 0.72;
     pointer-events: none;
 }
 
+.rbc-sphinx .rbc-month-view .rbc-day-bg.rbc-day-disabled {
+    cursor: not-allowed !important;
+}
+
 .calendar-shell .rbc-sphinx {
     border-radius: 0;
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid var(--border);
 }
 

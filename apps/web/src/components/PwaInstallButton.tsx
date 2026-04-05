@@ -67,20 +67,7 @@ export default function PwaInstallButton({ enabled, collapsed = false }: { enabl
     if (!enabled) return null;
 
     if (isInstalled) {
-        return (
-            <button
-                className={collapsed ? 'tb-icon' : 'btn-outline text-xs'}
-                type="button"
-                title={t('openApp')}
-                aria-label={t('openApp')}
-                onClick={() => {
-                    window.location.assign('/');
-                }}
-            >
-                <ExternalLink size={14} />
-                {!collapsed && t('openApp')}
-            </button>
-        );
+        return null;
     }
 
     if (isIos) {

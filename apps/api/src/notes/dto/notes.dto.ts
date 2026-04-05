@@ -12,3 +12,17 @@ export class CreateNoteDto {
     @IsString()
     body?: string;
 }
+
+export class UpdateNoteDto {
+    @IsOptional()
+    @IsString()
+    title?: string;
+
+    @IsOptional()
+    @IsString()
+    body?: string;
+
+    @IsOptional()
+    @IsDateString()
+    date?: string;
+}

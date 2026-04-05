@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { LatenessService } from './lateness.service';
 import { CreateLatenessDto } from './dto/lateness.dto';
@@ -26,5 +26,10 @@ export class LatenessController {
     @Post(':id/convert')
     convert(@Req() req: any, @Param('id') id: string) {
         return this.latenessService.convertToPermission(req.user.id, id);
+    }
+
+    @Delete(':id')
+    remove(@Req() req: any, @Param('id') id: string) {
+        return this.latenessService.deleteMine(req.user.id, id);
     }
 }

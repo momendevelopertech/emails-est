@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import MessageBubble from './MessageBubble';
 import MessageInput from './MessageInput';
+import { composeReplyMessage } from './compose-reply';
 import { ChatEmployee, ChatMessage } from './types';
 
 export default function ChatWindow({
@@ -32,6 +33,7 @@ export default function ChatWindow({
     const t = useTranslations('chat');
     const bottomRef = useRef<HTMLDivElement | null>(null);
     const [introducing, setIntroducing] = useState(false);
+    const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -81,14 +83,13 @@ export default function ChatWindow({
                     : 'introMessageDefault';
         setIntroducing(true);
         try {
-            await onSend(
-                t(introKey as any, {
-                    name: currentName || t('employeeFallback'),
-                    department: currentDepartmentLabel,
-                    branch: currentBranchLabel,
-                    position: currentPositionLabel,
-                }),
-            );
+            const text = t(introKey as any, {
+                name: currentName || t('employeeFallback'),
+                department: currentDepartmentLabel,
+                branch: currentBranchLabel,
+                position: currentPositionLabel,
+            });
+            await onSend(text);
         } finally {
             setIntroducing(false);
         }
@@ -98,33 +99,52 @@ export default function ChatWindow({
         <section className="flex min-h-[58vh] flex-1 flex-col md:min-h-[72vh]">
             {selectedEmployee ? (
                 <>
-                    <header className="border-b border-ink/10 bg-white px-4 py-3">
+                    <header className="chat-thread-header border-b border-[#e9edef] bg-[#f0f2f5] px-3 py-2">
                         <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <h3 className="font-semibold">{selectedEmployee.fullName}</h3>
-                                <p className="text-xs text-slate-500">{selectedEmployee.jobTitle || t('employeeFallback')}</p>
+                            <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#dfe5e7] text-lg font-bold text-[#54656f]">
+                                    {selectedEmployee.fullName.slice(0, 1).toUpperCase()}
+                                </div>
+                                <div>
+                                    <h3 className="text-[16px] font-semibold text-[#111b21]">{selectedEmployee.fullName}</h3>
+                                    <p className="text-[12px] text-[#667781]">{selectedEmployee.jobTitle || t('employeeFallback')}</p>
+                                </div>
                             </div>
-                            <button className="btn-outline text-xs" onClick={handleIntroduce} disabled={introducing}>
+                            <button className="rounded-full border border-[#c4d0d4] bg-white px-3 py-1.5 text-xs font-medium text-[#111b21] hover:bg-[#f0f2f5]" onClick={handleIntroduce} disabled={introducing}>
                                 {introducing ? t('sending') : t('introduceYourself')}
                             </button>
                         </div>
                     </header>
-                    <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">
-                        <div className="rounded-xl border border-ink/10 bg-white p-4 text-sm">
-                            <h4 className="text-base font-semibold">{t('welcome', { name: selectedEmployee.fullName })}</h4>
-                            <p className="mt-1 text-slate-600">{t('position')}: {selectedEmployee.jobTitle || t('noJobTitle')}</p>
-                            <p className="text-slate-600">{t('branch')}: {branchLabel}</p>
+                    <div className="chat-thread-body flex-1 space-y-1 overflow-y-auto bg-[#e5ddd5] p-3">
+                        <div className="rounded-lg border border-[#e9edef] bg-white/95 p-3 text-sm text-[#111b21] shadow-sm">
+                            <h4 className="text-[15px] font-semibold">{t('welcome', { name: selectedEmployee.fullName })}</h4>
+                            <p className="mt-1 text-[13px] text-[#667781]">{t('position')}: {selectedEmployee.jobTitle || t('noJobTitle')}</p>
+                            <p className="text-[13px] text-[#667781]">{t('branch')}: {branchLabel}</p>
                         </div>
                         {messages.map((m) => (
-                            <MessageBubble key={m.id} message={m} isMine={m.senderId === currentUserId} />
+                            <MessageBubble
+                                key={m.id}
+                                message={m}
+                                isMine={m.senderId === currentUserId}
+                                onReply={(msg) => setReplyTo(msg)}
+                            />
                         ))}
                         <div ref={bottomRef} />
                     </div>
                 </>
             ) : (
-                <div className="flex flex-1 items-center justify-center p-4 text-center text-slate-500">{t('selectPrompt')}</div>
+                <div className="flex flex-1 items-center justify-center p-4 text-center text-[#667781]">{t('selectPrompt')}</div>
             )}
-            <MessageInput onSend={onSend} disabled={!selectedEmployee} />
+            <MessageInput
+                disabled={!selectedEmployee}
+                replyTo={replyTo}
+                onCancelReply={() => setReplyTo(null)}
+                onSend={async (text) => {
+                    const payload = replyTo ? composeReplyMessage(replyTo.messageText, text) : text;
+                    setReplyTo(null);
+                    await onSend(payload);
+                }}
+            />
         </section>
     );
 }

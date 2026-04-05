@@ -52,7 +52,9 @@
     "introMessageSecretary": "مرحباً، أنا {name} سكرتارية الفرع.\nالفرع: {branch}\nالمنصب: {position}",
     "introMessageHr": "مرحباً، أنا {name} من الموارد البشرية.\nالقسم: {department}\nالفرع: {branch}\nالمنصب: {position}",
     "searchEmpty": "لا توجد نتائج مطابقة.",
-    "historyEmpty": "لا توجد محادثات سابقة حتى الآن."
+    "historyEmpty": "لا توجد محادثات سابقة حتى الآن.",
+    "replyingTo": "رد على",
+    "cancelReply": "إلغاء الرد"
   },
   "auth": {
     "welcome": "مرحبًا بعودتك",
@@ -306,7 +308,12 @@
     "note": "ملاحظة",
     "noteTitle": "عنوان الملاحظة",
     "form": "نموذج",
-    "notAvailable": "غير متاح"
+    "notAvailable": "غير متاح",
+    "edit": "تعديل",
+    "delete": "حذف",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "lateMinutes": "دقائق التأخير"
   },
   "notifications": {
     "title": "الإشعارات",

@@ -88,16 +88,14 @@ export default function CalendarView({
                 locales,
             });
 
-            const getWeekStartsOn = (currentLocalizer?: { startOfWeek?: () => number }): Day =>
-                typeof currentLocalizer?.startOfWeek === 'function'
-                    ? (currentLocalizer.startOfWeek() as Day)
-                    : CALENDAR_WEEK_STARTS_ON;
+            /** Always Saturday — must match react-big-calendar week grid (do not use ar-SA locale Sunday). */
+            const getWeekStartsOn = (): Day => CALENDAR_WEEK_STARTS_ON;
 
-            baseLocalizer.firstVisibleDay = (date: Date, currentLocalizer?: { startOfWeek?: () => number }) =>
-                stableCalendarDate(startOfWeek(startOfMonth(date), { weekStartsOn: getWeekStartsOn(currentLocalizer) }));
+            baseLocalizer.firstVisibleDay = (date: Date, _currentLocalizer?: { startOfWeek?: () => number }) =>
+                stableCalendarDate(startOfWeek(startOfMonth(date), { weekStartsOn: getWeekStartsOn() }));
 
-            baseLocalizer.lastVisibleDay = (date: Date, currentLocalizer?: { startOfWeek?: () => number }) =>
-                stableCalendarDate(endOfWeek(endOfMonth(date), { weekStartsOn: getWeekStartsOn(currentLocalizer) }));
+            baseLocalizer.lastVisibleDay = (date: Date, _currentLocalizer?: { startOfWeek?: () => number }) =>
+                stableCalendarDate(endOfWeek(endOfMonth(date), { weekStartsOn: getWeekStartsOn() }));
 
             baseLocalizer.visibleDays = (date: Date, currentLocalizer?: { startOfWeek?: () => number }) =>
                 buildStableDayRange(
@@ -113,6 +111,10 @@ export default function CalendarView({
 
                 return originalRange(start, end, unit);
             };
+
+            // date-fns localizer sets startOfWeek from ar/en locale (ar-SA = Sunday); RBC uses that for internals.
+            // Force Saturday-first week so month cells and all-day events align with data-date / Saturday column.
+            (baseLocalizer as { startOfWeek?: (culture?: string) => number }).startOfWeek = () => CALENDAR_WEEK_STARTS_ON;
 
             return baseLocalizer;
         },

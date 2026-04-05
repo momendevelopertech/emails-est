@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { addMinutes, format } from 'date-fns';
@@ -236,6 +236,18 @@ export default function RequestModal({ open, date, onClose, onSubmitted, locale 
             const match = raw.match(/Insufficient permission hours\. Available: ([0-9.]+)h, Requested: ([0-9.]+)h/);
             if (match) {
                 return `لا توجد ساعات إذن متاحة. المتاح: ${match[1]} ساعة، المطلوب: ${match[2]} ساعة.`;
+            }
+            if (/already have a leave, absence, or mission request/i.test(raw)) {
+                return 'لديك بالفعل طلب إجازة أو غياب بإذن أو مأمورية يتقاطع مع هذه التواريخ.';
+            }
+            if (/already have a permission request/i.test(raw)) {
+                return 'لديك بالفعل طلب إذن في أحد هذه الأيام.';
+            }
+            if (/already have a permission request on this day/i.test(raw)) {
+                return 'لديك بالفعل طلب إذن في هذا اليوم.';
+            }
+            if (/already have a leave, absence, or mission request on this date/i.test(raw)) {
+                return 'لديك بالفعل طلب في هذا اليوم (إجازة/غياب بإذن/مأمورية).';
             }
         }
         return raw;

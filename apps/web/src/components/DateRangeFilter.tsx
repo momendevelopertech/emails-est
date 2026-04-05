@@ -89,7 +89,10 @@ export default function DateRangeFilter({ locale, from = '', to = '', onChange, 
             </button>
 
             {open && (
-                <div id={panelId} className="dropdown-panel absolute z-30 mt-2 w-full min-w-[280px] max-w-[min(92vw,420px)] rounded-2xl p-3">
+                <div
+                    id={panelId}
+                    className="dropdown-panel fixed left-1/2 top-[max(1rem,env(safe-area-inset-top))] z-[80] w-[min(calc(100vw-1.5rem),420px)] -translate-x-1/2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-2xl sm:absolute sm:left-0 sm:top-full sm:mt-2 sm:w-full sm:max-w-[min(92vw,420px)] sm:translate-x-0"
+                >
                     <div className="mb-3 flex items-center gap-2">
                         <button
                             type="button"

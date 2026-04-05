@@ -4,6 +4,9 @@ import { PermissionsService } from './permissions.service';
 describe('PermissionsService', () => {
     const prisma = {
         $transaction: jest.fn(),
+        leaveRequest: {
+            findFirst: jest.fn(),
+        },
         permissionCycle: {
             findUnique: jest.fn(),
             create: jest.fn(),
@@ -13,6 +16,7 @@ describe('PermissionsService', () => {
             aggregate: jest.fn(),
             count: jest.fn(),
             findUnique: jest.fn(),
+            findFirst: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
             delete: jest.fn(),
@@ -61,6 +65,8 @@ describe('PermissionsService', () => {
         prisma.permissionRequest.update.mockResolvedValue({});
         prisma.permissionRequest.delete.mockResolvedValue({});
         prisma.permissionRequest.count.mockResolvedValue(0);
+        prisma.leaveRequest.findFirst.mockResolvedValue(null);
+        prisma.permissionRequest.findFirst.mockResolvedValue(null);
         prisma.lateness.updateMany.mockResolvedValue({ count: 0 });
         prisma.user.findMany.mockResolvedValue([]);
         prisma.workScheduleSettings.findFirst.mockResolvedValue(null);

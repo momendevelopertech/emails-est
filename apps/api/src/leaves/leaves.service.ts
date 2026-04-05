@@ -7,8 +7,9 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
-import { differenceInBusinessDays, endOfDay, startOfDay } from 'date-fns';
+import { endOfDay, startOfDay } from 'date-fns';
 import { getCycleRange } from '../shared/cycle';
+import { countInclusiveCalendarDays, parseLocalDateInput } from '../shared/leave-days';
 import { CreateLeaveDto, UpdateLeaveDto } from './dto/leaves.dto';
 
 @Injectable()
@@ -18,6 +19,42 @@ export class LeavesService {
         private notificationsService: NotificationsService,
         private auditService: AuditService,
     ) { }
+
+    /**
+     * One calendar-day slot for the four workflow types (leave / absence / mission / permission):
+     * no overlapping leave ranges and no permission on any covered day.
+     */
+    private async assertNoDuplicateDayRequest(userId: string, start: Date, end: Date, excludeLeaveId?: string) {
+        const rangeStart = startOfDay(start);
+        const rangeEnd = endOfDay(end);
+
+        const overlappingLeave = await this.prisma.leaveRequest.findFirst({
+            where: {
+                userId,
+                id: excludeLeaveId ? { not: excludeLeaveId } : undefined,
+                status: { notIn: ['REJECTED', 'CANCELLED'] },
+                AND: [{ startDate: { lte: rangeEnd } }, { endDate: { gte: rangeStart } }],
+            },
+        });
+        if (overlappingLeave) {
+            throw new BadRequestException(
+                'You already have a leave, absence, or mission request that overlaps these dates.',
+            );
+        }
+
+        const conflictingPermission = await this.prisma.permissionRequest.findFirst({
+            where: {
+                userId,
+                status: { notIn: ['REJECTED', 'CANCELLED'] },
+                requestDate: { gte: rangeStart, lte: rangeEnd },
+            },
+        });
+        if (conflictingPermission) {
+            throw new BadRequestException(
+                'You already have a permission request on one of these days.',
+            );
+        }
+    }
 
     private async getWorkflowUserIds(
         requestUserId: string,
@@ -200,10 +237,14 @@ export class LeavesService {
         await this.ensureYearBalances(targetUserId, year);
         const isSandbox = targetUser.workflowMode === 'SANDBOX';
 
-        const days = differenceInBusinessDays(new Date(data.endDate), new Date(data.startDate)) + 1;
+        const startDate = parseLocalDateInput(data.startDate);
+        const endDate = parseLocalDateInput(data.endDate);
+        const days = countInclusiveCalendarDays(startDate, endDate);
         if (days <= 0) {
             throw new BadRequestException('End date must be same day or after start date');
         }
+
+        await this.assertNoDuplicateDayRequest(targetUserId, startDate, endDate);
 
         if (data.leaveType !== 'ABSENCE_WITH_PERMISSION') {
             const balance = await this.prisma.leaveBalance.findUnique({
@@ -226,8 +267,8 @@ export class LeavesService {
             data: {
                 userId: targetUserId,
                 leaveType: data.leaveType,
-                startDate: new Date(data.startDate),
-                endDate: new Date(data.endDate),
+                startDate,
+                endDate,
                 totalDays: days,
                 reason: data.reason,
                 attachmentUrl: data.attachmentUrl,
@@ -622,12 +663,14 @@ export class LeavesService {
             if (request.status !== 'PENDING') throw new BadRequestException('Can only edit pending requests');
         }
 
-        const startDate = data.startDate ? new Date(data.startDate) : request.startDate;
-        const endDate = data.endDate ? new Date(data.endDate) : request.endDate;
-        const days = differenceInBusinessDays(endDate, startDate) + 1;
+        const startDate = data.startDate ? parseLocalDateInput(data.startDate) : request.startDate;
+        const endDate = data.endDate ? parseLocalDateInput(data.endDate) : request.endDate;
+        const days = countInclusiveCalendarDays(startDate, endDate);
         if (days <= 0) {
             throw new BadRequestException('End date must be same day or after start date');
         }
+
+        await this.assertNoDuplicateDayRequest(request.userId, startDate, endDate, id);
 
         const finalLeaveType = data.leaveType ?? request.leaveType;
         if (finalLeaveType !== 'ABSENCE_WITH_PERMISSION') {

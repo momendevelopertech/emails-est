@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
 import { Cron } from '@nestjs/schedule';
+import { endOfDay, startOfDay } from 'date-fns';
 import { getCycleRange } from '../shared/cycle';
 import { CreatePermissionDto, UpdatePermissionDto } from './dto/permissions.dto';
 
@@ -332,6 +333,33 @@ export class PermissionsService {
         }
 
         const requestDate = new Date(data.requestDate);
+        const dayStart = startOfDay(requestDate);
+        const dayEnd = endOfDay(requestDate);
+
+        const overlappingLeave = await this.prisma.leaveRequest.findFirst({
+            where: {
+                userId: targetUserId,
+                status: { notIn: ['REJECTED', 'CANCELLED'] },
+                AND: [{ startDate: { lte: dayEnd } }, { endDate: { gte: dayStart } }],
+            },
+        });
+        if (overlappingLeave) {
+            throw new BadRequestException(
+                'You already have a leave, absence, or mission request on this date.',
+            );
+        }
+
+        const sameDayPermission = await this.prisma.permissionRequest.findFirst({
+            where: {
+                userId: targetUserId,
+                status: { notIn: ['REJECTED', 'CANCELLED'] },
+                requestDate: { gte: dayStart, lte: dayEnd },
+            },
+        });
+        if (sameDayPermission) {
+            throw new BadRequestException('You already have a permission request on this day.');
+        }
+
         const cycle = await this.getOrCreateCycle(targetUserId, requestDate);
         const isSandbox = targetUser.workflowMode === 'SANDBOX';
 

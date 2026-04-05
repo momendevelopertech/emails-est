@@ -64,6 +64,17 @@ export class LatenessService {
         });
     }
 
+    async deleteMine(userId: string, id: string) {
+        const row = await this.prisma.lateness.findUnique({ where: { id } });
+        if (!row) throw new NotFoundException('Not found');
+        if (row.userId !== userId) throw new ForbiddenException();
+        if (row.convertedToPermission) {
+            throw new BadRequestException('Cannot delete lateness that was converted to a permission');
+        }
+        await this.prisma.lateness.delete({ where: { id } });
+        return { message: 'Deleted' };
+    }
+
     async findMine(userId: string, filters?: { from?: string; to?: string }) {
         let rangeStart: Date;
         let rangeEnd: Date;

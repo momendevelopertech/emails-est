@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { endOfDay, startOfDay } from 'date-fns';
 import { PusherService } from '../pusher/pusher.service';
@@ -64,9 +64,17 @@ export class NotificationsService {
         private emailService: EmailService,
     ) { }
 
+    private normalizeFrontendBaseUrl() {
+        let raw = (process.env.FRONTEND_URL || 'http://localhost:3000').trim().replace(/\/+$/, '');
+        if (!/^https?:\/\//i.test(raw)) {
+            const host = raw.replace(/^\/+/, '');
+            raw = /localhost/i.test(host) ? `http://${host}` : `https://${host}`;
+        }
+        return raw;
+    }
+
     private getPublicAppUrl(locale = 'ar') {
-        const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '');
-        return `${baseUrl}/${locale}`;
+        return `${this.normalizeFrontendBaseUrl()}/${locale}`;
     }
 
     private getPreferredLocale(user?: { fullNameAr?: string | null }): NotificationLocale {

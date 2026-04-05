@@ -52,6 +52,7 @@ type FormSubmission = {
 
 type NoteItem = {
     id: string;
+    userId: string;
     title: string;
     body?: string | null;
     date: string;
@@ -118,6 +119,9 @@ const parseLocalDate = (value: string) => {
     if (year && month && day) return new Date(year, month - 1, day);
     return new Date(value);
 };
+
+/** react-big-calendar treats all-day end as exclusive; use day after last calendar day */
+const exclusiveEndDay = (ymd: string) => addDays(parseLocalDate(ymd), 1);
 
 export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
     const t = useTranslations('dashboard');
@@ -486,7 +490,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
             return {
                 title: enumLabels.leaveType(leave.leaveType, locale),
                 start: parseLocalDate(leave.startDate),
-                end: parseLocalDate(leave.endDate),
+                end: exclusiveEndDay(leave.endDate),
                 allDay: true,
                 resource: { key, kind: key === 'absence' ? 'absence' : key === 'mission' ? 'mission' : 'leave', item: leave },
             };
@@ -495,23 +499,26 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         const permissionEvents = permissions.map((permission) => ({
             title: enumLabels.permissionType(permission.permissionType, locale),
             start: parseLocalDate(permission.requestDate),
-            end: parseLocalDate(permission.requestDate),
+            end: exclusiveEndDay(permission.requestDate),
             allDay: true,
             resource: { key: permission.permissionType === 'PERSONAL' ? 'personal' : 'permission', kind: 'permission', item: permission },
         }));
 
-        const formEvents = forms.map((submission) => ({
+        const formEvents = forms.map((submission) => {
+            const createdYmd = submission.createdAt.split('T')[0] || submission.createdAt.slice(0, 10);
+            return {
             title: submission.form.name,
-            start: parseLocalDate(submission.createdAt),
-            end: parseLocalDate(submission.createdAt),
+            start: parseLocalDate(createdYmd),
+            end: exclusiveEndDay(createdYmd),
             allDay: true,
             resource: { key: 'form', kind: 'form', item: submission },
-        }));
+        };
+        });
 
         const noteEvents = notes.map((note) => ({
             title: note.title,
             start: parseLocalDate(note.date),
-            end: parseLocalDate(note.date),
+            end: exclusiveEndDay(note.date),
             allDay: true,
             resource: { key: 'note', kind: 'note', item: note },
         }));
@@ -519,7 +526,7 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
         const latenessEvents = latenessItems.map((item) => ({
             title: tm('latenessRequest'),
             start: parseLocalDate(item.date),
-            end: parseLocalDate(item.date),
+            end: exclusiveEndDay(item.date),
             allDay: true,
             resource: { key: 'lateness', kind: 'lateness', item: { ...item, user } },
         }));
@@ -827,7 +834,9 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
                 open={!!selectedEvent}
                 event={selectedEvent}
                 locale={locale}
+                currentUserId={user?.id}
                 onClose={() => setSelectedEvent(null)}
+                onMutate={fetchAll}
             />
             <ChangePasswordModal />
         </main>

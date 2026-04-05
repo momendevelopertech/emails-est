@@ -1,9 +1,11 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { usePathname, useRouter } from 'next/navigation';
-import api, { clearApiCache, clearBrowserRuntimeCache } from '@/lib/api';
+import { Bell, MessageCircle } from 'lucide-react';
+import api, { clearApiCache, clearBrowserRuntimeCache, isAuthError } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import { KeyRound, Languages, LogOut, Moon, Sun } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -24,6 +26,7 @@ export default function SidebarFooter({
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const [pwaEnabled, setPwaEnabled] = useState(true);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [standaloneBadges, setStandaloneBadges] = useState({ notifications: 0, chats: 0 });
     const menuRef = useRef<HTMLDivElement | null>(null);
     const userMenuId = 'sidebar-user-menu';
     const userButtonId = 'sidebar-user-trigger';
@@ -36,6 +39,46 @@ export default function SidebarFooter({
             document.documentElement.dataset.theme = next;
         }
     }, []);
+
+    const [standalonePwa, setStandalonePwa] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        setStandalonePwa(
+            Boolean(window.matchMedia?.('(display-mode: standalone)').matches || (window.navigator as unknown as { standalone?: boolean }).standalone),
+        );
+    }, []);
+
+    useEffect(() => {
+        if (!user || !standalonePwa) return;
+        let cancelled = false;
+        const load = async () => {
+            try {
+                const [notificationsRes, chatsRes] = await Promise.all([
+                    api.get('/notifications/unread', {
+                        headers: { 'x-skip-activity': '1', 'x-no-cache': '1' },
+                    }),
+                    api.get('/chat/chats', {
+                        headers: { 'x-skip-activity': '1', 'x-no-cache': '1' },
+                    }),
+                ]);
+                if (cancelled) return;
+                const totalUnread = (chatsRes.data || []).reduce((sum: number, chat: { unreadCount?: number }) => sum + (chat.unreadCount || 0), 0);
+                setStandaloneBadges({
+                    notifications: (notificationsRes.data || []).length,
+                    chats: totalUnread,
+                });
+            } catch (e) {
+                if (!isAuthError(e)) return;
+            }
+        };
+        load();
+        const id = window.setInterval(load, 60_000);
+        return () => {
+            cancelled = true;
+            window.clearInterval(id);
+        };
+    }, [standalonePwa, user]);
 
     useEffect(() => {
         const handler = (event: MouseEvent) => {
@@ -100,6 +143,34 @@ export default function SidebarFooter({
         <div className={`sidebar-footer${collapsed ? ' is-collapsed' : ''}`} ref={menuRef}>
             <WorkflowModeSwitch locale={locale} collapsed={collapsed} />
             <div className="sidebar-tools">
+                {standalonePwa && user ? (
+                    <div className="standalone-pwa-badges flex items-center gap-1" aria-label={locale === 'ar' ? 'اختصارات سريعة' : 'Quick shortcuts'}>
+                        <Link
+                            href={`/${locale}/chat`}
+                            className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--ink2)] hover:bg-[var(--surface2)]"
+                            title={t('chat')}
+                        >
+                            <MessageCircle size={16} />
+                            {standaloneBadges.chats > 0 ? (
+                                <span className="absolute -right-0.5 -top-0.5 flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[#25d366] px-1 text-[10px] font-bold text-white">
+                                    {standaloneBadges.chats > 99 ? '99+' : standaloneBadges.chats}
+                                </span>
+                            ) : null}
+                        </Link>
+                        <Link
+                            href={`/${locale}/notifications`}
+                            className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--ink2)] hover:bg-[var(--surface2)]"
+                            title={t('notifications')}
+                        >
+                            <Bell size={16} />
+                            {standaloneBadges.notifications > 0 ? (
+                                <span className="absolute -right-0.5 -top-0.5 flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                                    {standaloneBadges.notifications > 99 ? '99+' : standaloneBadges.notifications}
+                                </span>
+                            ) : null}
+                        </Link>
+                    </div>
+                ) : null}
                 <button className="tb-icon" type="button" onClick={() => switchLocale(locale === 'ar' ? 'en' : 'ar')} title={locale === 'ar' ? 'English' : 'العربية'} aria-label={locale === 'ar' ? 'Switch language' : 'تبديل اللغة'}>
                     <span className="sr-only">{locale === 'ar' ? 'تبديل اللغة' : 'Switch language'}</span>
                     <Languages size={14} />
