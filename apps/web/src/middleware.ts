@@ -24,6 +24,7 @@ export default function middleware(req: NextRequest) {
     const subPath = segments.slice(1).join('/');
 
     const isPublicRoute =
+        !route ||                   // locale root: /ar or /en (no sub-route)
         publicPaths.has(route) ||
         publicPathPrefixes.some((prefix) => subPath.startsWith(prefix));
 

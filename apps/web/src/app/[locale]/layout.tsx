@@ -19,6 +19,8 @@ const cairo = Cairo({
     preload: false,
 });
 
+const OG_IMAGE_URL = 'https://hr-web-ten.vercel.app/brand/sphinx-logo.png';
+
 export const metadata = {
     title: 'SPHINX HR',
     description: 'Enterprise HR Management System',
@@ -31,6 +33,26 @@ export const metadata = {
         ],
         apple: [{ url: '/icons/icon.svg', type: 'image/svg+xml' }],
         shortcut: ['/icons/icon.svg'],
+    },
+    openGraph: {
+        title: 'SPHINX HR',
+        description: 'Enterprise HR Management System',
+        type: 'website' as const,
+        images: [
+            {
+                url: OG_IMAGE_URL,
+                width: 1200,
+                height: 630,
+                alt: 'SPHINX HR',
+                type: 'image/png',
+            },
+        ],
+    },
+    twitter: {
+        card: 'summary_large_image' as const,
+        title: 'SPHINX HR',
+        description: 'Enterprise HR Management System',
+        images: [OG_IMAGE_URL],
     },
 };
 
