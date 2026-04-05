@@ -120,8 +120,9 @@ export default function ChatWindow({
                         style={{
                             backgroundColor: '#e5ddd5',
                             backgroundImage: "linear-gradient(rgba(229,221,213,0.92), rgba(229,221,213,0.92)), url('/brand/sphinx-head.svg')",
-                            backgroundSize: '220px',
-                            backgroundRepeat: 'repeat',
+                            backgroundSize: 'min(42vw, 320px)',
+                            backgroundRepeat: 'no-repeat',
+                            backgroundPosition: 'center',
                         }}
                     >
                         <div className="rounded-lg border border-[#e9edef] bg-white/95 p-3 text-sm text-[#111b21] shadow-sm">

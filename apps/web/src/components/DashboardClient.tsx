@@ -684,42 +684,38 @@ export default function DashboardClient({ locale }: { locale: 'en' | 'ar' }) {
 
     return (
         <main className="dashboard-page pb-12">
-            {canBroadcast && (
-                <div className="px-6 mt-6">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <button className="btn-primary" onClick={() => setAnnouncementOpen(true)}>
-                            {t('sendAnnouncement')}
-                        </button>
-                        <button className="btn-secondary" onClick={triggerPayroll} disabled={sendingPayroll}>
-                            {sendingPayroll ? t('payrollProcessing') : t('payrollButton')}
-                        </button>
-                    </div>
-                </div>
-            )}
-            {noticeContent && (
-                <div className="px-6 mt-6">
-                    <div className="surface-panel rounded-2xl p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex items-start gap-3">
-                                <div className={`flex h-11 w-11 items-center justify-center rounded-full border ${noticeContent.isPayroll ? 'tone-amber' : 'tone-teal'}`}>
-                                    {noticeContent.isPayroll ? <Wallet size={20} /> : <Megaphone size={20} />}
-                                </div>
-                                <div>
-                                    <p className="text-xs uppercase tracking-[0.2em] text-ink/50">{noticeContent.label}</p>
-                                    <p className="text-sm font-semibold">{noticeContent.title || noticeContent.label}</p>
-                                    {noticeContent.body && <p className="text-sm text-ink/60">{noticeContent.body}</p>}
-                                </div>
-                            </div>
-                            <button className="btn-primary" onClick={markAnnouncementRead} disabled={markingNotice}>
-                                {markingNotice ? t('markingRead') : t('markRead')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
             <div className="px-6 mt-6">
                 <div className="dashboard-body-wrap">
-                    <div className="min-w-0">
+                    <div className="min-w-0 space-y-6">
+                        {canBroadcast && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button className="btn-primary" onClick={() => setAnnouncementOpen(true)}>
+                                    {t('sendAnnouncement')}
+                                </button>
+                                <button className="btn-secondary" onClick={triggerPayroll} disabled={sendingPayroll}>
+                                    {sendingPayroll ? t('payrollProcessing') : t('payrollButton')}
+                                </button>
+                            </div>
+                        )}
+                        {noticeContent && (
+                            <div className="surface-panel rounded-2xl p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div className="flex items-start gap-3">
+                                        <div className={`flex h-11 w-11 items-center justify-center rounded-full border ${noticeContent.isPayroll ? 'tone-amber' : 'tone-teal'}`}>
+                                            {noticeContent.isPayroll ? <Wallet size={20} /> : <Megaphone size={20} />}
+                                        </div>
+                                        <div>
+                                            <p className="text-xs uppercase tracking-[0.2em] text-ink/50">{noticeContent.label}</p>
+                                            <p className="text-sm font-semibold">{noticeContent.title || noticeContent.label}</p>
+                                            {noticeContent.body && <p className="text-sm text-ink/60">{noticeContent.body}</p>}
+                                        </div>
+                                    </div>
+                                    <button className="btn-primary" onClick={markAnnouncementRead} disabled={markingNotice}>
+                                        {markingNotice ? t('markingRead') : t('markRead')}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         <CalendarView
                             locale={locale}
                             events={events}
