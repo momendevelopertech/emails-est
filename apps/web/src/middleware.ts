@@ -8,15 +8,26 @@ const intlMiddleware = createMiddleware({
     localePrefix: 'always',
 });
 
+// Simple string-prefix paths that are fully public (no auth required at all).
 const publicPaths = new Set(['login', 'forgot-password', 'reset-password', 'unauthorized']);
+
+// Path prefixes (after locale) that should be publicly accessible for crawlers/sharing.
+// The page component still enforces auth client-side via useRequireAuth.
+const publicPathPrefixes = ['requests/print'];
 
 export default function middleware(req: NextRequest) {
     const { pathname } = req.nextUrl;
     const segments = pathname.split('/').filter(Boolean);
     const locale = segments[0];
     const route = segments[1] || '';
+    // e.g. "requests/print" from /ar/requests/print/leave/123
+    const subPath = segments.slice(1).join('/');
 
-    if (locale && locales.includes(locale as any) && !publicPaths.has(route)) {
+    const isPublicRoute =
+        publicPaths.has(route) ||
+        publicPathPrefixes.some((prefix) => subPath.startsWith(prefix));
+
+    if (locale && locales.includes(locale as any) && !isPublicRoute) {
         const hasAccessToken = !!req.cookies.get('access_token')?.value;
         const hasRefreshToken = !!req.cookies.get('refresh_token')?.value;
 

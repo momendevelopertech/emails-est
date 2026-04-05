@@ -4,7 +4,6 @@ import RequestPrintPreview from '@/components/RequestPrintPreview';
 type RequestType = 'leave' | 'permission';
 
 const OG_IMAGE_PNG_URL = 'https://hr-web-ten.vercel.app/brand/sphinx-logo.png';
-const OG_IMAGE_SVG_URL = 'https://hr-web-ten.vercel.app/brand/sphinx-logo.svg';
 
 function buildMetadata(locale: string, requestType: RequestType): Metadata {
     const isArabic = locale === 'ar';
@@ -47,11 +46,8 @@ function buildMetadata(locale: string, requestType: RequestType): Metadata {
                     url: OG_IMAGE_PNG_URL,
                     width: 1200,
                     height: 630,
-                },
-                {
-                    url: OG_IMAGE_SVG_URL,
-                    width: 1200,
-                    height: 630,
+                    alt: 'SPHINX HR',
+                    type: 'image/png',
                 },
             ],
         },
