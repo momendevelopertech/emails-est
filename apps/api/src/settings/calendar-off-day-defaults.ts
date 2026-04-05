@@ -39,6 +39,10 @@ const DEFAULT_CALENDAR_OFF_DAYS: CalendarOffDayRule[] = [
     { id: 'holiday-2026-october-war', type: 'holiday', nameAr: 'عيد القوات المسلحة', nameEn: 'Armed Forces Day', startDate: '2026-10-06', endDate: '2026-10-06', isRecurringAnnual: true, enabled: true },
 ];
 
+const DEFAULT_RULE_BY_ID = new Map(DEFAULT_CALENDAR_OFF_DAYS.map((rule) => [rule.id, rule]));
+
+const isBrokenLocalizedLabel = (value: string) => /\?{2,}/.test(value.trim());
+
 export const getDefaultCalendarOffDays = (): CalendarOffDayRule[] =>
     DEFAULT_CALENDAR_OFF_DAYS.map((rule) => ({ ...rule }));
 
@@ -59,10 +63,13 @@ export const normalizeCalendarOffDays = (input: unknown): CalendarOffDayRule[] =
             const nameEn = typeof candidate.nameEn === 'string' ? candidate.nameEn.trim() : '';
             if (!startDate || !endDate || !nameAr || !nameEn) return null;
 
+            const id = typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : `${type}-${index + 1}`;
+            const defaultRule = DEFAULT_RULE_BY_ID.get(id);
+
             return {
-                id: typeof candidate.id === 'string' && candidate.id.trim() ? candidate.id : `${type}-${index + 1}`,
+                id,
                 type,
-                nameAr,
+                nameAr: isBrokenLocalizedLabel(nameAr) && defaultRule ? defaultRule.nameAr : nameAr,
                 nameEn,
                 startDate,
                 endDate,
