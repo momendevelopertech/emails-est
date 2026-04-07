@@ -5,6 +5,15 @@ import { Response } from 'express';
 export class RootController {
     @Get()
     getRoot(@Res() res: Response) {
+        return this.sendHealthPage(res);
+    }
+
+    @Get('api')
+    getApiRoot(@Res() res: Response) {
+        return this.sendHealthPage(res);
+    }
+
+    private sendHealthPage(res: Response) {
         res.type('html').send(`<!doctype html>
 <html lang="en">
   <head>

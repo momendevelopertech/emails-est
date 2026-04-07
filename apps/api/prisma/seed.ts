@@ -1,4 +1,4 @@
-import { PrismaClient, Role, Governorate } from '@prisma/client';
+import { PrismaClient, Role, Governorate, RecipientStatus, TemplateType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -434,6 +434,406 @@ async function syncWorkScheduleSettings() {
     });
 }
 
+export async function seedMessagingData(prismaClient: PrismaClient = prisma) {
+    const templates: Array<{ name: string; type: TemplateType; subject: string; body: string }> = [
+        {
+            name: 'EST I Exam Assignment',
+            type: TemplateType.BOTH,
+            subject: 'EST I Exam Assignment',
+            body: `Dear {{name}},
+
+We look forward to welcoming you on {{day}} the {{date}} for the {{exam_type}} Exam as {{role}}. The session will be in:
+
+Test Center: {{test_center}} {{faculty}}
+
+Room #: {{room}}
+
+Address: {{address}}
+
+{{map_link}}
+
+You need to be in the test center at {{arrival_time}} sharp please.
+
+Best Regards,
+The EST Team`,
+        },
+        {
+            name: 'EST II Exam Assignment',
+            type: TemplateType.BOTH,
+            subject: 'EST II Exam Assignment',
+            body: `Dear {{name}},
+
+We look forward to welcoming you on {{day}} the {{date}} for the {{exam_type}} Exam as {{role}}. The session will be in:
+
+Test Center: {{test_center}} {{faculty}}
+
+Room #: {{room}}
+
+Address: {{address}}
+
+{{map_link}}
+
+You need to be in the test center at {{arrival_time}} sharp please.
+
+Best Regards,
+The EST Team`,
+        },
+    ];
+
+    for (const template of templates) {
+        await prismaClient.template.upsert({
+            where: { name: template.name },
+            update: { subject: template.subject, body: template.body, type: template.type },
+            create: { name: template.name, type: template.type, subject: template.subject, body: template.body },
+        });
+    }
+
+    const recipients = [
+        {
+            name: 'Moamen Ahmed Abdo',
+            email: 'test1@example.com',
+            phone: '+201000000000',
+            exam_type: 'EST 1',
+            role: 'Senior',
+            day: 'Friday',
+            date: '27 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Engineering',
+            room: '1st Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Aya Mostafa Hassan',
+            email: 'test2@example.com',
+            phone: '+201000000001',
+            exam_type: 'EST 1',
+            role: 'Senior',
+            day: 'Friday',
+            date: '27 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Engineering',
+            room: '1st Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Omar Nabil Adel',
+            email: 'test3@example.com',
+            phone: '+201000000002',
+            exam_type: 'EST 1',
+            role: 'Senior',
+            day: 'Friday',
+            date: '27 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Engineering',
+            room: '1st Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Sara Mahmoud Ibrahim',
+            email: 'test4@example.com',
+            phone: '+201000000003',
+            exam_type: 'EST 1',
+            role: 'Senior',
+            day: 'Friday',
+            date: '27 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Engineering',
+            room: '1st Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Hassan Samir Khaled',
+            email: 'test5@example.com',
+            phone: '+201000000004',
+            exam_type: 'EST 1',
+            role: 'Senior',
+            day: 'Friday',
+            date: '27 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Engineering',
+            room: '1st Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Laila Mostafa Amin',
+            email: 'test6@example.com',
+            phone: '+201000000005',
+            exam_type: 'EST 1',
+            role: 'Senior',
+            day: 'Friday',
+            date: '27 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Engineering',
+            room: '1st Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Nour Mohamed Ali',
+            email: 'test7@example.com',
+            phone: '+201000000006',
+            exam_type: 'EST 1',
+            role: 'Senior',
+            day: 'Friday',
+            date: '27 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Engineering',
+            room: '1st Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Tamer Saeed Fathy',
+            email: 'test8@example.com',
+            phone: '+201000000007',
+            exam_type: 'EST 1',
+            role: 'Senior',
+            day: 'Friday',
+            date: '27 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Engineering',
+            room: '1st Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Nadia Ahmed Fouad',
+            email: 'test9@example.com',
+            phone: '+201000000008',
+            exam_type: 'EST 1',
+            role: 'Senior',
+            day: 'Friday',
+            date: '27 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Engineering',
+            room: '1st Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Aya Omar Youssef',
+            email: 'test10@example.com',
+            phone: '+201000000009',
+            exam_type: 'EST 1',
+            role: 'Senior',
+            day: 'Friday',
+            date: '27 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Engineering',
+            room: '1st Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Mona Khaled Ibrahim',
+            email: 'test11@example.com',
+            phone: '+201000000010',
+            exam_type: 'EST 2',
+            role: 'Roaming',
+            day: 'Saturday',
+            date: '28 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Medicine',
+            room: 'Ground Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Ahmed Samir Yassin',
+            email: 'test12@example.com',
+            phone: '+201000000011',
+            exam_type: 'EST 2',
+            role: 'Roaming',
+            day: 'Saturday',
+            date: '28 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Medicine',
+            room: 'Ground Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Nourhan Salah Adel',
+            email: 'test13@example.com',
+            phone: '+201000000012',
+            exam_type: 'EST 2',
+            role: 'Roaming',
+            day: 'Saturday',
+            date: '28 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Medicine',
+            room: 'Ground Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Karim Fathy Nabil',
+            email: 'test14@example.com',
+            phone: '+201000000013',
+            exam_type: 'EST 2',
+            role: 'Roaming',
+            day: 'Saturday',
+            date: '28 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Medicine',
+            room: 'Ground Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Salma Mostafa Adel',
+            email: 'test15@example.com',
+            phone: '+201000000014',
+            exam_type: 'EST 2',
+            role: 'Roaming',
+            day: 'Saturday',
+            date: '28 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Medicine',
+            room: 'Ground Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Yara Mahmoud Samir',
+            email: 'test16@example.com',
+            phone: '+201000000015',
+            exam_type: 'EST 2',
+            role: 'Roaming',
+            day: 'Saturday',
+            date: '28 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Medicine',
+            room: 'Ground Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Hend Tarek Gamal',
+            email: 'test17@example.com',
+            phone: '+201000000016',
+            exam_type: 'EST 2',
+            role: 'Roaming',
+            day: 'Saturday',
+            date: '28 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Medicine',
+            room: 'Ground Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Osama Samir Farouk',
+            email: 'test18@example.com',
+            phone: '+201000000017',
+            exam_type: 'EST 2',
+            role: 'Roaming',
+            day: 'Saturday',
+            date: '28 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Medicine',
+            room: 'Ground Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Dina Tamer Youssef',
+            email: 'test19@example.com',
+            phone: '+201000000018',
+            exam_type: 'EST 2',
+            role: 'Roaming',
+            day: 'Saturday',
+            date: '28 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Medicine',
+            room: 'Ground Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+        {
+            name: 'Rana Ali Kamel',
+            email: 'test20@example.com',
+            phone: '+201000000019',
+            exam_type: 'EST 2',
+            role: 'Roaming',
+            day: 'Saturday',
+            date: '28 March 2026',
+            test_center: 'Horus University - Egypt (HUE)',
+            faculty: 'Faculty of Medicine',
+            room: 'Ground Floor',
+            address: 'Damietta New City',
+            map_link: 'https://goo.gl/maps/QpH7dmNahszbVCFM6',
+            arrival_time: '8:00 AM',
+            status: 'PENDING',
+        },
+    ];
+
+    const existingEmails = await prismaClient.recipient.findMany({
+        where: { email: { in: recipients.map((item) => item.email).filter(Boolean) as string[] } },
+        select: { email: true, phone: true },
+    });
+    const existingEmailSet = new Set(existingEmails.map((item) => item.email).filter(Boolean));
+    const existingPhoneSet = new Set(existingEmails.map((item) => item.phone).filter(Boolean));
+
+    const filtered = recipients.filter((row) => {
+        if (!row.name) return false;
+        if (row.email && existingEmailSet.has(row.email)) return false;
+        if (row.phone && existingPhoneSet.has(row.phone)) return false;
+        return true;
+    });
+
+    if (filtered.length) {
+        const createPayload = filtered.map((row) => ({
+            ...row,
+            status: RecipientStatus.PENDING,
+        }));
+        await prismaClient.recipient.createMany({ data: createPayload });
+    }
+}
+
 async function main() {
     console.log('Seeding SPHINX HR database (deduplicated)...');
 
@@ -668,12 +1068,15 @@ async function main() {
         }
     }
 
-    console.log('Database seeded successfully with required accounts.');
+    await seedMessagingData();
+    console.log('Database seeded successfully with required accounts and messaging data.');
 }
 
-main()
-    .catch((error) => {
-        console.error(error);
-        process.exit(1);
-    })
-    .finally(() => prisma.$disconnect());
+if (require.main === module) {
+    main()
+        .catch((error) => {
+            console.error(error);
+            process.exit(1);
+        })
+        .finally(() => prisma.$disconnect());
+}

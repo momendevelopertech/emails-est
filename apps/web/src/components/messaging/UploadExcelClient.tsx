@@ -1,0 +1,130 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
+import { useTranslations } from 'next-intl';
+import toast from 'react-hot-toast';
+import api from '@/lib/api';
+
+const requiredColumns = [
+    'name',
+    'email',
+    'phone',
+    'exam_type',
+    'role',
+    'day',
+    'date',
+    'test_center',
+    'faculty',
+    'room',
+    'address',
+    'map_link',
+    'arrival_time',
+];
+
+export default function UploadExcelClient({ locale }: { locale: string }) {
+    const t = useTranslations('messaging');
+    const [fileName, setFileName] = useState('');
+    const [isUploading, setIsUploading] = useState(false);
+    const [previewCount, setPreviewCount] = useState<number | null>(null);
+
+    const hint = useMemo(
+        () => t('uploadHint') || 'Upload an Excel file with recipient data. Required columns: name, email, phone, exam_type, role, day, date, test_center, faculty, room, address, map_link, arrival_time.',
+        [t],
+    );
+
+    const mapHeader = (value: string) => value.trim().toLowerCase().replace(/\s+/g, '_');
+
+    const parseWorkbook = async (file: File) => {
+        const buffer = await file.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 1, defval: '' });
+
+        if (rows.length < 2) {
+            throw new Error('The sheet must contain a header row and at least one data row.');
+        }
+
+        const headers = (rows[0] as unknown[]).map((value) => mapHeader(String(value || '')));
+        const data = rows.slice(1).map((row) => {
+            const values = row as unknown[];
+            return headers.reduce((acc, header, index) => {
+                acc[header] = values[index] ?? '';
+                return acc;
+            }, {} as Record<string, unknown>);
+        });
+
+        return data
+            .map((row) => ({
+                name: String(row.name || '').trim(),
+                email: String(row.email || '').trim(),
+                phone: String(row.phone || '').trim(),
+                exam_type: String(row.exam_type || '').trim(),
+                role: String(row.role || '').trim(),
+                day: String(row.day || '').trim(),
+                date: String(row.date || '').trim(),
+                test_center: String(row.test_center || '').trim(),
+                faculty: String(row.faculty || '').trim(),
+                room: String(row.room || '').trim(),
+                address: String(row.address || '').trim(),
+                map_link: String(row.map_link || '').trim(),
+                arrival_time: String(row.arrival_time || '').trim(),
+            }))
+            .filter((item) => item.name || item.email || item.phone);
+    };
+
+    const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setFileName(file.name);
+        setIsUploading(true);
+        setPreviewCount(null);
+
+        try {
+            const rows = await parseWorkbook(file);
+            if (rows.length === 0) {
+                throw new Error('No recipients were found in the file.');
+            }
+
+            await api.post('/messaging/recipients/import', { recipients: rows });
+            setPreviewCount(rows.length);
+            toast.success(t('uploadSuccess') || `Imported ${rows.length} recipients successfully.`);
+        } catch (error: any) {
+            toast.error(error?.message || t('uploadError') || 'Unable to import recipients.');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    return (
+        <section className="space-y-6 py-6">
+            <div>
+                <h1 className="text-3xl font-semibold">{t('uploadTitle') || 'Upload Excel'}</h1>
+                <p className="mt-2 max-w-2xl text-sm text-slate-500">{hint}</p>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <label className="block text-sm font-medium text-slate-700">{t('selectFile') || 'Select Excel file'}</label>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <input
+                        type="file"
+                        accept=".xlsx,.xls"
+                        disabled={isUploading}
+                        className="file-input"
+                        onChange={handleChange}
+                    />
+                    <span className="text-sm text-slate-500">{fileName || (t('noFileSelected') || 'No file selected')}</span>
+                </div>
+                {previewCount !== null && (
+                    <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+                        {t('importedCount', { count: previewCount }) || `${previewCount} recipients imported.`}
+                    </div>
+                )}
+                <div className="mt-4 text-xs text-slate-500">
+                    {t('uploadColumnsHint') || 'The first row must contain header names matching the field list.'}
+                </div>
+            </div>
+        </section>
+    );
+}

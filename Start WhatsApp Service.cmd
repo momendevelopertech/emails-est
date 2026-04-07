@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 title Start WhatsApp Service
 
-powershell -NoLogo -ExecutionPolicy Bypass -File ".\scripts\start-whatsapp-service.ps1" -Restart
+powershell -NoLogo -ExecutionPolicy Bypass -File ".\scripts\start-whatsapp-service.ps1"
 
 echo.
 pause

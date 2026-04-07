@@ -76,6 +76,11 @@ export default function NavLinks({ locale, collapsed = false }: { locale: string
 
     const links = useMemo(() => [
         { href: `/${locale}`, label: t('dashboard'), icon: LayoutDashboard, tone: 'dashboard' },
+        { href: `/${locale}/messaging`, label: t('messaging'), icon: LayoutDashboard, tone: 'dashboard' },
+        { href: `/${locale}/messaging/upload`, label: t('uploadExcel'), icon: FileText, tone: 'forms' },
+        { href: `/${locale}/messaging/templates`, label: t('templates'), icon: ClipboardList, tone: 'requests' },
+        { href: `/${locale}/messaging/send`, label: t('sendCampaign'), icon: MessageCircle, tone: 'chat' },
+        { href: `/${locale}/messaging/logs`, label: t('logs'), icon: BarChart3, tone: 'reports' },
         { href: `/${locale}/requests`, label: t('requests'), icon: ClipboardList, tone: 'requests' },
         { href: `/${locale}/chat`, label: t('chat'), badge: unreadChats, icon: MessageCircle, tone: 'chat' },
         ...(canManageEmployees ? [{ href: `/${locale}/employees`, label: t('employees'), icon: Users, tone: 'employees' }] : []),

@@ -517,3 +517,59 @@ model WorkScheduleSettings {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 }
+
+enum RecipientStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
+enum TemplateType {
+  EMAIL
+  WHATSAPP
+  BOTH
+}
+
+model Template {
+  id         String       @id @default(cuid())
+  name       String       @unique
+  type       TemplateType @default(BOTH)
+  subject    String
+  body       String
+  created_at DateTime     @default(now())
+}
+
+model Recipient {
+  id             String          @id @default(cuid())
+  name           String
+  email          String?
+  phone          String?
+  exam_type      String?
+  role           String?
+  day            String?
+  date           String?
+  test_center    String?
+  faculty        String?
+  room           String?
+  address        String?
+  map_link       String?
+  arrival_time   String?
+  status         RecipientStatus @default(PENDING)
+  error_message  String?
+  attempts_count Int             @default(0)
+  last_attempt_at DateTime?
+  created_at     DateTime        @default(now())
+  updated_at     DateTime        @updatedAt
+  logs           Log[]
+}
+
+model Log {
+  id           String          @id @default(cuid())
+  recipientId  String
+  status       RecipientStatus
+  error        String?
+  created_at   DateTime        @default(now())
+
+  recipient    Recipient       @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+}

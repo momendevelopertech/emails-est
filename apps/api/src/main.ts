@@ -7,6 +7,8 @@ import cookieParser = require('cookie-parser');
 import helmet from 'helmet';
 import csurf = require('csurf');
 import { HttpExceptionFilter } from './shared/http-exception.filter';
+import { PrismaService } from './prisma/prisma.service';
+import { seedMessagingData } from '../prisma/seed';
 import { getAllowedOrigins, getCookieSettings } from './shared/cookie-settings';
 import { assertSecurityEnv } from './shared/env-check';
 
@@ -27,6 +29,24 @@ const formatDebugCookies = (cookies?: Record<string, unknown>) => {
         return acc;
     }, {});
 };
+
+async function seedMessagingOnStartup(app: any) {
+    if (process.env.NODE_ENV === 'production' || process.env.SEED_MESSAGING_ON_STARTUP === '0') {
+        return;
+    }
+
+    const prisma = app.get(PrismaService);
+    try {
+        const count = await prisma.recipient.count();
+        if (count === 0) {
+            console.log('Seeding messaging dataset on startup...');
+            await seedMessagingData(prisma);
+            console.log('Messaging dataset seeded.');
+        }
+    } catch (error) {
+        console.warn('Messaging seed skipped:', error?.message || error);
+    }
+}
 
 async function bootstrap() {
     const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -126,7 +146,10 @@ async function bootstrap() {
 
     // API prefix
     app.setGlobalPrefix('api', {
-        exclude: [{ path: '', method: RequestMethod.GET }],
+        exclude: [
+            { path: '', method: RequestMethod.GET },
+            { path: 'api', method: RequestMethod.GET },
+        ],
     });
 
     // Swagger docs
@@ -142,6 +165,7 @@ async function bootstrap() {
     }
 
     const port = process.env.API_PORT || 3001;
+    await seedMessagingOnStartup(app);
     await app.listen(port);
     console.log(`🚀 SPHINX HR API running on http://localhost:${port}`);
     if (!isProd) {

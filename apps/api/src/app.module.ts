@@ -7,6 +7,7 @@ import * as path from 'path';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { MessagingModule } from './messaging/messaging.module';
 import { DepartmentsModule } from './departments/departments.module';
 import { LeavesModule } from './leaves/leaves.module';
 import { PermissionsModule } from './permissions/permissions.module';
@@ -69,6 +70,7 @@ const resolveEnvFilePaths = () => {
         ChatModule,
         LatenessModule,
         BranchesModule,
+        MessagingModule,
     ],
     controllers: [RootController],
     providers: [

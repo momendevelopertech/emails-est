@@ -256,24 +256,31 @@ function Start-EvolutionApi {
     $script:evolutionStderr = Resolve-LogPath -Path $evolutionStderr
 
     $distEntry = Join-Path $evolutionDir 'dist\main.js'
+    $tsxEntry = Join-Path $evolutionDir 'node_modules\.bin\tsx.cmd'
     $timeoutSeconds = 180
     $startupCommand = ''
     $process = $null
 
     if (Test-Path $distEntry) {
-        $startupCommand = "cmd /c cd /d `"$evolutionDir`" && node dist\main.js"
+        $startupCommand = "node `"$distEntry`""
         $process = Start-Process `
-            -FilePath 'cmd.exe' `
-            -ArgumentList '/c', "cd /d `"$evolutionDir`" && node dist\main.js" `
+            -FilePath 'node.exe' `
+            -ArgumentList $distEntry `
+            -WorkingDirectory $evolutionDir `
             -RedirectStandardOutput $evolutionStdout `
             -RedirectStandardError $evolutionStderr `
             -PassThru
     } else {
-        $startupCommand = "cmd /c cd /d `"$evolutionDir`" && node_modules\.bin\tsx.cmd .\src\main.ts"
+        if (-not (Test-Path $tsxEntry)) {
+            throw "Evolution API startup entry was not found. Checked: $distEntry and $tsxEntry"
+        }
+
+        $startupCommand = "`"$tsxEntry`" .\src\main.ts"
         $timeoutSeconds = 210
         $process = Start-Process `
-            -FilePath 'cmd.exe' `
-            -ArgumentList '/c', "cd /d `"$evolutionDir`" && node_modules\\.bin\\tsx.cmd .\\src\\main.ts" `
+            -FilePath $tsxEntry `
+            -ArgumentList '.\src\main.ts' `
+            -WorkingDirectory $evolutionDir `
             -RedirectStandardOutput $evolutionStdout `
             -RedirectStandardError $evolutionStderr `
             -PassThru

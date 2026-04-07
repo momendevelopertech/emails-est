@@ -1,5 +1,6 @@
 param(
-    [switch]$Restart
+    [switch]$Restart,
+    [switch]$RebuildApi
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,6 +14,7 @@ $apiStderr = Join-Path $logDir 'api-stderr.log'
 $webStdout = Join-Path $logDir 'web-stdout.log'
 $webStderr = Join-Path $logDir 'web-stderr.log'
 $whatsAppScript = Join-Path $PSScriptRoot 'start-whatsapp-service.ps1'
+$apiDistEntry = Join-Path $apiDir 'dist\src\main.js'
 
 function Test-ListeningPort {
     param([int]$Port)
@@ -130,7 +132,7 @@ if ($Restart) {
     & $whatsAppScript
 }
 
-if ($Restart -or -not (Test-ListeningPort -Port 3001)) {
+if ($RebuildApi -or -not (Test-Path $apiDistEntry)) {
     Write-Host ''
     Write-Host 'Building API...' -ForegroundColor Cyan
     Push-Location $apiDir
@@ -144,7 +146,7 @@ if ($Restart -or -not (Test-ListeningPort -Port 3001)) {
     }
 } else {
     Write-Host ''
-    Write-Host 'API is already running, skipping rebuild.' -ForegroundColor DarkGray
+    Write-Host 'Using existing API build, skipping rebuild.' -ForegroundColor DarkGray
 }
 
 Write-Host ''
