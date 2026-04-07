@@ -21,9 +21,12 @@ export default function MessagingDashboardClient({ locale }: { locale: string })
         isLoading,
         error,
         refetch,
-    } = useQuery(['messaging-recipients'], async () => {
-        const response = await api.get('/messaging/recipients', { params: { limit: 100 } });
-        return response.data;
+    } = useQuery({
+        queryKey: ['messaging-recipients'],
+        queryFn: async () => {
+            const response = await api.get('/messaging/recipients', { params: { page: 1, limit: 20 } });
+            return response.data;
+        },
     });
 
     useEffect(() => {

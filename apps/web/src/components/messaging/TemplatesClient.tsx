@@ -17,15 +17,19 @@ export default function TemplatesClient({ locale }: { locale: string }) {
     const [selected, setSelected] = useState<string | null>(null);
     const [form, setForm] = useState({ name: '', type: 'BOTH', subject: '', body: '' });
 
-    const { data, refetch } = useQuery(['messaging-templates'], async () => {
-        const response = await api.get('/messaging/templates');
-        return response.data;
+    const { data, refetch } = useQuery({
+        queryKey: ['messaging-templates'],
+        queryFn: async () => {
+            const response = await api.get('/messaging/templates');
+            return response.data;
+        },
     });
 
-    const createMutation = useMutation(async () => {
-        const response = await api.post('/messaging/templates', form);
-        return response.data;
-    }, {
+    const createMutation = useMutation({
+        mutationFn: async () => {
+            const response = await api.post('/messaging/templates', form);
+            return response.data;
+        },
         onSuccess() {
             toast.success(t('templateCreated') || 'Template created');
             setForm({ name: '', type: 'BOTH', subject: '', body: '' });
@@ -37,11 +41,12 @@ export default function TemplatesClient({ locale }: { locale: string }) {
         },
     });
 
-    const updateMutation = useMutation(async () => {
-        if (!selected) return null;
-        const response = await api.put(`/messaging/templates/${selected}`, form);
-        return response.data;
-    }, {
+    const updateMutation = useMutation({
+        mutationFn: async () => {
+            if (!selected) return null;
+            const response = await api.put(`/messaging/templates/${selected}`, form);
+            return response.data;
+        },
         onSuccess() {
             toast.success(t('templateUpdated') || 'Template updated');
             setSelected(null);
@@ -52,10 +57,11 @@ export default function TemplatesClient({ locale }: { locale: string }) {
         },
     });
 
-    const deleteMutation = useMutation(async (id: string) => {
-        const response = await api.delete(`/messaging/templates/${id}`);
-        return response.data;
-    }, {
+    const deleteMutation = useMutation({
+        mutationFn: async (id: string) => {
+            const response = await api.delete(`/messaging/templates/${id}`);
+            return response.data;
+        },
         onSuccess() {
             toast.success(t('templateDeleted') || 'Template deleted');
             if (selected) setSelected(null);
@@ -136,7 +142,7 @@ export default function TemplatesClient({ locale }: { locale: string }) {
                             />
                         </div>
                         <div className="flex flex-wrap gap-3">
-                            <button className="btn-primary" type="button" onClick={saveTemplate} disabled={createMutation.isLoading || updateMutation.isLoading}>
+                            <button className="btn-primary" type="button" onClick={saveTemplate} disabled={createMutation.status === 'pending' || updateMutation.status === 'pending'}>
                                 {selected ? t('updateTemplate') || 'Update template' : t('createTemplate') || 'Create template'}
                             </button>
                             {selected && (

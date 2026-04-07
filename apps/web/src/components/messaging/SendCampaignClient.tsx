@@ -17,15 +17,19 @@ export default function SendCampaignClient({ locale }: { locale: string }) {
     const [status, setStatus] = useState('');
     const [selectedIds, setSelectedIds] = useState('');
 
-    const { data: templates } = useQuery(['messaging-templates'], async () => {
-        const response = await api.get('/messaging/templates');
-        return response.data;
+    const { data: templates } = useQuery({
+        queryKey: ['messaging-templates'],
+        queryFn: async () => {
+            const response = await api.get('/messaging/templates');
+            return response.data;
+        },
     });
 
-    const sendMutation = useMutation(async (payload: any) => {
-        const response = await api.post('/messaging/send', payload);
-        return response.data;
-    }, {
+    const sendMutation = useMutation({
+        mutationFn: async (payload: any) => {
+            const response = await api.post('/messaging/send', payload);
+            return response.data;
+        },
         onSuccess(data) {
             toast.success(`${data.processed} ${t('sentSuccess') || 'recipients processed successfully.'}`);
         },
@@ -34,10 +38,11 @@ export default function SendCampaignClient({ locale }: { locale: string }) {
         },
     });
 
-    const retryMutation = useMutation(async (payload: any) => {
-        const response = await api.post('/messaging/retry', payload);
-        return response.data;
-    }, {
+    const retryMutation = useMutation({
+        mutationFn: async (payload: any) => {
+            const response = await api.post('/messaging/retry', payload);
+            return response.data;
+        },
         onSuccess(data) {
             toast.success(`${data.processed} ${t('retrySuccess') || 'retry attempts completed.'}`);
         },
@@ -134,16 +139,16 @@ export default function SendCampaignClient({ locale }: { locale: string }) {
                 </div>
 
                 <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <button className="btn-primary" type="button" onClick={sendAllPending} disabled={sendMutation.isLoading || retryMutation.isLoading}>
+                    <button className="btn-primary" type="button" onClick={sendAllPending} disabled={sendMutation.status === 'pending' || retryMutation.status === 'pending'}>
                         {t('sendAllPending') || 'Send All Pending'}
                     </button>
-                    <button className="btn-outline" type="button" onClick={sendFiltered} disabled={sendMutation.isLoading || retryMutation.isLoading}>
+                    <button className="btn-outline" type="button" onClick={sendFiltered} disabled={sendMutation.status === 'pending' || retryMutation.status === 'pending'}>
                         {t('sendFiltered') || 'Send Filtered'}
                     </button>
-                    <button className="btn-secondary" type="button" onClick={retryFailed} disabled={retryMutation.isLoading || sendMutation.isLoading}>
+                    <button className="btn-secondary" type="button" onClick={retryFailed} disabled={retryMutation.status === 'pending' || sendMutation.status === 'pending'}>
                         {t('retryFailed') || 'Retry Failed'}
                     </button>
-                    <button className="btn-outline" type="button" onClick={retrySelected} disabled={retryMutation.isLoading || sendMutation.isLoading}>
+                    <button className="btn-outline" type="button" onClick={retrySelected} disabled={retryMutation.status === 'pending' || sendMutation.status === 'pending'}>
                         {t('retrySelected') || 'Retry Selected'}
                     </button>
                 </div>

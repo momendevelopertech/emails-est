@@ -16,9 +16,12 @@ const statusStyles: Record<string, string> = {
 export default function LogsClient({ locale }: { locale: string }) {
     const t = useTranslations('messaging');
 
-    const { data, error, isLoading } = useQuery(['messaging-logs'], async () => {
-        const response = await api.get('/messaging/logs', { params: { limit: 100 } });
-        return response.data;
+    const { data, error, isLoading } = useQuery<any, Error>({
+        queryKey: ['messaging-logs'],
+        queryFn: async () => {
+            const response = await api.get('/messaging/logs', { params: { limit: 100 } });
+            return response.data;
+        },
     });
 
     useEffect(() => {
@@ -27,7 +30,7 @@ export default function LogsClient({ locale }: { locale: string }) {
         }
     }, [error, t]);
 
-    const rows = data?.items ?? [];
+    const rows = (data as any)?.items ?? [];
 
     return (
         <section className="space-y-6 py-6">
