@@ -1,5 +1,5 @@
-import DashboardClient from '@/components/DashboardClient';
+import { redirect } from 'next/navigation';
 
 export default function DashboardPage({ params }: { params: { locale: 'en' | 'ar' } }) {
-    return <DashboardClient locale={params.locale} />;
+    redirect(`/${params.locale}/messaging/upload`);
 }

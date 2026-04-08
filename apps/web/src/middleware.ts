@@ -11,9 +11,8 @@ const intlMiddleware = createMiddleware({
 // Simple string-prefix paths that are fully public (no auth required at all).
 const publicPaths = new Set(['login', 'forgot-password', 'reset-password', 'unauthorized']);
 
-// Path prefixes (after locale) that should be publicly accessible for crawlers/sharing.
-// The page component still enforces auth client-side via useRequireAuth.
-const publicPathPrefixes = ['requests/print'];
+// Path prefixes (after locale) that are publicly accessible (no auth redirect).
+const publicPathPrefixes = ['requests/print', 'messaging'];
 
 export default function middleware(req: NextRequest) {
     const { pathname } = req.nextUrl;
