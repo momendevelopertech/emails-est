@@ -39,15 +39,15 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
         const buffer = await file.arrayBuffer();
         const workbook = XLSX.read(buffer, { type: 'array' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { header: 1, defval: '' });
+        const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
 
-        if (rows.length < 2) {
+        if (rows.length < 2 || !Array.isArray(rows[0])) {
             throw new Error('The sheet must contain a header row and at least one data row.');
         }
 
-        const headers = (rows[0] as unknown[]).map((value) => mapHeader(String(value || '')));
+        const headers = rows[0].map((value) => mapHeader(String(value || '')));
         const data = rows.slice(1).map((row) => {
-            const values = row as unknown[];
+            const values = Array.isArray(row) ? row : [];
             return headers.reduce((acc, header, index) => {
                 acc[header] = values[index] ?? '';
                 return acc;
