@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import api from '@/lib/api';
+import { useRequireAuth } from '@/lib/use-auth';
 
 const requiredColumns = [
     'name',
@@ -23,10 +24,15 @@ const requiredColumns = [
 ];
 
 export default function UploadExcelClient({ locale }: { locale: string }) {
+    const { ready } = useRequireAuth(locale);
     const t = useTranslations('messaging');
     const [fileName, setFileName] = useState('');
     const [isUploading, setIsUploading] = useState(false);
     const [previewCount, setPreviewCount] = useState<number | null>(null);
+
+    if (!ready) {
+        return null;
+    }
 
     const hint = useMemo(
         () => t('uploadHint') || 'Upload an Excel file with recipient data. Required columns: name, email, phone, exam_type, role, day, date, test_center, faculty, room, address, map_link, arrival_time.',
@@ -118,6 +124,7 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
                 throw new Error('No recipients were found in the file.');
             }
 
+            await api.get('/auth/csrf', { headers: { 'x-skip-activity': '1' } });
             await api.post('/messaging/recipients/import', { recipients: rows });
             setPreviewCount(rows.length);
             toast.success(t('uploadSuccess') || `Imported ${rows.length} recipients successfully.`);
