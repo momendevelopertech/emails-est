@@ -29,8 +29,7 @@ export function useRequireAuth(locale: string) {
             }
         }
 
-        const hasRequiredProfile = !!(user?.jobTitle && user?.governorate && user?.branchId);
-        if (bootstrapped && user && hasRequiredProfile && verifiedRef.current) {
+        if (bootstrapped && user && verifiedRef.current) {
             setReady(true);
             setLoading(false);
             return;
