@@ -55,29 +55,32 @@ export class MessagingService {
     async importRecipients(recipients: CreateRecipientDto[]) {
         const normalized = recipients
             .map((recipient) => ({
-                name: recipient.name?.trim() || null,
-                email: recipient.email?.trim() || null,
-                phone: recipient.phone?.trim() || null,
-                exam_type: recipient.exam_type?.trim() || null,
-                role: recipient.role?.trim() || null,
-                day: recipient.day?.trim() || null,
-                date: recipient.date?.trim() || null,
-                test_center: recipient.test_center?.trim() || null,
-                faculty: recipient.faculty?.trim() || null,
-                room: recipient.room?.trim() || null,
-                address: recipient.address?.trim() || null,
-                map_link: recipient.map_link?.trim() || null,
-                arrival_time: recipient.arrival_time?.trim() || null,
+                name: this.normalizeImportValue(recipient.name),
+                email: this.normalizeImportValue(recipient.email),
+                phone: this.normalizeImportValue(recipient.phone),
+                exam_type: this.normalizeImportValue(recipient.exam_type),
+                role: this.normalizeImportValue(recipient.role),
+                day: this.normalizeImportValue(recipient.day),
+                date: this.normalizeImportValue(recipient.date),
+                test_center: this.normalizeImportValue(recipient.test_center),
+                faculty: this.normalizeImportValue(recipient.faculty),
+                room: this.normalizeImportValue(recipient.room),
+                address: this.normalizeImportValue(recipient.address),
+                map_link: this.normalizeImportValue(recipient.map_link),
+                arrival_time: this.normalizeImportValue(recipient.arrival_time),
                 status: RecipientStatus.PENDING,
             }))
-            .filter((item) => item.name || item.email || item.phone);
+            .filter((item) => item.name);
 
         if (!normalized.length) {
-            return { imported: 0 };
+            return { imported: 0, skipped: recipients.length };
         }
 
         await this.prisma.recipient.createMany({ data: normalized });
-        return { imported: normalized.length };
+        return {
+            imported: normalized.length,
+            skipped: recipients.length - normalized.length,
+        };
     }
 
     async getTemplates() {
@@ -249,5 +252,13 @@ export class MessagingService {
             const value = data[key] ?? data[key.replace(/_/g, '')] ?? '';
             return String(value ?? '');
         });
+    }
+
+    private normalizeImportValue(value: unknown): string | null {
+        if (value === null || value === undefined) {
+            return null;
+        }
+        const normalized = String(value).trim();
+        return normalized.length ? normalized : null;
     }
 }
