@@ -1,12 +1,14 @@
 import { ReactNode } from 'react';
 import AppShell from '@/components/AppShell';
+import { resolveRouteLocale } from '@/lib/route-locale';
 
-export default function AppLayout({
+export default async function AppLayout({
     children,
     params,
 }: {
     children: ReactNode;
-    params: { locale: string };
+    params: { locale?: string } | Promise<{ locale?: string }>;
 }) {
-    return <AppShell locale={params.locale}>{children}</AppShell>;
+    const locale = await resolveRouteLocale(params);
+    return <AppShell locale={locale}>{children}</AppShell>;
 }
