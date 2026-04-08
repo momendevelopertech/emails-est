@@ -35,6 +35,37 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
 
     const mapHeader = (value: string) => value.trim().toLowerCase().replace(/\s+/g, '_');
 
+    const downloadWorkbook = (kind: 'template' | 'sample') => {
+        const workbook = XLSX.utils.book_new();
+        const rows = [
+            requiredColumns,
+            ...(kind === 'sample'
+                ? [[
+                    'Ahmed Ali',
+                    'ahmed.ali@example.com',
+                    '+201001234567',
+                    'EST 1',
+                    'Senior',
+                    'Friday',
+                    '2026-04-10',
+                    'Nasr City Center',
+                    'Engineering',
+                    'A-12',
+                    'Nasr City, Cairo',
+                    'https://maps.app.goo.gl/example',
+                    '08:30',
+                ]]
+                : []),
+        ];
+
+        const worksheet = XLSX.utils.aoa_to_sheet(rows);
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'recipients');
+        XLSX.writeFile(
+            workbook,
+            kind === 'sample' ? 'messaging-recipients-sample.xlsx' : 'messaging-recipients-template.xlsx',
+        );
+    };
+
     const parseWorkbook = async (file: File) => {
         const buffer = await file.arrayBuffer();
         const workbook = XLSX.read(buffer, { type: 'array' });
@@ -104,26 +135,46 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
                 <p className="mt-2 max-w-2xl text-sm text-slate-500">{hint}</p>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <label className="block text-sm font-medium text-slate-700">{t('selectFile') || 'Select Excel file'}</label>
-                <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <input
-                        type="file"
-                        accept=".xlsx,.xls"
-                        disabled={isUploading}
-                        className="file-input"
-                        onChange={handleChange}
-                    />
-                    <span className="text-sm text-slate-500">{fileName || (t('noFileSelected') || 'No file selected')}</span>
-                </div>
-                {previewCount !== null && (
-                    <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
-                        {t('importedCount', { count: previewCount }) || `${previewCount} recipients imported.`}
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <label className="block text-sm font-medium text-slate-700">{t('selectFile') || 'Select Excel file'}</label>
+                    <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <input
+                            type="file"
+                            accept=".xlsx,.xls"
+                            disabled={isUploading}
+                            className="file-input"
+                            onChange={handleChange}
+                        />
+                        <span className="text-sm text-slate-500">{fileName || (t('noFileSelected') || 'No file selected')}</span>
                     </div>
-                )}
-                <div className="mt-4 text-xs text-slate-500">
-                    {t('uploadColumnsHint') || 'The first row must contain header names matching the field list.'}
+                    {previewCount !== null && (
+                        <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+                            {t('importedCount', { count: previewCount }) || `${previewCount} recipients imported.`}
+                        </div>
+                    )}
+                    <div className="mt-4 text-xs text-slate-500">
+                        {t('uploadColumnsHint') || 'The first row must contain header names matching the field list.'}
+                    </div>
                 </div>
+
+                <aside className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <h2 className="text-lg font-semibold text-slate-900">{t('downloadCenterTitle') || 'Download files'}</h2>
+                    <p className="mt-2 text-sm text-slate-500">
+                        {t('downloadCenterHint') || 'Download a blank template or a pre-filled sample to test quickly.'}
+                    </p>
+                    <div className="mt-4 flex flex-col gap-3">
+                        <button type="button" className="btn-outline" onClick={() => downloadWorkbook('template')}>
+                            {t('downloadTemplate') || 'Download template'}
+                        </button>
+                        <button type="button" className="btn-secondary" onClick={() => downloadWorkbook('sample')}>
+                            {t('downloadSample') || 'Download sample'}
+                        </button>
+                    </div>
+                    <p className="mt-4 text-xs text-slate-500">
+                        {t('downloadNote') || 'Template contains only headers. Sample contains one test row with the same headers.'}
+                    </p>
+                </aside>
             </div>
         </section>
     );
