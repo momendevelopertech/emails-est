@@ -26,6 +26,10 @@ const requiredColumns = [
 export default function UploadExcelClient({ locale }: { locale: string }) {
     const { ready } = useRequireAuth(locale);
     const t = useTranslations('messaging');
+    const hint = useMemo(
+        () => t('uploadHint') || 'Upload an Excel file with recipient data. Required columns: name, email, phone, exam_type, role, day, date, test_center, faculty, room, address, map_link, arrival_time.',
+        [t],
+    );
     const [fileName, setFileName] = useState('');
     const [isUploading, setIsUploading] = useState(false);
     const [previewCount, setPreviewCount] = useState<number | null>(null);
@@ -33,11 +37,6 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
     if (!ready) {
         return null;
     }
-
-    const hint = useMemo(
-        () => t('uploadHint') || 'Upload an Excel file with recipient data. Required columns: name, email, phone, exam_type, role, day, date, test_center, faculty, room, address, map_link, arrival_time.',
-        [t],
-    );
 
     const mapHeader = (value: string) => value.trim().toLowerCase().replace(/\s+/g, '_');
 
