@@ -22,7 +22,8 @@
     "react-dom": "^18.3.0",
     "react-hot-toast": "^2.4.1",
     "xlsx": "^0.18.5",
-    "zustand": "^4.5.2"
+    "zustand": "^4.5.2",
+    "pusher-js": "^8.4.0"
   },
   "optionalDependencies": {
     "@next/swc-win32-x64-msvc": "14.2.3"
