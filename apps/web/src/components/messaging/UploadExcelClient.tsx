@@ -35,7 +35,13 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
     const [previewCount, setPreviewCount] = useState<number | null>(null);
 
     if (!ready) {
-        return null;
+        return (
+            <section className="py-10">
+                <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
+                    {t('loading') || 'Loading...'}
+                </div>
+            </section>
+        );
     }
 
     const mapHeader = (value: string) => value.trim().toLowerCase().replace(/\s+/g, '_');

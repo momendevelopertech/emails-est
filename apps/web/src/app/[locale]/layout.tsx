@@ -1,16 +1,15 @@
 import '../globals.css';
 import { ReactNode } from 'react';
-import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { Toaster } from 'react-hot-toast';
-import { defaultLocale, locales } from '@/i18n/routing';
 import { Cairo } from 'next/font/google';
 import ClientCacheManager from '@/components/ClientCacheManager';
 import PwaRegistrar from '@/components/PwaRegistrar';
 import { AuthProvider } from '@/context/AuthContext';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 import ReactQueryProvider from '@/components/ReactQueryProvider';
+import { resolveRouteLocale } from '@/lib/route-locale';
 
 const cairo = Cairo({
     subsets: ['arabic', 'latin'],
@@ -61,10 +60,9 @@ export default async function LocaleLayout({
     params,
 }: {
     children: ReactNode;
-    params: { locale: string };
+    params: { locale?: string } | Promise<{ locale?: string }>;
 }) {
-    const locale = locales.includes(params.locale as any) ? params.locale : defaultLocale;
-    if (!locale) notFound();
+    const locale = await resolveRouteLocale(params);
     const messages = await getMessages();
     const dir = locale === 'ar' ? 'rtl' : 'ltr';
     const fontClass = cairo.variable;
