@@ -37,7 +37,7 @@ describe('WhatsAppService', () => {
             .mockResolvedValueOnce({ status: 500, data: { message: 'failed-2' } })
             .mockResolvedValueOnce({ status: 200, data: { id: 'ok' } });
 
-        const service = new WhatsAppService(prisma as any);
+        const service = new WhatsAppService();
         (service as any).waitBeforeRetry = jest.fn().mockResolvedValue(undefined);
 
         const result = await service.sendWhatsApp('01012345678', 'hello world');
@@ -53,7 +53,7 @@ describe('WhatsAppService', () => {
     });
 
     it('returns a validation error for invalid Egyptian mobile numbers without attempting delivery', async () => {
-        const service = new WhatsAppService(prisma as any);
+        const service = new WhatsAppService();
 
         const result = await service.sendWhatsApp('012345', 'hello world');
 

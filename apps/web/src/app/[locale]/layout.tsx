@@ -5,19 +5,12 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { Toaster } from 'react-hot-toast';
 import { defaultLocale, locales } from '@/i18n/routing';
-import { Cairo } from 'next/font/google';
 import ClientCacheManager from '@/components/ClientCacheManager';
 import PwaRegistrar from '@/components/PwaRegistrar';
 import { AuthProvider } from '@/context/AuthContext';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 import ReactQueryProvider from '@/components/ReactQueryProvider';
 
-const cairo = Cairo({
-    subsets: ['arabic', 'latin'],
-    variable: '--font-primary',
-    weight: ['400', '500', '600', '700'],
-    preload: false,
-});
 
 const OG_IMAGE_URL = 'https://hr-web-ten.vercel.app/brand/sphinx-logo.png';
 
@@ -67,10 +60,8 @@ export default async function LocaleLayout({
     if (!locale) notFound();
     const messages = await getMessages();
     const dir = locale === 'ar' ? 'rtl' : 'ltr';
-    const fontClass = cairo.variable;
-
     return (
-        <html lang={locale} dir={dir} className={fontClass}>
+        <html lang={locale} dir={dir}>
             <body className="bg-atmosphere text-ink font-base">
                 <NextIntlClientProvider messages={messages}>
                     <ReactQueryProvider>
