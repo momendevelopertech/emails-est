@@ -2,7 +2,6 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { RequestMethod, ValidationPipe } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser = require('cookie-parser');
 import helmet from 'helmet';
 import csurf = require('csurf');
@@ -152,25 +151,10 @@ async function bootstrap() {
         ],
     });
 
-    // Swagger docs
-    if (!isProd) {
-        const config = new DocumentBuilder()
-            .setTitle('SPHINX HR System API')
-            .setDescription('Enterprise HR Management System API')
-            .setVersion('1.0')
-            .addBearerAuth()
-            .build();
-        const document = SwaggerModule.createDocument(app, config);
-        SwaggerModule.setup('api/docs', app, document);
-    }
-
     const port = process.env.API_PORT || 3001;
     await seedMessagingOnStartup(app);
     await app.listen(port);
     console.log(`🚀 SPHINX HR API running on http://localhost:${port}`);
-    if (!isProd) {
-        console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
-    }
 }
 
 bootstrap();
