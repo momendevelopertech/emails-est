@@ -47,7 +47,7 @@ export function useRequireAuth(locale: string) {
                     return;
                 }
                 await api.get('/auth/csrf');
-                if (bootstrapped && user && hasRequiredProfile) {
+                if (bootstrapped && user) {
                     await api.post('/auth/refresh', {});
                     if (!active) return;
                     if (typeof window !== 'undefined') {
@@ -82,7 +82,7 @@ export function useRequireAuth(locale: string) {
                     return;
                 }
 
-                if (bootstrapped && user && hasRequiredProfile) {
+                if (bootstrapped && user) {
                     verifiedRef.current = true;
                     setReady(true);
                     return;

@@ -7,24 +7,17 @@ import { getJwtKeys } from './jwt-keys';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-    constructor(private prisma: PrismaService) {
-        const keys = getJwtKeys();
-        super({
-            jwtFromRequest: ExtractJwt.fromExtractors([
-                (req: Request) => req?.cookies?.access_token,
-                ExtractJwt.fromAuthHeaderAsBearerToken(),
-            ]),
-            ignoreExpiration: false,
-            secretOrKey: keys.publicKey,
-            algorithms: ['RS256'],
-        });
-    }
+  constructor(private prisma: PrismaService) {
+    const keys = getJwtKeys();
+    super({
+      jwtFromRequest: ExtractJwt.fromExtractors([(req: Request) => req?.cookies?.access_token, ExtractJwt.fromAuthHeaderAsBearerToken()]),
+      ignoreExpiration: false,
+      secretOrKey: keys.publicKey,
+      algorithms: ['RS256'],
+    });
+  }
 
-    async validate(payload: any) {
-        const user = await this.prisma.user.findUnique({
-            where: { id: payload.sub },
-            include: { department: true },
-        });
-        return user;
-    }
+  async validate(payload: any) {
+    return this.prisma.user.findUnique({ where: { id: payload.sub } });
+  }
 }

@@ -1,12 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
-import { PrismaService } from '../prisma/prisma.service';
 import { normalizeEgyptMobilePhone } from '../shared/egypt-phone';
 
 type WhatsAppConfigCandidate = {
     apiKey?: string | null;
     baseUrl: string;
-    source: 'database' | 'environment';
+    source: 'environment';
 };
 
 export type WhatsAppDeliveryResult = {
@@ -26,7 +25,6 @@ const DEFAULT_RETRY_ATTEMPTS = 3;
 export class WhatsAppService {
     private readonly logger = new Logger(WhatsAppService.name);
 
-    constructor(private readonly prisma: PrismaService) { }
 
     formatEgyptianNumber(phone?: string | null) {
         const normalized = normalizeEgyptMobilePhone(phone);
@@ -160,20 +158,7 @@ export class WhatsAppService {
 
         pushCandidate(process.env.EVOLUTION_API_BASE_URL, process.env.EVOLUTION_API_KEY, 'environment');
 
-        try {
-            const settings = await this.prisma.workScheduleSettings.findFirst({
-                select: {
-                    evolutionApiBaseUrl: true,
-                    evolutionApiKey: true,
-                },
-            });
 
-            pushCandidate(settings?.evolutionApiBaseUrl, settings?.evolutionApiKey, 'database');
-        } catch (error: any) {
-            if (error?.code !== 'P2022') {
-                throw error;
-            }
-        }
 
         return candidates;
     }

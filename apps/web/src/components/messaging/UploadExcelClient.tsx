@@ -7,21 +7,7 @@ import toast from 'react-hot-toast';
 import api from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 
-const requiredColumns = [
-    'name',
-    'email',
-    'phone',
-    'exam_type',
-    'role',
-    'day',
-    'date',
-    'test_center',
-    'faculty',
-    'room',
-    'address',
-    'map_link',
-    'arrival_time',
-];
+import { REQUIRED_UPLOAD_COLUMNS, validateUploadHeaders } from './upload-utils';
 
 export default function UploadExcelClient({ locale }: { locale: string }) {
     const { ready } = useRequireAuth(locale);
@@ -38,12 +24,11 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
         return null;
     }
 
-    const mapHeader = (value: string) => value.trim().toLowerCase().replace(/\s+/g, '_');
-
+    
     const downloadWorkbook = (kind: 'template' | 'sample') => {
         const workbook = XLSX.utils.book_new();
         const rows = [
-            requiredColumns,
+            REQUIRED_UPLOAD_COLUMNS,
             ...(kind === 'sample'
                 ? [[
                     'Ahmed Ali',
@@ -81,7 +66,11 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
             throw new Error('The sheet must contain a header row and at least one data row.');
         }
 
-        const headers = rows[0].map((value) => mapHeader(String(value || '')));
+        const rawHeaders = rows[0].map((value) => String(value || ''));
+        const { normalized: headers, missing } = validateUploadHeaders(rawHeaders);
+        if (missing.length) {
+            throw new Error(`Missing required headers: ${missing.join(', ')}`);
+        }
         const data = rows.slice(1).map((row) => {
             const values = Array.isArray(row) ? row : [];
             return headers.reduce((acc, header, index) => {

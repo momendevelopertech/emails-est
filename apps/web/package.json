@@ -1,54 +1,41 @@
 {
-    "name":  "@sphinx/web",
-    "version":  "1.0.0",
-    "private":  true,
-    "description":  "SPHINX HR System - Next.js Frontend",
-    "scripts":  {
-                    "clean:next":  "node -e \"require(\u0027fs\u0027).rmSync(\u0027.next\u0027, { recursive: true, force: true })\"",
-                    "dev":  "npm run clean:next \u0026\u0026 next dev -p 3000",
-                    "build":  "npm run clean:next \u0026\u0026 next build",
-                    "start":  "next start",
-                    "lint":  "next lint",
-                    "test":  "next lint"
-                },
-    "dependencies":  {
-                         "next":  "^14.2.35",
-                         "react":  "^18.3.0",
-                         "react-dom":  "^18.3.0",
-                         "next-intl":  "^3.12.0",
-                         "next-pwa":  "^5.6.0",
-                         "zustand":  "^4.5.2",
-                         "pusher-js":  "^8.4.0",
-                         "axios":  "^1.6.7",
-                         "react-big-calendar":  "^1.11.2",
-                         "date-fns":  "^3.3.1",
-                         "react-hook-form":  "^7.51.1",
-                         "@hookform/resolvers":  "^3.3.4",
-                         "zod":  "^3.22.4",
-                         "react-hot-toast":  "^2.4.1",
-                         "xlsx": "^0.18.5",
-                         "@tanstack/react-query":  "^5.28.6",
-                         "lucide-react":  "^0.356.0",
-                         "clsx":  "^2.1.0",
-                         "tailwind-merge":  "^2.2.2",
-                         "framer-motion":  "^11.0.14",
-                         "recharts":  "^2.12.2",
-                         "@supabase/supabase-js":  "^2.39.0",
-                         "@supabase/ssr":  "^0.1.0"
-                     },
-    "optionalDependencies":  {
-                                 "@next/swc-win32-x64-msvc":  "14.2.3"
-                             },
-    "devDependencies":  {
-                            "@types/react":  "^18.3.0",
-                            "@types/react-dom":  "^18.3.0",
-                            "@types/react-big-calendar":  "^1.8.9",
-                            "@types/node":  "^20.11.20",
-                            "typescript":  "^5.4.2",
-                            "tailwindcss":  "^3.4.1",
-                            "autoprefixer":  "^10.4.18",
-                            "postcss":  "^8.4.35",
-                            "eslint":  "^8.57.0",
-                            "eslint-config-next":  "14.2.3"
-                        }
+  "name": "@sphinx/web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Messaging-only Next.js frontend",
+  "scripts": {
+    "clean:next": "node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\"",
+    "dev": "npm run clean:next && next dev -p 3000",
+    "build": "npm run clean:next && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "next lint"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.28.6",
+    "axios": "^1.6.7",
+    "lucide-react": "^0.356.0",
+    "next": "^14.2.35",
+    "next-intl": "^3.12.0",
+    "next-pwa": "^5.6.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-hot-toast": "^2.4.1",
+    "xlsx": "^0.18.5",
+    "zustand": "^4.5.2"
+  },
+  "optionalDependencies": {
+    "@next/swc-win32-x64-msvc": "14.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.20",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.18",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.3",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.4.2"
+  }
 }

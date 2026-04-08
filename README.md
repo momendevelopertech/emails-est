@@ -77,3 +77,30 @@ The NestJS API (`apps/api`) should be deployed as a separate service (for exampl
 ## Notes
 
 The API is available at `http://localhost:3001/api` and Swagger docs at `http://localhost:3001/api/docs`. The web app runs on `http://localhost:3000`.
+
+
+## Messaging-only architecture
+
+This repository now runs a **messaging-first** scope only:
+
+1. Upload Excel recipients
+2. Manage templates (CRUD)
+3. Send campaign (EMAIL / WHATSAPP / BOTH)
+4. Retry failed or selected recipients
+5. Review messaging logs
+
+### Backend kept
+- `auth` (minimal login/session endpoints)
+- `messaging` module
+- `notifications/email.service.ts` and `notifications/whatsapp.service.ts`
+- Prisma models: `User`, `RefreshToken`, `Template`, `Recipient`, `Log`
+
+### Removed
+- HR workflows (requests/forms/departments/reports/chat/notifications center and related modules).
+
+### Migration strategy
+- Phase applied in this branch: **hard cleanup migration** (`apps/api/prisma/migrations/20260408_messaging_only_architecture/migration.sql`).
+- Rollback strategy:
+  1. Restore database from snapshot/backups made before migration.
+  2. Revert this commit and run `prisma generate` again.
+  3. Re-deploy API and web together to avoid route/schema mismatch.
