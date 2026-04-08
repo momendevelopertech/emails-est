@@ -24,11 +24,11 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
         return null;
     }
 
-    
+
     const downloadWorkbook = (kind: 'template' | 'sample') => {
         const workbook = XLSX.utils.book_new();
-        const rows = [
-            REQUIRED_UPLOAD_COLUMNS,
+        const rows: string[][] = [
+            [...REQUIRED_UPLOAD_COLUMNS],
             ...(kind === 'sample'
                 ? [[
                     'Ahmed Ali',
