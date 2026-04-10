@@ -225,6 +225,21 @@ api.defaults.adapter = async (config) => {
     return response;
 };
 
+let csrfPromise: Promise<void> | null = null;
+
+const ensureCsrfToken = async () => {
+    if (csrfToken) return;
+    
+    if (!csrfPromise) {
+        csrfPromise = api
+            .get('/auth/csrf', { headers: { 'x-skip-activity': '1' } })
+            .finally(() => {
+                csrfPromise = null;
+            });
+    }
+    return csrfPromise;
+};
+
 const ensureRefresh = async () => {
     if (refreshDisabled) {
         throw new AppApiError(401, 'Session expired. Please sign in again.');
@@ -232,10 +247,7 @@ const ensureRefresh = async () => {
 
     if (!refreshPromise) {
         refreshPromise = (async () => {
-            if (!csrfToken) {
-                await api.get('/auth/csrf', { headers: { 'x-skip-activity': '1' } });
-            }
-
+            await ensureCsrfToken();
             await api.post('/auth/refresh', {}, { headers: { 'x-skip-activity': '1' } });
         })()
             .then(() => {
@@ -250,6 +262,10 @@ const ensureRefresh = async () => {
 
 export const refreshSession = async () => {
     await ensureRefresh();
+};
+
+export const fetchCsrfToken = async () => {
+    await ensureCsrfToken();
 };
 
 api.interceptors.request.use((config) => {

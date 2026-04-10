@@ -4,7 +4,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMessages } from 'next-intl';
 import toast from 'react-hot-toast';
-import api, { AppApiError, setAccessToken } from '@/lib/api';
+import api, { AppApiError, setAccessToken, fetchCsrfToken } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import BrandLogo from '@/components/BrandLogo';
 
@@ -37,7 +37,10 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
     setPending(true);
     setErrorDetails(null);
     try {
-      await api.get('/auth/csrf');
+      // Ensure CSRF token is available
+      await fetchCsrfToken();
+      
+      // Attempt login
       const response = await api.post('/auth/login', { identifier, password });
       setAccessToken(response.data?.accessToken || null);
       setUser(response.data?.user || null);

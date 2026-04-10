@@ -89,8 +89,9 @@ export async function configureApp(app: NestExpressApplication) {
         const method = (req.method || '').toUpperCase();
         const requestPath = req.path || '';
         const shouldSkipCsrf =
-            method === 'POST' &&
-            (requestPath === '/api/auth/refresh' || requestPath === '/api/auth/logout');
+            ((method === 'POST' &&
+            (requestPath === '/api/auth/refresh' || requestPath === '/api/auth/logout')) ||
+            (method === 'GET' && requestPath === '/api/auth/csrf'));
 
         if (shouldSkipCsrf) {
             return next();
