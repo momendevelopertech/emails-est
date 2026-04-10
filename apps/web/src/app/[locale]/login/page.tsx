@@ -16,6 +16,11 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
   const [identifier, setIdentifier] = useState('superadmin@sphinx.com');
   const [password, setPassword] = useState('Admin@123456');
   const [pending, setPending] = useState(false);
+  const [errorDetails, setErrorDetails] = useState<{
+    title: string;
+    description: string;
+    meta?: string;
+  } | null>(null);
 
   const getMessage = (key: string, fallback: string) => {
     const value = authMessages[key];
@@ -30,6 +35,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
     }
 
     setPending(true);
+    setErrorDetails(null);
     try {
       await api.get('/auth/csrf');
       const response = await api.post('/auth/login', { identifier, password });
@@ -39,6 +45,27 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
       router.push(`/${params.locale}/messaging/upload`);
     } catch (error) {
       const message = error instanceof AppApiError ? error.message : getMessage('loginInvalid', 'Login failed.');
+      if (error instanceof AppApiError) {
+        const statusLabel = error.status ? `HTTP ${error.status}` : params.locale === 'ar' ? 'بدون كود HTTP' : 'No HTTP status';
+        const endpoint = typeof error.details?.endpoint === 'string' ? error.details.endpoint : '/auth/login';
+        const code = typeof error.details?.code === 'string' ? error.details.code : null;
+        const extraParts = [statusLabel, `endpoint: ${endpoint}`];
+        if (code) extraParts.push(`code: ${code}`);
+
+        setErrorDetails({
+          title: params.locale === 'ar' ? 'فشل تسجيل الدخول' : 'Login failed',
+          description: message,
+          meta: extraParts.join(' • '),
+        });
+      } else {
+        setErrorDetails({
+          title: params.locale === 'ar' ? 'فشل تسجيل الدخول' : 'Login failed',
+          description: params.locale === 'ar'
+            ? 'حدث خطأ غير متوقع. حاول مرة أخرى.'
+            : 'Unexpected error happened. Please retry.',
+        });
+      }
+      console.error('[login] submit failed', error);
       toast.error(message);
     } finally {
       setPending(false);
@@ -112,6 +139,21 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
           <button className="btn-primary w-full !rounded-2xl !py-3 text-base font-semibold" type="submit" disabled={pending}>
             {pending ? getMessage('loading', 'Loading...') : getMessage('loginButton', getMessage('login', 'Login'))}
           </button>
+
+          {errorDetails && (
+            <div
+              role="alert"
+              className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-start text-sm text-rose-900"
+            >
+              <div className="font-semibold">{errorDetails.title}</div>
+              <div className="mt-1">{errorDetails.description}</div>
+              {errorDetails.meta ? (
+                <div className="mt-2 font-mono text-xs text-rose-700/90" dir="ltr">
+                  {errorDetails.meta}
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
       </form>
     </main>
