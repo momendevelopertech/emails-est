@@ -108,13 +108,20 @@ export async function configureApp(app: NestExpressApplication) {
         },
     });
 
+    // Apply CSRF protection for CSRF endpoint so csrfToken() is available
     app.use((req, res, next) => {
         const method = (req.method || '').toUpperCase();
         const requestPath = req.path || '';
+
+        // Always apply CSRF on GET /api/auth/csrf so csrfToken() works
+        if (method === 'GET' && requestPath === '/api/auth/csrf') {
+            return csrfProtection(req, res, next);
+        }
+
+        // Skip CSRF for refresh/logout POST requests
         const shouldSkipCsrf =
-            ((method === 'POST' &&
-            (requestPath === '/api/auth/refresh' || requestPath === '/api/auth/logout')) ||
-            (method === 'GET' && requestPath === '/api/auth/csrf'));
+            method === 'POST' &&
+            (requestPath === '/api/auth/refresh' || requestPath === '/api/auth/logout');
 
         if (shouldSkipCsrf) {
             return next();

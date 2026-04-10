@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { createHttpServer } from '../src/http-server';
+import { createHttpServer } from './http-server';
 
 export const config = {
     runtime: 'nodejs',
