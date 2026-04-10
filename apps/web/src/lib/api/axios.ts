@@ -13,6 +13,7 @@ export class AppApiError extends Error {
         public readonly status?: number,
         message = 'Something went wrong. Please try again.',
         public readonly fields?: Record<string, string>,
+        public readonly details?: Record<string, unknown>,
     ) {
         super(message);
         this.name = 'AppApiError';
@@ -344,11 +345,18 @@ api.interceptors.response.use((response) => {
     }
 
     if (error?.code === 'ECONNABORTED') {
-        return Promise.reject(new AppApiError(undefined, 'Request timed out. Please try again.'));
+        return Promise.reject(new AppApiError(undefined, 'Request timed out. Please try again.', undefined, {
+            code: 'TIMEOUT',
+            endpoint: original?.url || 'unknown',
+        }));
     }
 
     if (!error?.response) {
-        return Promise.reject(new AppApiError(undefined, 'Network error. Check your connection and retry.'));
+        return Promise.reject(new AppApiError(undefined, 'Network error. Check your connection and retry.', undefined, {
+            code: 'NETWORK_ERROR',
+            endpoint: original?.url || 'unknown',
+            baseURL: original?.baseURL || api.defaults.baseURL || getPublicApiUrl(),
+        }));
     }
 
     const data = error.response.data || {};
@@ -371,7 +379,13 @@ api.interceptors.response.use((response) => {
         }, {})
         : undefined;
 
-    return Promise.reject(new AppApiError(status, message, fields));
+    return Promise.reject(new AppApiError(status, message, fields, {
+        code: typeof data?.code === 'string' ? data.code : undefined,
+        endpoint: original?.url || 'unknown',
+        method: (original?.method || 'get').toUpperCase(),
+        timestamp: data?.timestamp,
+        path: data?.path,
+    }));
 });
 
 export default api;
