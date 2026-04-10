@@ -58,6 +58,29 @@ export async function configureApp(app: NestExpressApplication) {
     const { sameSite, secure, domain, path } = getCookieSettings();
     const authDebugCookies = process.env.AUTH_DEBUG_COOKIES === '1';
 
+    // Enable CORS BEFORE CSRF middleware so OPTIONS preflight requests pass through
+    app.enableCors({
+        origin: (origin, callback) => {
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+                return;
+            }
+
+            callback(new Error(`Origin ${origin} is not allowed by CORS`));
+        },
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: [
+            'Content-Type',
+            'Authorization',
+            'X-CSRF-Token',
+            'X-No-Cache',
+            'X-Allow-Cache',
+            'X-Skip-Activity',
+        ],
+        optionsSuccessStatus: 204,
+    });
+
     if (authDebugCookies) {
         app.use((req, _res, next) => {
             if (req.path?.startsWith('/api/auth/')) {
@@ -105,28 +128,6 @@ export async function configureApp(app: NestExpressApplication) {
             return res.status(403).json({ message: 'Invalid CSRF token' });
         }
         return next(err);
-    });
-
-    app.enableCors({
-        origin: (origin, callback) => {
-            if (!origin || allowedOrigins.includes(origin)) {
-                callback(null, true);
-                return;
-            }
-
-            callback(new Error(`Origin ${origin} is not allowed by CORS`));
-        },
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-        allowedHeaders: [
-            'Content-Type',
-            'Authorization',
-            'X-CSRF-Token',
-            'X-No-Cache',
-            'X-Allow-Cache',
-            'X-Skip-Activity',
-        ],
-        optionsSuccessStatus: 204,
     });
 
     app.useGlobalPipes(
