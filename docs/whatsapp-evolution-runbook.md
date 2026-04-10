@@ -13,7 +13,7 @@ Use this file as the handoff document for any new Codex chat.
 - `ngrok` must forward the public URL to `http://127.0.0.1:8080`.
 - The local bridge lives in `scripts/evolution-bridge.js`.
 - The bridge rewrites `/message/sendText` to `/message/sendText/sphinxhr` and injects the global Evolution API key.
-- Evolution API runs outside the repo from `F:\tools\evolution-api`.
+- Evolution API runs outside the repo from a local tools folder such as `F:\tools\evolution-api` or `E:\tools\evolution-api`.
 - Evolution API listens on `http://127.0.0.1:8081`.
 - Evolution Manager is available at `http://127.0.0.1:8081/manager`.
 - The WhatsApp instance name is `sphinxhr`.
@@ -22,8 +22,8 @@ Use this file as the handoff document for any new Codex chat.
 
 - The HR repo files.
 - The repo `.env`.
-- The Evolution API folder at `F:\tools\evolution-api`.
-- The Evolution API local `.env` at `F:\tools\evolution-api\.env`.
+- The Evolution API folder at a detected tools path such as `F:\tools\evolution-api` or `E:\tools\evolution-api`.
+- The Evolution API local `.env` inside that folder.
 - The stored WhatsApp session files in `F:\tools\evolution-api\instances`.
 - The Evolution database state.
 
@@ -57,13 +57,19 @@ That file runs the WhatsApp service only:
 - starts `ngrok` using the current `EVOLUTION_API_BASE_URL` from the repo `.env`
 - prints the final local and public health URLs
 
+The script now auto-detects the Evolution folder from:
+
+- `-EvolutionDir <path>` if you pass it explicitly
+- `EVOLUTION_API_DIR` if it is set in the environment
+- common local paths such as `F:\tools\evolution-api`, `E:\tools\evolution-api`, then `C:\tools\evolution-api`
+
 It does not start the main HR API or web app.
 
 This script will:
 
 - start Evolution API on `8081` if it is not already running
 - start the local bridge on `8080` if it is not already running
-- read the Evolution global API key from `F:\tools\evolution-api\.env`
+- read the Evolution global API key from the detected Evolution `.env`
 - print the current `sphinxhr` instance state
 - show the manager and health URLs
 
@@ -162,8 +168,8 @@ Fix:
 Cold setup:
 
 ```powershell
-git clone --depth 1 https://github.com/EvolutionAPI/evolution-api.git F:\tools\evolution-api
-cd F:\tools\evolution-api
+git clone --depth 1 https://github.com/EvolutionAPI/evolution-api.git E:\tools\evolution-api
+cd E:\tools\evolution-api
 npm.cmd install
 npm.cmd run db:generate
 npm.cmd run db:deploy:win
@@ -178,7 +184,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\start-whatsapp-stack.ps1
 ## Secret Handling
 
 - Do not hardcode secrets in the repo.
-- The recovery script reads the Evolution global API key from `F:\tools\evolution-api\.env`.
+- The recovery script reads the Evolution global API key from the detected Evolution `.env`.
 - Keep real credentials in local `.env` files, not in tracked markdown files.
 
 ## Handoff Prompt for a New Codex Chat

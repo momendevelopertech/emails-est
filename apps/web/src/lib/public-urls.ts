@@ -6,6 +6,7 @@ type NormalizeOptions = {
 
 const hasScheme = (value: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
 const isLocalHost = (value: string) => /^(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(value);
+const isLocalAbsoluteUrl = (value: string) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(value);
 
 const normalizePublicUrl = (value: string, options: NormalizeOptions = {}) => {
     const allowRelative = options.allowRelative ?? true;
@@ -24,7 +25,12 @@ export const getPublicApiUrl = () =>
         const isBrowser = typeof window !== 'undefined';
         const isAbsoluteUrl = /^https?:\/\//i.test(configuredUrl);
 
-        // Always proxy browser API traffic through Next.js rewrites for first-party auth cookies.
+        // Keep localhost browser traffic direct so local auth/CSRF uses the real API origin.
+        if (isBrowser && isLocalAbsoluteUrl(configuredUrl)) {
+            return configuredUrl;
+        }
+
+        // Proxy remote browser API traffic through Next.js rewrites for first-party auth cookies.
         if (isBrowser && isAbsoluteUrl) {
             return '/api';
         }

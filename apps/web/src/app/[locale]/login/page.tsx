@@ -12,14 +12,22 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
   const t = useTranslations('auth');
   const router = useRouter();
   const { setUser, setBootstrapped } = useAuthStore();
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  const [identifier, setIdentifier] = useState('superadmin@sphinx.com');
+  const [password, setPassword] = useState('Admin@123456');
   const [pending, setPending] = useState(false);
+
+  const getMessage = (key: string, fallback: string) => {
+    try {
+      return t(key as any);
+    } catch {
+      return fallback;
+    }
+  };
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (!identifier.trim() || !password.trim()) {
-      toast.error(t('loginPasswordRequired'));
+      toast.error(getMessage('loginPasswordRequired', 'Please enter your password.'));
       return;
     }
 
@@ -32,21 +40,81 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
       setBootstrapped(true);
       router.push(`/${params.locale}/messaging/upload`);
     } catch (error) {
-      const message = error instanceof AppApiError ? error.message : t('loginFailed');
+      const message = error instanceof AppApiError ? error.message : getMessage('loginInvalid', 'Login failed.');
       toast.error(message);
     } finally {
       setPending(false);
     }
   };
 
+  const fieldClassName = [
+    'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3',
+    'text-sm text-slate-900 shadow-sm transition',
+    'placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100',
+    'disabled:cursor-not-allowed disabled:bg-slate-100',
+  ].join(' ');
+
   return (
-    <main className="min-h-screen bg-atmosphere p-6 flex items-center justify-center">
-      <form onSubmit={onSubmit} className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-sm space-y-5">
-        <BrandLogo locale={params.locale} />
-        <h1 className="text-2xl font-semibold">{t('loginTitle')}</h1>
-        <input className="input" placeholder={t('loginIdentifierPlaceholder')} value={identifier} onChange={(e) => setIdentifier(e.target.value)} disabled={pending} />
-        <input className="input" type="password" placeholder={t('loginPasswordPlaceholder')} value={password} onChange={(e) => setPassword(e.target.value)} disabled={pending} />
-        <button className="btn-primary w-full" type="submit" disabled={pending}>{pending ? t('loading') : t('loginButton')}</button>
+    <main className="min-h-screen bg-atmosphere px-4 py-8 sm:px-6 flex items-center justify-center">
+      <form onSubmit={onSubmit} className="w-full max-w-lg rounded-[2rem] border border-slate-200/80 bg-white/95 p-6 shadow-xl shadow-emerald-950/5 backdrop-blur sm:p-8">
+        <div className="space-y-6">
+          <div className="flex justify-center">
+            <BrandLogo locale={params.locale} />
+          </div>
+
+          <div className="space-y-2 text-center">
+            <h1 className="text-3xl font-semibold text-slate-900">{getMessage('loginTitle', getMessage('login', 'Login'))}</h1>
+            <p className="text-sm text-slate-500">
+              {params.locale === 'ar'
+                ? 'البيانات متسجلة تلقائيًا. اضغط تسجيل الدخول مباشرة أو عدلها إذا أردت.'
+                : 'Credentials are already filled in. Click sign in directly or edit them if needed.'}
+            </p>
+          </div>
+
+          <div className="rounded-3xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            <div className="font-semibold">{params.locale === 'ar' ? 'بيانات الدخول الجاهزة' : 'Ready-to-use credentials'}</div>
+            <div className="mt-1 font-mono text-xs sm:text-sm" dir="ltr">
+              superadmin@sphinx.com / Admin@123456
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <label className="block space-y-2 text-start">
+              <span className="text-sm font-medium text-slate-700">
+                {params.locale === 'ar' ? 'البريد الإلكتروني أو اسم المستخدم' : 'Email or username'}
+              </span>
+              <input
+                className={fieldClassName}
+                dir="ltr"
+                autoComplete="username"
+                placeholder={getMessage('loginIdentifierPlaceholder', getMessage('email', 'Email or username'))}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                disabled={pending}
+              />
+            </label>
+
+            <label className="block space-y-2 text-start">
+              <span className="text-sm font-medium text-slate-700">
+                {params.locale === 'ar' ? 'كلمة المرور' : 'Password'}
+              </span>
+              <input
+                className={fieldClassName}
+                type="password"
+                dir="ltr"
+                autoComplete="current-password"
+                placeholder={getMessage('loginPasswordPlaceholder', getMessage('password', 'Password'))}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={pending}
+              />
+            </label>
+          </div>
+
+          <button className="btn-primary w-full !rounded-2xl !py-3 text-base font-semibold" type="submit" disabled={pending}>
+            {pending ? getMessage('loading', 'Loading...') : getMessage('loginButton', getMessage('login', 'Login'))}
+          </button>
+        </div>
       </form>
     </main>
   );

@@ -1,6 +1,7 @@
 param(
     [string]$NgrokUrl = '',
-    [switch]$Restart
+    [switch]$Restart,
+    [string]$EvolutionDir = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -12,7 +13,19 @@ $bridgeScript = Join-Path $PSScriptRoot 'evolution-bridge.js'
 $bridgeStdout = Join-Path $logDir 'bridge-stdout.log'
 $bridgeStderr = Join-Path $logDir 'bridge-stderr.log'
 
-$evolutionDir = 'F:\tools\evolution-api'
+$evolutionDirCandidates = @(
+    $EvolutionDir,
+    $env:EVOLUTION_API_DIR,
+    'F:\tools\evolution-api',
+    'E:\tools\evolution-api',
+    'C:\tools\evolution-api'
+) | Where-Object { $_ -and $_.Trim() } | Select-Object -Unique
+
+$evolutionDir = ($evolutionDirCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1)
+if (-not $evolutionDir) {
+    $evolutionDir = $evolutionDirCandidates[0]
+}
+
 $evolutionEnvPath = Join-Path $evolutionDir '.env'
 $evolutionStdout = Join-Path $evolutionDir 'evolution-8081-stdout.log'
 $evolutionStderr = Join-Path $evolutionDir 'evolution-8081-stderr.log'

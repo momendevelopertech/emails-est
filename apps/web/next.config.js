@@ -40,7 +40,9 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 const resolveApiRewriteTarget = () => {
     const configured = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '').trim();
     if (!configured || configured === '/api') {
-        return 'https://hr-api-six.vercel.app/api';
+        return process.env.NODE_ENV === 'production'
+            ? 'https://hr-api-six.vercel.app/api'
+            : 'http://localhost:3001/api';
     }
     if (/^https?:\/\//i.test(configured)) {
         return configured.replace(/\/$/, '');
@@ -49,7 +51,9 @@ const resolveApiRewriteTarget = () => {
         return `https:${configured}`.replace(/\/$/, '');
     }
     if (configured.startsWith('/')) {
-        return 'https://hr-api-six.vercel.app/api';
+        return process.env.NODE_ENV === 'production'
+            ? 'https://hr-api-six.vercel.app/api'
+            : 'http://localhost:3001/api';
     }
     const scheme = /^(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(configured) ? 'http://' : 'https://';
     return `${scheme}${configured}`.replace(/\/$/, '');

@@ -40,6 +40,19 @@ describe('MessagingService', () => {
     expect(res.failed).toBe(0);
   });
 
+  it('sendCampaign supports selected ids', async () => {
+    prisma.template.findUnique.mockResolvedValue({ id: 't1', name: 'tmp', type: TemplateType.EMAIL, subject: 'Hi {{name}}', body: 'Body {{name}}' });
+    prisma.recipient.findMany.mockResolvedValue([{ id: 'r-selected', name: 'Mona', email: 'mona@mail.com', status: RecipientStatus.PENDING }]);
+    prisma.recipient.update.mockResolvedValue({});
+    emailService.sendEmail.mockResolvedValue({ ok: true });
+    prisma.log.create.mockResolvedValue({});
+
+    const res = await service.sendCampaign({ templateId: 't1', mode: 'selected', ids: ['r-selected'] } as any);
+    expect(prisma.recipient.findMany).toHaveBeenCalledWith({ where: { id: { in: ['r-selected'] } } });
+    expect(res.processed).toBe(1);
+    expect(res.failed).toBe(0);
+  });
+
   it('retryRecipients retries selected ids', async () => {
     prisma.template.findUnique.mockResolvedValue({ id: 't1', name: 'tmp', type: TemplateType.EMAIL, subject: 'Hi', body: 'Body' });
     prisma.recipient.findMany.mockResolvedValue([{ id: 'r1', name: 'Ali', email: 'ali@mail.com', status: RecipientStatus.FAILED }]);

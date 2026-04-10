@@ -167,6 +167,9 @@ export class MessagingService {
 
     private async findRecipientsForSend(dto: SendCampaignDto) {
         const where: any = {};
+        if (dto.mode === 'selected') {
+            where.id = { in: dto.ids || [] };
+        }
         if (dto.mode === 'all_pending') {
             where.status = RecipientStatus.PENDING;
         }

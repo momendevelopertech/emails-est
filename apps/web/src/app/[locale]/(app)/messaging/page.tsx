@@ -1,5 +1,5 @@
-import MessagingDashboardClient from '@/components/messaging/MessagingDashboardClient';
+import MessagingWorkspaceClient from '@/components/messaging/MessagingWorkspaceClient';
 
 export default function MessagingDashboardPage({ params }: { params: { locale: string } }) {
-    return <MessagingDashboardClient locale={params.locale} />;
+    return <MessagingWorkspaceClient locale={params.locale} />;
 }
