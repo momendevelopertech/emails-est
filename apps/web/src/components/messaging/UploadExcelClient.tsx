@@ -10,7 +10,7 @@ import { useRequireAuth } from '@/lib/use-auth';
 import { REQUIRED_UPLOAD_COLUMNS, validateUploadHeaders } from './upload-utils';
 
 export default function UploadExcelClient({ locale }: { locale: string }) {
-    const { ready } = useRequireAuth(locale);
+    const { ready, isChecking, error } = useRequireAuth(locale);
     const t = useTranslations('messaging');
     const hint = useMemo(
         () => t('uploadHint') || 'Upload an Excel file with recipient data. Required columns: name, email, phone, exam_type, role, day, date, test_center, faculty, room, address, map_link, arrival_time.',
@@ -19,6 +19,32 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
     const [fileName, setFileName] = useState('');
     const [isUploading, setIsUploading] = useState(false);
     const [previewCount, setPreviewCount] = useState<number | null>(null);
+
+    if (isChecking) {
+        return (
+            <section className="py-6">
+                <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <p className="text-sm text-slate-600">{t('loading') || 'Checking session...'}</p>
+                </div>
+            </section>
+        );
+    }
+
+    if (!ready && error === 'network') {
+        return (
+            <section className="py-6">
+                <div className="rounded-3xl border border-rose-200 bg-rose-50 p-6 shadow-sm">
+                    <h1 className="text-lg font-semibold text-rose-900">{t('uploadUnavailableTitle') || 'Upload is temporarily unavailable'}</h1>
+                    <p className="mt-2 text-sm text-rose-800">
+                        {t('uploadUnavailableHint') || 'The app could not verify your session due to a network or API issue. Please refresh and try again.'}
+                    </p>
+                    <button type="button" className="btn-danger mt-4" onClick={() => window.location.reload()}>
+                        {t('retry') || 'Retry'}
+                    </button>
+                </div>
+            </section>
+        );
+    }
 
     if (!ready) {
         return null;

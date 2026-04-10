@@ -10,6 +10,8 @@ export function useRequireAuth(locale: string) {
     const router = useRouter();
     const { user, bootstrapped, setUser, setLoading, setBootstrapped } = useAuthStore();
     const [ready, setReady] = useState(false);
+    const [isChecking, setIsChecking] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const attemptedRef = useRef(false);
     const verifiedRef = useRef(false);
 
@@ -23,6 +25,7 @@ export function useRequireAuth(locale: string) {
         if (!user) {
             setReady(false);
             if (loggedOut) {
+                setIsChecking(false);
                 setLoading(false);
                 router.push(`/${locale}/login`);
                 return;
@@ -31,6 +34,8 @@ export function useRequireAuth(locale: string) {
 
         if (bootstrapped && user && verifiedRef.current) {
             setReady(true);
+            setIsChecking(false);
+            setError(null);
             setLoading(false);
             return;
         }
@@ -41,7 +46,9 @@ export function useRequireAuth(locale: string) {
         let active = true;
         const boot = async () => {
             try {
+                setError(null);
                 if (loggedOut) {
+                    setIsChecking(false);
                     router.push(`/${locale}/login`);
                     return;
                 }
@@ -54,6 +61,7 @@ export function useRequireAuth(locale: string) {
                     }
                     verifiedRef.current = true;
                     setReady(true);
+                    setIsChecking(false);
                     return;
                 }
 
@@ -66,6 +74,7 @@ export function useRequireAuth(locale: string) {
                 setBootstrapped(true);
                 verifiedRef.current = true;
                 setReady(true);
+                setIsChecking(false);
             } catch (error) {
                 const status = getErrorStatus(error);
                 const isAuthFailure = status === 401 || status === 403;
@@ -77,6 +86,8 @@ export function useRequireAuth(locale: string) {
                     setUser(null);
                     setBootstrapped(false);
                     verifiedRef.current = false;
+                    setIsChecking(false);
+                    setError(null);
                     router.push(`/${locale}/login`);
                     return;
                 }
@@ -84,11 +95,15 @@ export function useRequireAuth(locale: string) {
                 if (bootstrapped && user) {
                     verifiedRef.current = true;
                     setReady(true);
+                    setIsChecking(false);
+                    setError(null);
                     return;
                 }
 
                 verifiedRef.current = false;
                 setReady(false);
+                setIsChecking(false);
+                setError('network');
             } finally {
                 if (active) {
                     setLoading(false);
@@ -104,5 +119,5 @@ export function useRequireAuth(locale: string) {
         };
     }, [bootstrapped, locale, router, setBootstrapped, setLoading, setUser, user]);
 
-    return { user, ready };
+    return { user, ready, isChecking, error };
 }
