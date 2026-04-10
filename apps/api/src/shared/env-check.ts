@@ -7,7 +7,6 @@ export const assertSecurityEnv = (isProd: boolean) => {
 
     if (!hasJwtPrivate) missing.push('JWT_PRIVATE_KEY or JWT_PRIVATE_KEY_B64');
     if (!hasJwtPublic) missing.push('JWT_PUBLIC_KEY or JWT_PUBLIC_KEY_B64');
-    if (!process.env.CSRF_SECRET) missing.push('CSRF_SECRET');
 
     const hasRefreshSecret = !!process.env.REFRESH_TOKEN_SECRET || hasJwtPrivate;
     if (!hasRefreshSecret) missing.push('REFRESH_TOKEN_SECRET');

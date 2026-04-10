@@ -40,6 +40,7 @@ export class AuthController {
     const ages = this.getCookieAges(rememberMe);
     res.cookie('access_token', result.accessToken, this.getHttpOnlyCookieOptions(ages.accessMs));
     res.cookie('refresh_token', result.refreshToken, this.getHttpOnlyCookieOptions(ages.refreshMs));
+    res.cookie('remember_me', rememberMe ? '1' : '0', this.getSessionHintCookieOptions(ages.refreshMs));
     res.cookie('sphinx_session', '1', this.getSessionHintCookieOptions(ages.refreshMs));
     return { user: result.user, accessToken: result.accessToken };
   }

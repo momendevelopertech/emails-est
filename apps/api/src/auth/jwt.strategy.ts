@@ -4,6 +4,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { getJwtKeys } from './jwt-keys';
+import { safeAuthUserFields } from './safe-user';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -18,6 +19,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    return this.prisma.user.findUnique({ where: { id: payload.sub } });
+    return this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: safeAuthUserFields,
+    });
   }
 }
