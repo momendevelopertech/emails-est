@@ -3,24 +3,22 @@
 import { useEffect } from 'react';
 import { clearBrowserRuntimeCache } from '@/lib/api';
 
-const APP_BUILD_ID = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
-
-export default function ClientCacheManager() {
+export default function ClientCacheManager({ buildId }: { buildId: string }) {
     useEffect(() => {
         const key = 'app-build-id';
         const previousBuild = window.localStorage.getItem(key);
-        const isNewBuild = previousBuild && previousBuild !== APP_BUILD_ID;
+        const isNewBuild = previousBuild && previousBuild !== buildId;
 
         if (isNewBuild) {
             clearBrowserRuntimeCache().finally(() => {
-                window.localStorage.setItem(key, APP_BUILD_ID);
+                window.localStorage.setItem(key, buildId);
                 window.location.reload();
             });
             return;
         }
 
-        window.localStorage.setItem(key, APP_BUILD_ID);
-    }, []);
+        window.localStorage.setItem(key, buildId);
+    }, [buildId]);
 
     return null;
 }

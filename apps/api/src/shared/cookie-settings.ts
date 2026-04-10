@@ -10,7 +10,7 @@ export type AuthCookieSettings = {
 
 const hasScheme = (value: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
 const isLocalhost = (value: string) => /^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(value);
-const DEFAULT_PROD_FRONTEND_ORIGIN = 'https://hr-web-ten.vercel.app';
+const DEFAULT_PROD_FRONTEND_ORIGIN = 'https://emails-est-web.vercel.app';
 
 const normalizeOrigin = (value?: string) => {
     if (!value) {

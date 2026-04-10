@@ -11,12 +11,29 @@ import { AuthProvider } from '@/context/AuthContext';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 import ReactQueryProvider from '@/components/ReactQueryProvider';
 
+const DEFAULT_SITE_URL = 'https://emails-est-web.vercel.app';
 
-const OG_IMAGE_URL = 'https://hr-web-ten.vercel.app/brand/sphinx-logo.png';
+const normalizeSiteUrl = (value?: string) => {
+    if (!value) return DEFAULT_SITE_URL;
+
+    const trimmed = value.trim();
+    if (!trimmed) return DEFAULT_SITE_URL;
+    if (/^https?:\/\//i.test(trimmed)) return trimmed.replace(/\/$/, '');
+    if (trimmed.startsWith('//')) return `https:${trimmed}`.replace(/\/$/, '');
+    return `https://${trimmed}`.replace(/\/$/, '');
+};
+
+const SITE_URL = normalizeSiteUrl(
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.SITE_URL ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+);
+const APP_BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
 
 export const metadata = {
-    title: 'SPHINX HR',
-    description: 'Enterprise HR Management System',
+    metadataBase: new URL(SITE_URL),
+    title: 'Emails EST',
+    description: 'Bulk email and messaging workspace',
     manifest: '/manifest.json',
     themeColor: '#1f3a52',
     icons: {
@@ -28,24 +45,24 @@ export const metadata = {
         shortcut: ['/icons/icon.svg'],
     },
     openGraph: {
-        title: 'SPHINX HR',
-        description: 'Enterprise HR Management System',
+        title: 'Emails EST',
+        description: 'Bulk email and messaging workspace',
         type: 'website' as const,
         images: [
             {
-                url: OG_IMAGE_URL,
+                url: '/brand/sphinx-logo.svg',
                 width: 1200,
                 height: 630,
-                alt: 'SPHINX HR',
-                type: 'image/png',
+                alt: 'Emails EST',
+                type: 'image/svg+xml',
             },
         ],
     },
     twitter: {
         card: 'summary_large_image' as const,
-        title: 'SPHINX HR',
-        description: 'Enterprise HR Management System',
-        images: [OG_IMAGE_URL],
+        title: 'Emails EST',
+        description: 'Bulk email and messaging workspace',
+        images: ['/brand/sphinx-logo.svg'],
     },
 };
 
@@ -66,7 +83,7 @@ export default async function LocaleLayout({
                 <NextIntlClientProvider messages={messages}>
                     <ReactQueryProvider>
                         <AuthProvider locale={locale}>
-                            <ClientCacheManager />
+                            <ClientCacheManager buildId={APP_BUILD_ID} />
                             <PwaRegistrar />
                             <SessionTimeoutManager />
                             {children}

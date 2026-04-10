@@ -2,14 +2,15 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+import { useMessages } from 'next-intl';
 import toast from 'react-hot-toast';
 import api, { AppApiError, setAccessToken } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import BrandLogo from '@/components/BrandLogo';
 
 export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } }) {
-  const t = useTranslations('auth');
+  const messages = useMessages() as Record<string, unknown>;
+  const authMessages = (messages.auth as Record<string, unknown> | undefined) ?? {};
   const router = useRouter();
   const { setUser, setBootstrapped } = useAuthStore();
   const [identifier, setIdentifier] = useState('superadmin@sphinx.com');
@@ -17,11 +18,8 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
   const [pending, setPending] = useState(false);
 
   const getMessage = (key: string, fallback: string) => {
-    try {
-      return t(key as any);
-    } catch {
-      return fallback;
-    }
+    const value = authMessages[key];
+    return typeof value === 'string' ? value : fallback;
   };
 
   const onSubmit = async (event: FormEvent) => {
@@ -66,7 +64,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
             <h1 className="text-3xl font-semibold text-slate-900">{getMessage('loginTitle', getMessage('login', 'Login'))}</h1>
             <p className="text-sm text-slate-500">
               {params.locale === 'ar'
-                ? 'البيانات متسجلة تلقائيًا. اضغط تسجيل الدخول مباشرة أو عدلها إذا أردت.'
+                ? 'البيانات مُسجلة تلقائيًا. اضغط تسجيل الدخول مباشرة أو عدلها إذا أردت.'
                 : 'Credentials are already filled in. Click sign in directly or edit them if needed.'}
             </p>
           </div>

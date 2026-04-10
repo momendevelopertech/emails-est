@@ -19,7 +19,7 @@ export class RootController {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SPHINX HR API</title>
+    <title>Emails EST API</title>
     <style>
       :root {
         --bg: #f3f6fb;
@@ -127,20 +127,22 @@ export class RootController {
       <header class="header">
         <div class="logo" aria-hidden="true">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L4.8 5.2V11.4C4.8 16.4 7.8 20.9 12 22C16.2 20.9 19.2 16.4 19.2 11.4V5.2L12 2Z" fill="white" fill-opacity="0.95"/>
-            <path d="M8.5 12.2L10.8 14.5L15.7 9.6" stroke="#1E3A5F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="2.5" y="2.5" width="19" height="19" rx="6" fill="rgba(255,255,255,0.24)"/>
+            <path d="M5.5 8.2C5.5 7.53726 6.03726 7 6.7 7H17.3C17.9627 7 18.5 7.53726 18.5 8.2V15.8C18.5 16.4627 17.9627 17 17.3 17H6.7C6.03726 17 5.5 16.4627 5.5 15.8V8.2Z" fill="white"/>
+            <path d="M6.8 8.2L12 12.2L17.2 8.2" stroke="#1E3A5F" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M11.2 11.4L18.2 6.9L15.6 14.2L13.1 13.1L11.2 11.4Z" fill="#F59E0B"/>
           </svg>
         </div>
         <div>
-          <h2 class="title">SPHINX HR Platform</h2>
-          <p class="subtitle">Backend Service Gateway</p>
+          <h2 class="title">Emails EST API</h2>
+          <p class="subtitle">Messaging backend gateway</p>
         </div>
       </header>
 
       <section class="body">
         <span class="status"><span class="dot"></span>Service Online</span>
-        <h1>Backend API is running successfully.</h1>
-        <p>This endpoint confirms the server is healthy and protected by core security middleware.</p>
+        <h1>Messaging backend is running successfully.</h1>
+        <p>This endpoint confirms the API is healthy and ready to serve email and messaging flows.</p>
 
         <div class="grid">
           <div class="item">
@@ -152,8 +154,8 @@ export class RootController {
             <a href="/api/docs">/api/docs</a>
           </div>
           <div class="item">
-            <b>Real-time Provider</b>
-            <code>Pusher Channels</code>
+            <b>Delivery Focus</b>
+            <code>Email + Messaging</code>
           </div>
           <div class="item">
             <b>Security stack</b>

@@ -1,5 +1,16 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
+const dotenv = require('dotenv');
 const defaultRuntimeCaching = require('next-pwa/cache');
+
+[
+    path.resolve(__dirname, '.env.local'),
+    path.resolve(__dirname, '.env'),
+    path.resolve(__dirname, '../../.env.local'),
+    path.resolve(__dirname, '../../.env'),
+].forEach((envPath) => {
+    dotenv.config({ path: envPath });
+});
 
 const runtimeCaching = [
     // Block caching for dynamic API traffic (always network).
@@ -41,7 +52,7 @@ const resolveApiRewriteTarget = () => {
     const configured = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '').trim();
     if (!configured || configured === '/api') {
         return process.env.NODE_ENV === 'production'
-            ? 'https://hr-api-six.vercel.app/api'
+            ? 'https://emails-est-api.vercel.app/api'
             : 'http://localhost:3001/api';
     }
     if (/^https?:\/\//i.test(configured)) {
@@ -52,7 +63,7 @@ const resolveApiRewriteTarget = () => {
     }
     if (configured.startsWith('/')) {
         return process.env.NODE_ENV === 'production'
-            ? 'https://hr-api-six.vercel.app/api'
+            ? 'https://emails-est-api.vercel.app/api'
             : 'http://localhost:3001/api';
     }
     const scheme = /^(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(configured) ? 'http://' : 'https://';
@@ -63,7 +74,7 @@ const nextConfig = {
     reactStrictMode: true,
     allowedDevOrigins: ['127.0.0.1', 'localhost', '*.localhost'],
     images: {
-        domains: ['res.cloudinary.com', 'lh3.googleusercontent.com', 'hr-web-ten.vercel.app'],
+        domains: ['res.cloudinary.com', 'lh3.googleusercontent.com', 'emails-est-web.vercel.app'],
     },
     async rewrites() {
         const target = resolveApiRewriteTarget();

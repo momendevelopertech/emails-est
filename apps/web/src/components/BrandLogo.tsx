@@ -15,10 +15,10 @@ export default function BrandLogo({
     const widthClass = compact ? 'w-[140px] sm:w-[170px]' : 'w-[200px] sm:w-[280px]';
 
     return (
-        <Link href={`/${locale}`} className={`inline-flex items-center ${widthClass}`} aria-label="SPHINX Home">
+        <Link href={`/${locale}`} className={`inline-flex items-center ${widthClass}`} aria-label="Emails EST Home">
             <Image
                 src="/brand/sphinx-logo.svg"
-                alt="SPHINX Logo"
+                alt="Emails EST"
                 width={intrinsicWidth}
                 height={intrinsicHeight}
                 className="brand-logo h-auto w-full"

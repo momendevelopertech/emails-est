@@ -8,7 +8,7 @@
     "start": "node -r dotenv/config dist/src/main.js dotenv_config_path=../../.env",
     "start:prod": "node -r dotenv/config dist/src/main.js dotenv_config_path=../../.env",
     "postinstall": "prisma generate",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
+    "lint": "eslint \"{src,api,apps,libs,test}/**/*.ts\"",
     "test": "jest",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",

@@ -144,6 +144,7 @@
     "email": "Email",
     "password": "Password",
     "rememberMe": "Remember me",
+    "loading": "Signing you in...",
     "login": "Sign in",
     "loginButton": "Sign in",
     "loginTitle": "Sign in",

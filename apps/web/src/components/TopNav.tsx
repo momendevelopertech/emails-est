@@ -33,7 +33,7 @@ export default function TopNav({
                     <div className="sidebar-brand-compact">
                         <Image
                             src="/brand/sphinx-head.svg"
-                            alt="SPHINX"
+                            alt="Emails EST"
                             width={36}
                             height={36}
                             className="brand-favicon brand-logo"
