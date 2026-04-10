@@ -34,15 +34,9 @@ export const metadata = {
     metadataBase: new URL(SITE_URL),
     title: 'Emails EST',
     description: 'Bulk email and messaging workspace',
-    manifest: '/manifest.json',
-    themeColor: '#1f3a52',
     icons: {
-        icon: [
-            { url: '/icons/icon.svg', type: 'image/svg+xml' },
-            { url: '/brand/sphinx-head.svg', type: 'image/svg+xml' },
-        ],
-        apple: [{ url: '/icons/icon.svg', type: 'image/svg+xml' }],
-        shortcut: ['/icons/icon.svg'],
+        icon: '/icons/icon.svg',
+        apple: '/icons/icon.svg',
     },
     openGraph: {
         title: 'Emails EST',
