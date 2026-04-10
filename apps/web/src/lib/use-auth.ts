@@ -92,14 +92,6 @@ export function useRequireAuth(locale: string) {
                     return;
                 }
 
-                if (bootstrapped && user) {
-                    verifiedRef.current = true;
-                    setReady(true);
-                    setIsChecking(false);
-                    setError(null);
-                    return;
-                }
-
                 verifiedRef.current = false;
                 setReady(false);
                 setIsChecking(false);
