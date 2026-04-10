@@ -24,16 +24,19 @@ export const getPublicApiUrl = () =>
         const configuredUrl = normalizePublicUrl(process.env.NEXT_PUBLIC_API_URL || LOCAL_API_URL, { allowRelative: true });
         const isBrowser = typeof window !== 'undefined';
         const isAbsoluteUrl = /^https?:\/\//i.test(configuredUrl);
+        const isVercel = !!process.env.VERCEL;
 
         // Keep localhost browser traffic direct so local auth/CSRF uses the real API origin.
         if (isBrowser && isLocalAbsoluteUrl(configuredUrl)) {
             return configuredUrl;
         }
 
-        // Proxy remote browser API traffic through Next.js rewrites for first-party auth cookies.
-        if (isBrowser && isAbsoluteUrl) {
-            return '/api';
+        // On Vercel production, always use absolute URL to the API domain
+        // (rewrites don't work reliably for CSRF and auth cookies)
+        if (isBrowser && isVercel && isAbsoluteUrl) {
+            return configuredUrl;
         }
 
+        // In Next.js server or if not absolute, use the configured URL as-is
         return configuredUrl;
     })();
