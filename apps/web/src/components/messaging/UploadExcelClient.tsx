@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
-import api from '@/lib/api';
+import api, { fetchCsrfToken } from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 
 import { REQUIRED_UPLOAD_COLUMNS, validateUploadHeaders } from './upload-utils';
@@ -138,7 +138,7 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
                 throw new Error('No recipients were found in the file.');
             }
 
-            await api.get('/auth/csrf', { headers: { 'x-skip-activity': '1' } });
+            await fetchCsrfToken();
             await api.post('/messaging/recipients/import', { recipients: rows });
             setPreviewCount(rows.length);
             toast.success(t('uploadSuccess') || `Imported ${rows.length} recipients successfully.`);

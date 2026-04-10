@@ -12,7 +12,7 @@ const intlMiddleware = createMiddleware({
 const publicPaths = new Set(['login', 'forgot-password', 'reset-password', 'unauthorized']);
 
 // Path prefixes (after locale) that are publicly accessible (no auth redirect).
-const publicPathPrefixes = ['requests/print', 'messaging'];
+const publicPathPrefixes = ['requests/print'];
 
 export default function middleware(req: NextRequest) {
     const { pathname } = req.nextUrl;

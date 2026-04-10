@@ -1,4 +1,4 @@
-import { RequestMethod, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser = require('cookie-parser');
 import helmet from 'helmet';
@@ -25,6 +25,13 @@ const formatDebugCookies = (cookies?: Record<string, unknown>) => {
         acc[key] = String(value);
         return acc;
     }, {});
+};
+
+const normalizeRequestPath = (value?: string) => {
+    const path = value || '/';
+    if (path === '/api') return '/';
+    if (path.startsWith('/api/')) return path.slice(4) || '/';
+    return path;
 };
 
 async function seedMessagingOnStartup(app: NestExpressApplication) {
@@ -83,9 +90,10 @@ export async function configureApp(app: NestExpressApplication) {
 
     if (authDebugCookies) {
         app.use((req, _res, next) => {
-            if (req.path?.startsWith('/api/auth/')) {
+            const requestPath = normalizeRequestPath(req.path);
+            if (requestPath.startsWith('/auth/')) {
                 console.log('[auth] Cookies:', {
-                    path: req.path,
+                    path: requestPath,
                     origin: req.headers.origin,
                     host: req.headers.host,
                     forwardedHost: req.headers['x-forwarded-host'],
@@ -111,17 +119,15 @@ export async function configureApp(app: NestExpressApplication) {
     // Apply CSRF protection for CSRF endpoint so csrfToken() is available
     app.use((req, res, next) => {
         const method = (req.method || '').toUpperCase();
-        const requestPath = req.path || '';
+        const requestPath = normalizeRequestPath(req.path);
 
-        // Always apply CSRF on GET /api/auth/csrf so csrfToken() works
-        if (method === 'GET' && requestPath === '/api/auth/csrf') {
+        if (method === 'GET' && requestPath === '/auth/csrf') {
             return csrfProtection(req, res, next);
         }
 
-        // Skip CSRF for refresh/logout POST requests
         const shouldSkipCsrf =
             method === 'POST' &&
-            (requestPath === '/api/auth/refresh' || requestPath === '/api/auth/logout');
+            (requestPath === '/auth/refresh' || requestPath === '/auth/logout');
 
         if (shouldSkipCsrf) {
             return next();
@@ -146,13 +152,6 @@ export async function configureApp(app: NestExpressApplication) {
         }),
     );
     app.useGlobalFilters(new HttpExceptionFilter());
-
-    app.setGlobalPrefix('api', {
-        exclude: [
-            { path: '', method: RequestMethod.GET },
-            { path: 'api', method: RequestMethod.GET },
-        ],
-    });
 
     await seedMessagingOnStartup(app);
 }

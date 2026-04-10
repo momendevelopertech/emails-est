@@ -1,8 +1,8 @@
 import { ReactNode } from 'react';
 
 export const metadata = {
-    manifest: '/manifest.json',
-    themeColor: '#1f3a52',
+    title: 'Emails EST',
+    description: 'Bulk email and messaging workspace',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

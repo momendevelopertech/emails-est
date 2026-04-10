@@ -7,6 +7,7 @@ let refreshPromise: Promise<void> | null = null;
 let refreshDisabled = false;
 let accessToken: string | null = null;
 const activityListeners = new Set<() => void>();
+const AUTH_STORAGE_KEY = 'sphinx-auth';
 
 export class AppApiError extends Error {
     constructor(
@@ -72,12 +73,22 @@ const clearSessionHintCookie = () => {
     document.cookie = 'sphinx_session=; Max-Age=0; path=/; SameSite=Lax';
 };
 
+const clearPersistedAuth = () => {
+    if (typeof window === 'undefined') return;
+    try {
+        window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch {
+        // ignore storage errors
+    }
+};
+
 const clearAuthState = () => {
     if (typeof window === 'undefined') return;
     try {
         const { setUser, setBootstrapped } = useAuthStore.getState();
         setUser(null);
         setBootstrapped(false);
+        clearPersistedAuth();
     } catch {
         // ignore store errors
     }
@@ -157,6 +168,7 @@ export const clearBrowserRuntimeCache = async () => {
     clearApiCache();
     csrfToken = null;
     accessToken = null;
+    clearPersistedAuth();
 
     if (typeof window === 'undefined') return;
 
@@ -169,9 +181,9 @@ export const clearBrowserRuntimeCache = async () => {
         const registrations = await navigator.serviceWorker.getRegistrations();
         await Promise.all(registrations.map(async (registration) => {
             try {
-                await registration.update();
+                await registration.unregister();
             } catch {
-                // ignore SW update errors
+                // ignore SW cleanup errors
             }
         }));
     }
@@ -232,7 +244,7 @@ const ensureCsrfToken = () => {
     
     if (!csrfPromise) {
         csrfPromise = api
-            .get('/auth/csrf', { headers: { 'x-skip-activity': '1' } })
+            .get('/auth/csrf')
             .then(() => {})
             .finally(() => {
                 csrfPromise = null;
@@ -248,7 +260,6 @@ const ensureRefresh = async () => {
 
     if (!refreshPromise) {
         refreshPromise = (async () => {
-            await ensureCsrfToken();
             await api.post('/auth/refresh', {}, { headers: { 'x-skip-activity': '1' } });
         })()
             .then(() => {
@@ -331,7 +342,7 @@ api.interceptors.response.use((response) => {
         !original.url?.includes('/auth/csrf')
     ) {
         original._csrfRetry = true;
-        await api.get('/auth/csrf');
+        await fetchCsrfToken();
         return api(original);
     }
 

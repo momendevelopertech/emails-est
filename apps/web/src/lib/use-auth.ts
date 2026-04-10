@@ -52,7 +52,6 @@ export function useRequireAuth(locale: string) {
                     router.push(`/${locale}/login`);
                     return;
                 }
-                await api.get('/auth/csrf');
                 if (bootstrapped && user) {
                     await api.post('/auth/refresh', {});
                     if (!active) return;

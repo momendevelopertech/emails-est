@@ -147,11 +147,11 @@ export class RootController {
         <div class="grid">
           <div class="item">
             <b>API Base URL</b>
-            <code>/api</code>
+            <code>/</code>
           </div>
           <div class="item">
-            <b>Swagger (non-production)</b>
-            <a href="/api/docs">/api/docs</a>
+            <b>Web Proxy Base</b>
+            <code>/api</code>
           </div>
           <div class="item">
             <b>Delivery Focus</b>

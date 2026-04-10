@@ -18,7 +18,7 @@ import {
     SquarePen,
     Users,
 } from 'lucide-react';
-import api from '@/lib/api';
+import api, { fetchCsrfToken } from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import { REQUIRED_UPLOAD_COLUMNS, validateUploadHeaders } from './upload-utils';
 
@@ -297,7 +297,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const importMutation = useMutation({
         mutationFn: async (rows: Array<Record<string, string>>) => {
-            await api.get('/auth/csrf', { headers: { 'x-skip-activity': '1' } });
+            await fetchCsrfToken();
             const response = await api.post('/messaging/recipients/import', { recipients: rows });
             return response.data;
         },
@@ -347,7 +347,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const sendMutation = useMutation({
         mutationFn: async (payload: any) => {
-            await api.get('/auth/csrf', { headers: { 'x-skip-activity': '1' } });
+            await fetchCsrfToken();
             const response = await api.post('/messaging/send', payload);
             return response.data;
         },
@@ -362,7 +362,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const retryMutation = useMutation({
         mutationFn: async (payload: any) => {
-            await api.get('/auth/csrf', { headers: { 'x-skip-activity': '1' } });
+            await fetchCsrfToken();
             const response = await api.post('/messaging/retry', payload);
             return response.data;
         },

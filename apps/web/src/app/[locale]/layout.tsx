@@ -4,9 +4,8 @@ import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { Toaster } from 'react-hot-toast';
-import { defaultLocale, locales } from '@/i18n/routing';
+import { locales } from '@/i18n/routing';
 import ClientCacheManager from '@/components/ClientCacheManager';
-import PwaRegistrar from '@/components/PwaRegistrar';
 import { AuthProvider } from '@/context/AuthContext';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 import ReactQueryProvider from '@/components/ReactQueryProvider';
@@ -67,8 +66,11 @@ export default async function LocaleLayout({
     children: ReactNode;
     params: { locale: string };
 }) {
-    const locale = locales.includes(params.locale as any) ? params.locale : defaultLocale;
-    if (!locale) notFound();
+    if (!locales.includes(params.locale as any)) {
+        notFound();
+    }
+
+    const locale = params.locale;
     const messages = await getMessages();
     const dir = locale === 'ar' ? 'rtl' : 'ltr';
     return (
@@ -78,7 +80,6 @@ export default async function LocaleLayout({
                     <ReactQueryProvider>
                         <AuthProvider locale={locale}>
                             <ClientCacheManager buildId={APP_BUILD_ID} />
-                            <PwaRegistrar />
                             <SessionTimeoutManager />
                             {children}
                             <Toaster position={locale === 'ar' ? 'top-left' : 'top-right'} />

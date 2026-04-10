@@ -1,7 +1,6 @@
 /** @type {import('next').NextConfig} */
 const path = require('path');
 const dotenv = require('dotenv');
-const defaultRuntimeCaching = require('next-pwa/cache');
 
 [
     path.resolve(__dirname, '.env.local'),
@@ -12,62 +11,31 @@ const defaultRuntimeCaching = require('next-pwa/cache');
     dotenv.config({ path: envPath });
 });
 
-const runtimeCaching = [
-    // Block caching for dynamic API traffic (always network).
-    {
-        urlPattern: /^\/api\/.*/i,
-        handler: 'NetworkOnly',
-        options: {
-            cacheName: 'api-runtime-local',
-        },
-    },
-    {
-        urlPattern: /^https?:\/\/[^/]+\/api\/.*/i,
-        handler: 'NetworkOnly',
-        options: {
-            cacheName: 'api-runtime-remote',
-        },
-    },
-    // Keep default runtime caching for static assets/fonts/images, but drop any generic api rule if present.
-    ...defaultRuntimeCaching.filter(
-        (rule) => !(rule.urlPattern && /api/i.test(rule.urlPattern.toString())),
-    ),
-];
-
-const withPWA = require('next-pwa')({
-    dest: 'public',
-    register: true,
-    skipWaiting: true,
-    clientsClaim: true,
-    disable: process.env.NODE_ENV === 'development',
-    buildExcludes: [/app-build-manifest\.json$/],
-    runtimeCaching,
-});
-
 const createNextIntlPlugin = require('next-intl/plugin');
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
+const stripApiSuffix = (value) => value.replace(/\/api\/?$/i, '');
 
 const resolveApiRewriteTarget = () => {
     const configured = (process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '').trim();
     if (!configured || configured === '/api') {
         return process.env.NODE_ENV === 'production'
-            ? 'https://emails-est-api.vercel.app/api'
-            : 'http://localhost:3001/api';
+            ? 'https://emails-est-api.vercel.app'
+            : 'http://localhost:3001';
     }
     if (/^https?:\/\//i.test(configured)) {
-        return configured.replace(/\/$/, '');
+        return stripApiSuffix(configured.replace(/\/$/, ''));
     }
     if (configured.startsWith('//')) {
-        return `https:${configured}`.replace(/\/$/, '');
+        return stripApiSuffix(`https:${configured}`.replace(/\/$/, ''));
     }
     if (configured.startsWith('/')) {
         return process.env.NODE_ENV === 'production'
-            ? 'https://emails-est-api.vercel.app/api'
-            : 'http://localhost:3001/api';
+            ? 'https://emails-est-api.vercel.app'
+            : 'http://localhost:3001';
     }
     const scheme = /^(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(configured) ? 'http://' : 'https://';
-    return `${scheme}${configured}`.replace(/\/$/, '');
+    return stripApiSuffix(`${scheme}${configured}`.replace(/\/$/, ''));
 };
 
 const nextConfig = {
@@ -100,4 +68,4 @@ const nextConfig = {
     },
 };
 
-module.exports = withNextIntl(withPWA(nextConfig));
+module.exports = withNextIntl(nextConfig);
