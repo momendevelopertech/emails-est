@@ -12,24 +12,28 @@ const hasScheme = (value: string) => /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
 const isLocalhost = (value: string) => /^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(value);
 const DEFAULT_PROD_FRONTEND_ORIGIN = 'https://emails-est-web.vercel.app';
 
-const normalizeOrigin = (value?: string) => {
-    if (!value) {
-        if (process.env.NODE_ENV === 'production') {
-            return DEFAULT_PROD_FRONTEND_ORIGIN;
-        }
-        return 'http://localhost:3000';
-    }
+const ensureAbsoluteUrl = (value: string) => {
     const trimmed = value.trim();
-    if (!trimmed) {
-        if (process.env.NODE_ENV === 'production') {
-            return DEFAULT_PROD_FRONTEND_ORIGIN;
-        }
-        return 'http://localhost:3000';
-    }
+    if (!trimmed) return undefined;
+
     if (hasScheme(trimmed)) return trimmed;
     if (trimmed.startsWith('//')) return `https:${trimmed}`;
     if (isLocalhost(trimmed)) return `http://${trimmed.replace(/^https?:\/\//i, '')}`;
     return `https://${trimmed}`;
+};
+
+const normalizeOrigin = (value?: string) => {
+    const fallback = process.env.NODE_ENV === 'production'
+        ? DEFAULT_PROD_FRONTEND_ORIGIN
+        : 'http://localhost:3000';
+
+    const candidate = ensureAbsoluteUrl(value || '') || fallback;
+
+    try {
+        return new URL(candidate).origin;
+    } catch {
+        return candidate.replace(/\/+$/, '');
+    }
 };
 
 const normalizeDomain = (value?: string) => {
