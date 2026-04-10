@@ -227,12 +227,13 @@ api.defaults.adapter = async (config) => {
 
 let csrfPromise: Promise<void> | null = null;
 
-const ensureCsrfToken = async () => {
-    if (csrfToken) return;
+const ensureCsrfToken = () => {
+    if (csrfToken) return Promise.resolve();
     
     if (!csrfPromise) {
         csrfPromise = api
             .get('/auth/csrf', { headers: { 'x-skip-activity': '1' } })
+            .then(() => {})
             .finally(() => {
                 csrfPromise = null;
             });
