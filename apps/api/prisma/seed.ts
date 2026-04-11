@@ -1,5 +1,7 @@
 import { PrismaClient, RecipientStatus, TemplateType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { EST1_ALL_FIXTURE_ROWS } from './fixtures/est1-all.fixture';
+import { normalizeRecipientImport } from '../src/messaging/recipient-import';
 
 const prisma = new PrismaClient();
 
@@ -7,160 +9,38 @@ const SEEDED_TEMPLATE_DEFINITIONS = [
   {
     name: 'Exam Reminder',
     type: TemplateType.BOTH,
-    subject: 'Reminder for {{name}}',
-    body: 'Hello {{name}}, your exam is on {{date}} at {{arrival_time}} in room {{room}}.',
+    subject: 'EST1 assignment for {{name}}',
+    body: 'Hello {{name}}, your EST1 room is {{room_est1}} at {{building}} in {{governorate}}. Location: {{location}}',
   },
   {
     name: 'Seed - Email Only',
     type: TemplateType.EMAIL,
-    subject: 'Exam briefing for {{name}}',
-    body: 'Hello {{name}}, please arrive at {{arrival_time}} to {{test_center}} and report to room {{room}}.',
+    subject: 'EST1 briefing for {{name}}',
+    body: 'Hello {{name}}, your role is {{role}} at {{building}}. Room: {{room_est1}}. Address: {{address}}',
   },
   {
     name: 'Seed - WhatsApp Only',
     type: TemplateType.WHATSAPP,
     subject: 'WhatsApp briefing',
-    body: 'Hello {{name}}, your shift is {{day}} for {{exam_type}} at {{arrival_time}}.',
+    body: 'Hello {{name}}, you are assigned as {{role}} ({{type}}) in {{building}}. Room: {{room_est1}}',
   },
 ] as const;
 
-const SEEDED_RECIPIENTS = [
-  {
-    name: 'Seed Pending Email',
-    email: 'seed.pending.email@example.com',
-    phone: null,
-    exam_type: 'SEED-EST-1',
-    role: 'Senior',
-    day: 'Friday',
-    date: '2026-04-10',
-    test_center: 'Nasr City Center',
-    faculty: 'Engineering',
-    room: 'A-12',
-    address: 'Nasr City, Cairo',
-    map_link: 'https://maps.app.goo.gl/example',
-    arrival_time: '08:30',
-    status: RecipientStatus.PENDING,
-    error_message: null,
-    attempts_count: 0,
-    last_attempt_at: null,
-  },
-  {
-    name: 'Seed Pending WhatsApp',
-    email: null,
-    phone: '01012345679',
-    exam_type: 'SEED-EST-1',
-    role: 'Observer',
-    day: 'Friday',
-    date: '2026-04-10',
-    test_center: 'Nasr City Center',
-    faculty: 'Business',
-    room: 'B-03',
-    address: 'Nasr City, Cairo',
-    map_link: 'https://maps.app.goo.gl/example',
-    arrival_time: '09:00',
-    status: RecipientStatus.PENDING,
-    error_message: null,
-    attempts_count: 0,
-    last_attempt_at: null,
-  },
-  {
-    name: 'Seed Pending Both',
-    email: 'seed.pending.both@example.com',
-    phone: '01012345680',
-    exam_type: 'SEED-EST-2',
-    role: 'Lead',
-    day: 'Saturday',
-    date: '2026-04-11',
-    test_center: 'October Campus',
-    faculty: 'Medicine',
-    room: 'C-08',
-    address: '6th of October, Giza',
-    map_link: 'https://maps.app.goo.gl/example',
-    arrival_time: '07:45',
-    status: RecipientStatus.PENDING,
-    error_message: null,
-    attempts_count: 0,
-    last_attempt_at: null,
-  },
-  {
-    name: 'Seed Sent Recipient',
-    email: 'seed.sent@example.com',
-    phone: '01012345681',
-    exam_type: 'SEED-EST-2',
-    role: 'Coordinator',
-    day: 'Saturday',
-    date: '2026-04-11',
-    test_center: 'October Campus',
-    faculty: 'Science',
-    room: 'D-02',
-    address: '6th of October, Giza',
-    map_link: 'https://maps.app.goo.gl/example',
-    arrival_time: '08:15',
-    status: RecipientStatus.SENT,
-    error_message: null,
-    attempts_count: 1,
-    last_attempt_at: new Date('2026-04-08T08:30:00.000Z'),
-  },
-  {
-    name: 'Seed Failed Recipient',
-    email: 'seed.failed@example.com',
-    phone: '01012345682',
-    exam_type: 'SEED-EST-3',
-    role: 'Support',
-    day: 'Sunday',
-    date: '2026-04-12',
-    test_center: 'Maadi Branch',
-    faculty: 'Arts',
-    room: 'E-11',
-    address: 'Maadi, Cairo',
-    map_link: 'https://maps.app.goo.gl/example',
-    arrival_time: '09:30',
-    status: RecipientStatus.FAILED,
-    error_message: 'SMTP rejected the recipient address',
-    attempts_count: 2,
-    last_attempt_at: new Date('2026-04-08T09:10:00.000Z'),
-  },
-  {
-    name: 'Seed Processing Recipient',
-    email: 'seed.processing@example.com',
-    phone: '01012345683',
-    exam_type: 'SEED-EST-3',
-    role: 'Assistant',
-    day: 'Sunday',
-    date: '2026-04-12',
-    test_center: 'Maadi Branch',
-    faculty: 'Law',
-    room: 'F-05',
-    address: 'Maadi, Cairo',
-    map_link: 'https://maps.app.goo.gl/example',
-    arrival_time: '10:15',
-    status: RecipientStatus.PROCESSING,
-    error_message: null,
-    attempts_count: 1,
-    last_attempt_at: new Date('2026-04-08T09:25:00.000Z'),
-  },
-] as const;
+const SEEDED_RECIPIENTS = EST1_ALL_FIXTURE_ROWS.map((row, index) => ({
+  id: `seed-est1-${String(index + 1).padStart(4, '0')}`,
+  ...normalizeRecipientImport(row, index),
+  status: RecipientStatus.PENDING,
+  error_message: null,
+  attempts_count: 0,
+  last_attempt_at: null,
+}));
 
-const SEEDED_LOGS = [
-  {
-    recipientName: 'Seed Sent Recipient',
-    status: RecipientStatus.SENT,
-    error: null,
-    created_at: new Date('2026-04-08T08:30:00.000Z'),
-  },
-  {
-    recipientName: 'Seed Failed Recipient',
-    status: RecipientStatus.FAILED,
-    error: 'SMTP rejected the recipient address',
-    created_at: new Date('2026-04-08T09:10:00.000Z'),
-  },
-  {
-    recipientName: 'Seed Failed Recipient',
-    status: RecipientStatus.FAILED,
-    error: 'WhatsApp number is not registered (201012345682).',
-    created_at: new Date('2026-04-08T09:11:00.000Z'),
-  },
-] as const;
+const SEEDED_LOGS: Array<{
+  recipientName: string;
+  status: RecipientStatus;
+  error: string | null;
+  created_at: Date;
+}> = [];
 
 type SeedUserInput = {
   id: string;
@@ -279,12 +159,10 @@ export async function seedMessagingData(client: PrismaClient) {
     });
   }
 
-  const seededExamTypes = Array.from(new Set(
-    SEEDED_RECIPIENTS.map((recipient) => recipient.exam_type).filter(Boolean),
-  ));
+  const seededRecipientIds = SEEDED_RECIPIENTS.map((recipient) => recipient.id);
 
   const existingSeedRecipients = await client.recipient.findMany({
-    where: { exam_type: { in: seededExamTypes } },
+    where: { id: { in: seededRecipientIds } },
     select: { id: true },
   });
 
@@ -304,26 +182,28 @@ export async function seedMessagingData(client: PrismaClient) {
     createdRecipients.push({ id: created.id, name: created.name });
   }
 
-  const recipientIdByName = new Map(createdRecipients.map((recipient) => [recipient.name, recipient.id]));
-  await client.log.createMany({
-    data: SEEDED_LOGS
-      .map((log) => {
-        const recipientId = recipientIdByName.get(log.recipientName);
-        if (!recipientId) return null;
-        return {
-          recipientId,
-          status: log.status,
-          error: log.error,
-          created_at: log.created_at,
-        };
-      })
-      .filter(Boolean) as Array<{
-        recipientId: string;
-        status: RecipientStatus;
-        error: string | null;
-        created_at: Date;
-      }>,
-  });
+  if (SEEDED_LOGS.length) {
+    const recipientIdByName = new Map(createdRecipients.map((recipient) => [recipient.name, recipient.id]));
+    await client.log.createMany({
+      data: SEEDED_LOGS
+        .map((log) => {
+          const recipientId = recipientIdByName.get(log.recipientName);
+          if (!recipientId) return null;
+          return {
+            recipientId,
+            status: log.status,
+            error: log.error,
+            created_at: log.created_at,
+          };
+        })
+        .filter(Boolean) as Array<{
+          recipientId: string;
+          status: RecipientStatus;
+          error: string | null;
+          created_at: Date;
+        }>,
+    });
+  }
 }
 
 async function main() {

@@ -47,7 +47,7 @@
     "dashboardEmpty": "No recipients yet.",
     "uploadTitle": "Upload Excel",
     "uploadSubtitle": "Import recipients from an Excel file.",
-    "uploadHint": "Upload an Excel file with recipient data. Required columns: name, email, phone, exam_type, role, day, date, test_center, faculty, room, address, map_link, arrival_time.",
+    "uploadHint": "Upload an Excel file with recipient data. Required columns: ROOM EST1, Full English name (at least 4 names), Email, Role, Type, Governorate, Address, Building, Location.",
     "selectFile": "Select file",
     "noFileSelected": "No file selected",
     "uploadSuccess": "Recipients imported successfully.",

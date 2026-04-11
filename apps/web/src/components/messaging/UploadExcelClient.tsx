@@ -7,13 +7,13 @@ import toast from 'react-hot-toast';
 import api, { fetchCsrfToken } from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 
-import { REQUIRED_UPLOAD_COLUMNS, validateUploadHeaders } from './upload-utils';
+import { buildDownloadWorkbook, EXCEL_UPLOAD_HEADERS, parseRecipientWorkbook } from './upload-utils';
 
 export default function UploadExcelClient({ locale }: { locale: string }) {
     const { ready, isChecking, error } = useRequireAuth(locale);
     const t = useTranslations('messaging');
     const hint = useMemo(
-        () => t('uploadHint') || 'Upload an Excel file with recipient data. Required columns: name, email, phone, exam_type, role, day, date, test_center, faculty, room, address, map_link, arrival_time.',
+        () => t('uploadHint') || `Upload an Excel file with recipient data. Required columns: ${EXCEL_UPLOAD_HEADERS.join(', ')}.`,
         [t],
     );
     const [fileName, setFileName] = useState('');
@@ -49,79 +49,10 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
     if (!ready) {
         return null;
     }
-
-
     const downloadWorkbook = (kind: 'template' | 'sample') => {
-        const workbook = XLSX.utils.book_new();
-        const rows: string[][] = [
-            [...REQUIRED_UPLOAD_COLUMNS],
-            ...(kind === 'sample'
-                ? [[
-                    'Ahmed Ali',
-                    'ahmed.ali@example.com',
-                    '+201001234567',
-                    'EST 1',
-                    'Senior',
-                    'Friday',
-                    '2026-04-10',
-                    'Nasr City Center',
-                    'Engineering',
-                    'A-12',
-                    'Nasr City, Cairo',
-                    'https://maps.app.goo.gl/example',
-                    '08:30',
-                ]]
-                : []),
-        ];
-
-        const worksheet = XLSX.utils.aoa_to_sheet(rows);
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'recipients');
-        XLSX.writeFile(
-            workbook,
-            kind === 'sample' ? 'messaging-recipients-sample.xlsx' : 'messaging-recipients-template.xlsx',
-        );
-    };
-
-    const parseWorkbook = async (file: File) => {
-        const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
-
-        if (rows.length < 2 || !Array.isArray(rows[0])) {
-            throw new Error('The sheet must contain a header row and at least one data row.');
-        }
-
-        const rawHeaders = rows[0].map((value) => String(value || ''));
-        const { normalized: headers, missing } = validateUploadHeaders(rawHeaders);
-        if (missing.length) {
-            throw new Error(`Missing required headers: ${missing.join(', ')}`);
-        }
-        const data = rows.slice(1).map((row) => {
-            const values = Array.isArray(row) ? row : [];
-            return headers.reduce((acc, header, index) => {
-                acc[header] = values[index] ?? '';
-                return acc;
-            }, {} as Record<string, unknown>);
-        });
-
-        return data
-            .map((row) => ({
-                name: String(row.name || '').trim(),
-                email: String(row.email || '').trim(),
-                phone: String(row.phone || '').trim(),
-                exam_type: String(row.exam_type || '').trim(),
-                role: String(row.role || '').trim(),
-                day: String(row.day || '').trim(),
-                date: String(row.date || '').trim(),
-                test_center: String(row.test_center || '').trim(),
-                faculty: String(row.faculty || '').trim(),
-                room: String(row.room || '').trim(),
-                address: String(row.address || '').trim(),
-                map_link: String(row.map_link || '').trim(),
-                arrival_time: String(row.arrival_time || '').trim(),
-            }))
-            .filter((item) => item.name || item.email || item.phone);
+        const workbook = buildDownloadWorkbook(kind);
+        const fileName = kind === 'sample' ? 'messaging-est1-sample.xlsx' : 'messaging-est1-template.xlsx';
+        XLSX.writeFile(workbook, fileName);
     };
 
     const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,7 +64,7 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
         setPreviewCount(null);
 
         try {
-            const rows = await parseWorkbook(file);
+            const rows = await parseRecipientWorkbook(file, locale === 'ar');
             if (rows.length === 0) {
                 throw new Error('No recipients were found in the file.');
             }
@@ -175,7 +106,7 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
                         </div>
                     )}
                     <div className="mt-4 text-xs text-slate-500">
-                        {t('uploadColumnsHint') || 'The first row must contain header names matching the field list.'}
+                        {t('uploadColumnsHint') || 'The first row must contain the same Excel headers used in the EST1 sheet.'}
                     </div>
                 </div>
 

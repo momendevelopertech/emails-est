@@ -11,6 +11,14 @@ export enum RecipientStatus {
 export class RecipientFilterDto {
     @IsOptional()
     @IsString()
+    name?: string;
+
+    @IsOptional()
+    @IsString()
+    email?: string;
+
+    @IsOptional()
+    @IsString()
     exam_type?: string;
 
     @IsOptional()
@@ -20,6 +28,34 @@ export class RecipientFilterDto {
     @IsOptional()
     @IsString()
     day?: string;
+
+    @IsOptional()
+    @IsString()
+    room?: string;
+
+    @IsOptional()
+    @IsString()
+    room_est1?: string;
+
+    @IsOptional()
+    @IsString()
+    type?: string;
+
+    @IsOptional()
+    @IsString()
+    governorate?: string;
+
+    @IsOptional()
+    @IsString()
+    address?: string;
+
+    @IsOptional()
+    @IsString()
+    building?: string;
+
+    @IsOptional()
+    @IsString()
+    location?: string;
 
     @IsOptional()
     @IsEnum(RecipientStatus)

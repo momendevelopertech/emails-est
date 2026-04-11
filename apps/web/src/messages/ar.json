@@ -47,7 +47,7 @@
     "dashboardEmpty": "لا يوجد مستلمين بعد.",
     "uploadTitle": "تحميل إكسل",
     "uploadSubtitle": "استورد المستلمين من ملف Excel.",
-    "uploadHint": "قم بتحميل ملف Excel يحتوي على بيانات المستلمين. الأعمدة المطلوبة: name، email، phone، exam_type، role، day، date، test_center، faculty، room، address، map_link، arrival_time.",
+    "uploadHint": "قم بتحميل ملف Excel يحتوي على بيانات المستلمين. الأعمدة المطلوبة: ROOM EST1، Full English name (at least 4 names)، Email، Role، Type، Governorate، Address، Building، Location.",
     "selectFile": "اختر ملف",
     "noFileSelected": "لم يتم اختيار ملف",
     "uploadSuccess": "تم استيراد المستلمين بنجاح.",

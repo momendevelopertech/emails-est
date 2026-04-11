@@ -42,7 +42,27 @@ export class CreateRecipientDto {
 
     @IsOptional()
     @IsString()
+    room_est1?: string | null;
+
+    @IsOptional()
+    @IsString()
+    type?: string | null;
+
+    @IsOptional()
+    @IsString()
+    governorate?: string | null;
+
+    @IsOptional()
+    @IsString()
     address?: string | null;
+
+    @IsOptional()
+    @IsString()
+    building?: string | null;
+
+    @IsOptional()
+    @IsString()
+    location?: string | null;
 
     @IsOptional()
     @IsString()

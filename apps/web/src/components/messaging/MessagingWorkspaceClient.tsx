@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import api, { fetchCsrfToken } from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
-import { REQUIRED_UPLOAD_COLUMNS, validateUploadHeaders } from './upload-utils';
+import { buildDownloadWorkbook, parseRecipientWorkbook } from './upload-utils';
 
 type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
 type TemplateType = 'BOTH' | 'EMAIL' | 'WHATSAPP';
@@ -36,14 +36,31 @@ type Recipient = {
     name: string;
     email?: string | null;
     phone?: string | null;
-    exam_type?: string | null;
     role?: string | null;
-    day?: string | null;
-    date?: string | null;
+    room_est1?: string | null;
+    type?: string | null;
+    governorate?: string | null;
+    address?: string | null;
+    building?: string | null;
+    location?: string | null;
     status: 'PENDING' | 'PROCESSING' | 'SENT' | 'FAILED';
     error_message?: string | null;
     attempts_count?: number;
     last_attempt_at?: string | null;
+};
+
+type RecipientFilters = {
+    search: string;
+    name: string;
+    email: string;
+    role: string;
+    room_est1: string;
+    type: string;
+    governorate: string;
+    address: string;
+    building: string;
+    location: string;
+    status: string;
 };
 
 type Template = {
@@ -76,6 +93,19 @@ type EmailSettingsRecord = {
 };
 
 const EMPTY_RECIPIENTS: Recipient[] = [];
+const EMPTY_FILTERS: RecipientFilters = {
+    search: '',
+    name: '',
+    email: '',
+    role: '',
+    room_est1: '',
+    type: '',
+    governorate: '',
+    address: '',
+    building: '',
+    location: '',
+    status: '',
+};
 
 const STATUS_STYLES: Record<Recipient['status'], string> = {
     PENDING: 'bg-amber-50 text-amber-800 border border-amber-200',
@@ -116,20 +146,25 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         refresh: isArabic ? 'تحديث' : 'Refresh',
         uploadCardTitle: isArabic ? 'رفع ملف Excel' : 'Upload Excel file',
         uploadCardHint: isArabic
-            ? 'بعد الرفع ستظهر البيانات فورًا في الجدول بالأسفل مع الحالة لكل مستلم.'
-            : 'After import, recipients will appear immediately in the table below with delivery status.',
+            ? 'بعد الرفع ستظهر البيانات فورًا في الجدول، وسيتم استبدال كل الإيميلات تلقائيًا بإيميلات التيست المحددة.'
+            : 'After import, recipients will appear immediately in the table below and every email will be replaced automatically with the test addresses.',
         uploadTemplate: isArabic ? 'تحميل قالب فارغ' : 'Download template',
         uploadSample: isArabic ? 'تحميل مثال جاهز' : 'Download sample',
         selectFile: isArabic ? 'اختر ملف Excel' : 'Choose Excel file',
         importedCount: isArabic ? 'تم استيراد' : 'Imported',
         recipientsSectionTitle: isArabic ? 'جدول المستلمين' : 'Recipients table',
         recipientsSectionHint: isArabic
-            ? 'فلتر بالاسم أو الامتحان أو الدور أو اليوم أو الحالة، وحدد من تريد إرساله.'
-            : 'Filter by name, exam, role, day or status, then select who should receive the campaign.',
-        searchPlaceholder: isArabic ? 'ابحث بالاسم أو الإيميل أو رقم الهاتف' : 'Search by name, email or phone',
-        examType: isArabic ? 'نوع الامتحان' : 'Exam type',
+            ? 'فلتر بأي هيدر موجود في ملف الإكسيل، ثم حدّد الصفوف التي تريد استخدامها في الإرسال.'
+            : 'Filter by any header from the Excel sheet, then select the rows you want to use in a campaign.',
+        searchPlaceholder: isArabic ? 'ابحث بالاسم أو الإيميل أو الغرفة أو المبنى أو المحافظة' : 'Search by name, email, room, building or governorate',
         role: isArabic ? 'الدور' : 'Role',
-        day: isArabic ? 'اليوم' : 'Day',
+        roomEst1: isArabic ? 'غرفة EST1' : 'ROOM EST1',
+        typeLabel: isArabic ? 'النوع' : 'Type',
+        governorate: isArabic ? 'المحافظة' : 'Governorate',
+        address: isArabic ? 'العنوان' : 'Address',
+        building: isArabic ? 'المبنى' : 'Building',
+        location: isArabic ? 'الموقع' : 'Location',
+        emailLabel: isArabic ? 'الإيميل' : 'Email',
         status: isArabic ? 'الحالة' : 'Status',
         clearFilters: isArabic ? 'مسح الفلاتر' : 'Clear filters',
         visibleCount: isArabic ? 'إجمالي النتائج' : 'Matching recipients',
@@ -235,13 +270,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     ));
     const [page, setPage] = useState(1);
     const [pageSize] = useState(25);
-    const [filters, setFilters] = useState({
-        search: '',
-        exam_type: '',
-        role: '',
-        day: '',
-        status: '',
-    });
+    const [filters, setFilters] = useState<RecipientFilters>(EMPTY_FILTERS);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
     const [fileName, setFileName] = useState('');
     const [previewCount, setPreviewCount] = useState<number | null>(null);
@@ -475,6 +504,28 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         failed: recipients.filter((recipient) => recipient.status === 'FAILED').length,
     }), [recipients]);
 
+    const recipientFilterFields = useMemo(() => ([
+        { key: 'name', label: copy.name },
+        { key: 'email', label: copy.emailLabel },
+        { key: 'role', label: copy.role },
+        { key: 'room_est1', label: copy.roomEst1 },
+        { key: 'type', label: copy.typeLabel },
+        { key: 'governorate', label: copy.governorate },
+        { key: 'address', label: copy.address },
+        { key: 'building', label: copy.building },
+        { key: 'location', label: copy.location },
+    ] as Array<{ key: keyof RecipientFilters; label: string }>), [
+        copy.address,
+        copy.building,
+        copy.emailLabel,
+        copy.governorate,
+        copy.location,
+        copy.name,
+        copy.role,
+        copy.roomEst1,
+        copy.typeLabel,
+    ]);
+
     const allVisibleSelected = recipients.length > 0 && recipients.every((recipient) => selectedRecipientIds.includes(recipient.id));
 
     const updateFilter = (key: keyof typeof filters, value: string) => {
@@ -484,7 +535,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const clearFilters = () => {
         setPage(1);
-        setFilters({ search: '', exam_type: '', role: '', day: '', status: '' });
+        setFilters(EMPTY_FILTERS);
     };
 
     const toggleRecipient = (recipientId: string) => {
@@ -509,64 +560,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     };
 
     const downloadWorkbook = (kind: 'template' | 'sample') => {
-        const workbook = XLSX.utils.book_new();
-        const rows: string[][] = [
-            [...REQUIRED_UPLOAD_COLUMNS],
-            ...(kind === 'sample'
-                ? [[
-                    'Ahmed Ali',
-                    'ahmed.ali@example.com',
-                    '01012345678',
-                    'EST 1',
-                    'Senior',
-                    'Friday',
-                    '2026-04-10',
-                    'Nasr City Center',
-                    'Engineering',
-                    'A-12',
-                    'Nasr City, Cairo',
-                    'https://maps.app.goo.gl/example',
-                    '08:30',
-                ]]
-                : []),
-        ];
-
-        const worksheet = XLSX.utils.aoa_to_sheet(rows);
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'recipients');
-        XLSX.writeFile(workbook, kind === 'sample' ? 'messaging-recipients-sample.xlsx' : 'messaging-recipients-template.xlsx');
+        const workbook = buildDownloadWorkbook(kind);
+        XLSX.writeFile(workbook, kind === 'sample' ? 'messaging-est1-sample.xlsx' : 'messaging-est1-template.xlsx');
     };
 
-    const parseWorkbook = async (file: File) => {
-        const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
-
-        if (rows.length < 2 || !Array.isArray(rows[0])) {
-            throw new Error(isArabic
-                ? 'الملف يجب أن يحتوي على صف عناوين وصف بيانات واحد على الأقل.'
-                : 'The sheet must contain a header row and at least one data row.');
-        }
-
-        const rawHeaders = rows[0].map((value) => String(value || ''));
-        const { normalized: headers, missing } = validateUploadHeaders(rawHeaders);
-        if (missing.length) {
-            throw new Error(isArabic
-                ? `الأعمدة الناقصة: ${missing.join(', ')}`
-                : `Missing required headers: ${missing.join(', ')}`);
-        }
-
-        return rows
-            .slice(1)
-            .map((row) => {
-                const values = Array.isArray(row) ? row : [];
-                return headers.reduce((acc, header, index) => {
-                    acc[header] = String(values[index] ?? '').trim();
-                    return acc;
-                }, {} as Record<string, string>);
-            })
-            .filter((item) => item.name || item.email || item.phone);
-    };
+    const parseWorkbook = async (file: File) => parseRecipientWorkbook(file, isArabic);
 
     const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -617,9 +615,15 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const buildFilterPayload = (applyPendingFallback = true) => {
         const payload: Record<string, string> = {};
         if (filters.search.trim()) payload.search = filters.search.trim();
-        if (filters.exam_type.trim()) payload.exam_type = filters.exam_type.trim();
+        if (filters.name.trim()) payload.name = filters.name.trim();
+        if (filters.email.trim()) payload.email = filters.email.trim();
         if (filters.role.trim()) payload.role = filters.role.trim();
-        if (filters.day.trim()) payload.day = filters.day.trim();
+        if (filters.room_est1.trim()) payload.room_est1 = filters.room_est1.trim();
+        if (filters.type.trim()) payload.type = filters.type.trim();
+        if (filters.governorate.trim()) payload.governorate = filters.governorate.trim();
+        if (filters.address.trim()) payload.address = filters.address.trim();
+        if (filters.building.trim()) payload.building = filters.building.trim();
+        if (filters.location.trim()) payload.location = filters.location.trim();
         if (filters.status) {
             payload.status = filters.status;
         } else if (applyPendingFallback) {
@@ -828,7 +832,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 </div>
                             </div>
 
-                            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                                 <label className="relative block xl:col-span-2">
                                     <Search className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                     <input
@@ -839,9 +843,15 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     />
                                 </label>
 
-                                <input value={filters.exam_type} onChange={(event) => updateFilter('exam_type', event.target.value)} className="input w-full" placeholder={copy.examType} />
-                                <input value={filters.role} onChange={(event) => updateFilter('role', event.target.value)} className="input w-full" placeholder={copy.role} />
-                                <input value={filters.day} onChange={(event) => updateFilter('day', event.target.value)} className="input w-full" placeholder={copy.day} />
+                                {recipientFilterFields.map((field) => (
+                                    <input
+                                        key={field.key}
+                                        value={filters[field.key]}
+                                        onChange={(event) => updateFilter(field.key, event.target.value)}
+                                        className="input w-full"
+                                        placeholder={field.label}
+                                    />
+                                ))}
                                 <select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)} className="input w-full">
                                     <option value="">{copy.status}</option>
                                     {Object.entries(copy.statusLabels).map(([value, label]) => (
@@ -922,10 +932,13 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
                                                         <div className="space-y-1 text-xs text-slate-600">
-                                                            <div><strong>{copy.examType}:</strong> {recipient.exam_type || '-'}</div>
+                                                            <div><strong>{copy.roomEst1}:</strong> {recipient.room_est1 || '-'}</div>
                                                             <div><strong>{copy.role}:</strong> {recipient.role || '-'}</div>
-                                                            <div><strong>{copy.day}:</strong> {recipient.day || '-'}</div>
-                                                            <div><strong>Date:</strong> {recipient.date || '-'}</div>
+                                                            <div><strong>{copy.typeLabel}:</strong> {recipient.type || '-'}</div>
+                                                            <div><strong>{copy.governorate}:</strong> {recipient.governorate || '-'}</div>
+                                                            <div><strong>{copy.building}:</strong> {recipient.building || '-'}</div>
+                                                            <div><strong>{copy.address}:</strong> {recipient.address || '-'}</div>
+                                                            <div><strong>{copy.location}:</strong> {recipient.location || '-'}</div>
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
@@ -1425,3 +1438,4 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         </section>
     );
 }
+

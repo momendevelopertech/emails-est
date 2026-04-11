@@ -84,7 +84,12 @@ model Recipient {
   test_center     String?
   faculty         String?
   room            String?
+  room_est1       String?
+  type            String?
+  governorate     String?
   address         String?
+  building        String?
+  location        String?
   map_link        String?
   arrival_time    String?
   status          RecipientStatus @default(PENDING)

@@ -9,6 +9,7 @@ import { SendCampaignDto } from './dto/send-campaign.dto';
 import { RetryRecipientsDto } from './dto/retry-recipients.dto';
 import { RecipientFilterDto } from './dto/recipient-filter.dto';
 import { RecipientStatus, TemplateType } from '@prisma/client';
+import { normalizeImportValue, normalizeRecipientImport, RECIPIENT_TEXT_FILTER_FIELDS } from './recipient-import';
 
 @Injectable()
 export class MessagingService {
@@ -21,19 +22,7 @@ export class MessagingService {
     async findRecipients(filter: RecipientFilterDto) {
         const page = Math.max(filter.page ?? 1, 1);
         const limit = Math.min(Math.max(filter.limit ?? 100, 1), 500);
-        const where: any = {};
-
-        if (filter.exam_type) where.exam_type = filter.exam_type;
-        if (filter.role) where.role = filter.role;
-        if (filter.day) where.day = filter.day;
-        if (filter.status) where.status = filter.status;
-        if (filter.search) {
-            where.OR = [
-                { name: { contains: filter.search, mode: 'insensitive' } },
-                { email: { contains: filter.search, mode: 'insensitive' } },
-                { phone: { contains: filter.search, mode: 'insensitive' } },
-            ];
-        }
+        const where = this.buildRecipientWhere(filter);
 
         const [items, total] = await Promise.all([
             this.prisma.recipient.findMany({
@@ -49,25 +38,28 @@ export class MessagingService {
     }
 
     async createRecipient(dto: CreateRecipientDto) {
-        return this.prisma.recipient.create({ data: { ...dto, status: RecipientStatus.PENDING } });
+        const roomEst1 = normalizeImportValue(dto.room_est1) ?? normalizeImportValue(dto.room);
+        const building = normalizeImportValue(dto.building) ?? normalizeImportValue(dto.test_center);
+        const location = normalizeImportValue(dto.location) ?? normalizeImportValue(dto.map_link);
+
+        return this.prisma.recipient.create({
+            data: {
+                ...dto,
+                room: roomEst1,
+                room_est1: roomEst1,
+                test_center: building,
+                building,
+                location,
+                map_link: location,
+                status: RecipientStatus.PENDING,
+            },
+        });
     }
 
     async importRecipients(recipients: CreateRecipientDto[]) {
         const normalized = recipients
-            .map((recipient) => ({
-                name: this.normalizeImportValue(recipient.name),
-                email: this.normalizeImportValue(recipient.email),
-                phone: this.normalizeImportValue(recipient.phone),
-                exam_type: this.normalizeImportValue(recipient.exam_type),
-                role: this.normalizeImportValue(recipient.role),
-                day: this.normalizeImportValue(recipient.day),
-                date: this.normalizeImportValue(recipient.date),
-                test_center: this.normalizeImportValue(recipient.test_center),
-                faculty: this.normalizeImportValue(recipient.faculty),
-                room: this.normalizeImportValue(recipient.room),
-                address: this.normalizeImportValue(recipient.address),
-                map_link: this.normalizeImportValue(recipient.map_link),
-                arrival_time: this.normalizeImportValue(recipient.arrival_time),
+            .map((recipient, index) => ({
+                ...normalizeRecipientImport(recipient, index),
                 status: RecipientStatus.PENDING,
             }))
             .filter((item) => item.name);
@@ -177,10 +169,7 @@ export class MessagingService {
             where.status = RecipientStatus.FAILED;
         }
         if (dto.mode === 'filtered' && dto.filter) {
-            if (dto.filter.exam_type) where.exam_type = dto.filter.exam_type;
-            if (dto.filter.role) where.role = dto.filter.role;
-            if (dto.filter.day) where.day = dto.filter.day;
-            if (dto.filter.status) where.status = dto.filter.status as RecipientStatus;
+            Object.assign(where, this.buildRecipientWhere(dto.filter));
         }
         if (dto.mode === 'filtered' && !dto.filter?.status) {
             // allow any filtered status if status is not explicitly provided
@@ -257,11 +246,42 @@ export class MessagingService {
         });
     }
 
-    private normalizeImportValue(value: unknown): string | null {
-        if (value === null || value === undefined) {
-            return null;
+    private buildRecipientWhere(filter: RecipientFilterDto) {
+        const where: any = {};
+        const textFilters: Array<keyof RecipientFilterDto> = [
+            'name',
+            'email',
+            'exam_type',
+            'role',
+            'day',
+            'room',
+            'room_est1',
+            'type',
+            'governorate',
+            'address',
+            'building',
+            'location',
+        ];
+
+        for (const field of textFilters) {
+            const value = normalizeImportValue(filter[field]);
+            if (!value) {
+                continue;
+            }
+
+            where[field] = { contains: value, mode: 'insensitive' };
         }
-        const normalized = String(value).trim();
-        return normalized.length ? normalized : null;
+
+        if (filter.status) {
+            where.status = filter.status;
+        }
+
+        if (filter.search) {
+            where.OR = RECIPIENT_TEXT_FILTER_FIELDS.map((field) => ({
+                [field]: { contains: filter.search, mode: 'insensitive' },
+            }));
+        }
+
+        return where;
     }
 }

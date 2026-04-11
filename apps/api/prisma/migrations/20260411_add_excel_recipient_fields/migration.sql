@@ -1,0 +1,6 @@
+ALTER TABLE "Recipient"
+    ADD COLUMN IF NOT EXISTS "room_est1" TEXT,
+    ADD COLUMN IF NOT EXISTS "type" TEXT,
+    ADD COLUMN IF NOT EXISTS "governorate" TEXT,
+    ADD COLUMN IF NOT EXISTS "building" TEXT,
+    ADD COLUMN IF NOT EXISTS "location" TEXT;
