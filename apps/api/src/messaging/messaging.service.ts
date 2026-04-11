@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import { WhatsAppService } from '../notifications/whatsapp.service';
 import { CreateRecipientDto } from './dto/create-recipient.dto';
+import { ImportRecipientDto } from './dto/import-recipient.dto';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { SendCampaignDto } from './dto/send-campaign.dto';
@@ -56,7 +57,7 @@ export class MessagingService {
         });
     }
 
-    async importRecipients(recipients: CreateRecipientDto[]) {
+    async importRecipients(recipients: ImportRecipientDto[]) {
         const normalized = recipients
             .map((recipient, index) => ({
                 ...normalizeRecipientImport(recipient, index),

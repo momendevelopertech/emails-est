@@ -1,21 +1,22 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import api, { fetchCsrfToken } from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 
-import { buildDownloadWorkbook, EXCEL_UPLOAD_HEADERS, parseRecipientWorkbook } from './upload-utils';
+import {
+    downloadWorkbook as downloadRecipientWorkbook,
+    getImportErrorMessage,
+    getUploadHint,
+    parseRecipientWorkbook,
+} from './upload-utils';
 
 export default function UploadExcelClient({ locale }: { locale: string }) {
     const { ready, isChecking, error } = useRequireAuth(locale);
     const t = useTranslations('messaging');
-    const hint = useMemo(
-        () => t('uploadHint') || `Upload an Excel file with recipient data. Required columns: ${EXCEL_UPLOAD_HEADERS.join(', ')}.`,
-        [t],
-    );
+    const hint = useMemo(() => getUploadHint(locale), [locale]);
     const [fileName, setFileName] = useState('');
     const [isUploading, setIsUploading] = useState(false);
     const [previewCount, setPreviewCount] = useState<number | null>(null);
@@ -49,10 +50,9 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
     if (!ready) {
         return null;
     }
+
     const downloadWorkbook = (kind: 'template' | 'sample') => {
-        const workbook = buildDownloadWorkbook(kind);
-        const fileName = kind === 'sample' ? 'messaging-est1-sample.xlsx' : 'messaging-est1-template.xlsx';
-        XLSX.writeFile(workbook, fileName);
+        downloadRecipientWorkbook(kind);
     };
 
     const handleChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -64,7 +64,7 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
         setPreviewCount(null);
 
         try {
-            const rows = await parseRecipientWorkbook(file, locale === 'ar');
+            const rows = await parseRecipientWorkbook(file, locale);
             if (rows.length === 0) {
                 throw new Error('No recipients were found in the file.');
             }
@@ -74,7 +74,7 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
             setPreviewCount(rows.length);
             toast.success(t('uploadSuccess') || `Imported ${rows.length} recipients successfully.`);
         } catch (error: any) {
-            toast.error(error?.message || t('uploadError') || 'Unable to import recipients.');
+            toast.error(getImportErrorMessage(error, t('uploadError') || 'Unable to import recipients.'));
         } finally {
             setIsUploading(false);
         }
@@ -106,7 +106,7 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
                         </div>
                     )}
                     <div className="mt-4 text-xs text-slate-500">
-                        {t('uploadColumnsHint') || 'The first row must contain the same Excel headers used in the EST1 sheet.'}
+                        {t('uploadColumnsHint') || 'The EST workbook format is supported directly, including multiple sheets. Emails are replaced automatically with test addresses during import.'}
                     </div>
                 </div>
 
@@ -124,7 +124,7 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
                         </button>
                     </div>
                     <p className="mt-4 text-xs text-slate-500">
-                        {t('downloadNote') || 'Template contains only headers. Sample contains one test row with the same headers.'}
+                        {t('downloadNote') || 'The downloaded files mirror the official EST workbook structure. The sample includes example rows ready for testing.'}
                     </p>
                 </aside>
             </div>

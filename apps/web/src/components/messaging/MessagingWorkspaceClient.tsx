@@ -4,7 +4,6 @@ import { ChangeEvent, MouseEvent, useEffect, useMemo, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 import {
     ChevronDown,
@@ -25,7 +24,12 @@ import {
 } from 'lucide-react';
 import api, { fetchCsrfToken } from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
-import { buildDownloadWorkbook, parseRecipientWorkbook } from './upload-utils';
+import {
+    downloadWorkbook as downloadRecipientWorkbook,
+    getImportErrorMessage,
+    parseRecipientWorkbook,
+    type RecipientImportRow,
+} from './upload-utils';
 
 type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
 type TemplateType = 'BOTH' | 'EMAIL' | 'WHATSAPP';
@@ -373,7 +377,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     };
 
     const importMutation = useMutation({
-        mutationFn: async (rows: Array<Record<string, string>>) => {
+        mutationFn: async (rows: RecipientImportRow[]) => {
             await fetchCsrfToken();
             const response = await api.post('/messaging/recipients/import', { recipients: rows });
             return response.data;
@@ -384,7 +388,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
         },
         onError(error: any) {
-            toast.error(error?.message || copy.uploadError);
+            toast.error(getImportErrorMessage(error, copy.uploadError));
         },
     });
 
@@ -560,12 +564,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     };
 
     const downloadWorkbook = (kind: 'template' | 'sample') => {
-        const workbook = buildDownloadWorkbook(kind);
-        XLSX.writeFile(workbook, kind === 'sample' ? 'messaging-est1-sample.xlsx' : 'messaging-est1-template.xlsx');
+        downloadRecipientWorkbook(kind);
     };
 
-    const parseWorkbook = async (file: File) => parseRecipientWorkbook(file, isArabic);
-
+    const parseWorkbook = async (file: File) => parseRecipientWorkbook(file, locale);
     const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -579,7 +581,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             }
             importMutation.mutate(rows);
         } catch (error: any) {
-            toast.error(error?.message || copy.uploadError);
+            toast.error(getImportErrorMessage(error, copy.uploadError));
         } finally {
             event.target.value = '';
         }
