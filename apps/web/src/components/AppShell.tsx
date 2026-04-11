@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { ReactNode, useMemo, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { FileSpreadsheet, LayoutPanelTop, LogOut, Menu, SendHorizontal } from 'lucide-react';
+import { FileSpreadsheet, LayoutPanelTop, LogOut, Menu, SendHorizontal, Settings } from 'lucide-react';
 import TopNav from './TopNav';
 import { useAuthContext } from '@/context/AuthContext';
 import { useAuthStore } from '@/stores/auth-store';
@@ -17,6 +17,7 @@ export default function AppShell({ locale, children }: { locale: string; childre
     const [mobileOpen, setMobileOpen] = useState(false);
     const activeTab = searchParams.get('tab') || 'recipients';
     const isMessagingRoute = pathname?.includes('/messaging');
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
     const initials = useMemo(() => {
         const value = user?.fullName?.trim();
         if (!value) return 'HR';
@@ -49,6 +50,13 @@ export default function AppShell({ locale, children }: { locale: string; childre
             icon: SendHorizontal,
             active: isMessagingRoute && activeTab === 'campaign',
         },
+        ...(isSuperAdmin ? [{
+            id: 'settings',
+            href: `/${locale}/messaging?tab=settings`,
+            label: locale === 'ar' ? 'الإعدادات' : 'Settings',
+            icon: Settings,
+            active: isMessagingRoute && activeTab === 'settings',
+        }] : []),
     ];
 
     const closeMobile = () => setMobileOpen(false);

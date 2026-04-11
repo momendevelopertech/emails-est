@@ -1,11 +1,14 @@
 'use client';
 
-import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, MouseEvent, useEffect, useMemo, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 import {
+    ChevronDown,
+    ChevronUp,
     CheckCircle2,
     FileSpreadsheet,
     Filter,
@@ -15,6 +18,8 @@ import {
     RefreshCcw,
     Search,
     SendHorizontal,
+    Settings,
+    Server,
     SquarePen,
     Users,
 } from 'lucide-react';
@@ -22,7 +27,7 @@ import api, { fetchCsrfToken } from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import { REQUIRED_UPLOAD_COLUMNS, validateUploadHeaders } from './upload-utils';
 
-type WorkspaceTab = 'recipients' | 'templates' | 'campaign';
+type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
 type TemplateType = 'BOTH' | 'EMAIL' | 'WHATSAPP';
 type SendScope = 'selected' | 'filtered' | 'all_pending' | 'failed';
 
@@ -62,6 +67,14 @@ type LogRow = {
     };
 };
 
+type EmailSettingsRecord = {
+    sender_name: string;
+    sender_email: string;
+    mail_from: string;
+    smtp_host: string;
+    smtp_port: number;
+};
+
 const EMPTY_RECIPIENTS: Recipient[] = [];
 
 const STATUS_STYLES: Record<Recipient['status'], string> = {
@@ -72,21 +85,23 @@ const STATUS_STYLES: Record<Recipient['status'], string> = {
 };
 
 const CHANNEL_STYLES: Record<TemplateType, string> = {
-    BOTH: 'bg-slate-900 text-white',
+    BOTH: 'bg-violet-50 text-violet-800 border border-violet-200',
     EMAIL: 'bg-cyan-50 text-cyan-800 border border-cyan-200',
     WHATSAPP: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
 };
 
 const isWorkspaceTab = (value?: string | null): value is WorkspaceTab =>
-    value === 'recipients' || value === 'templates' || value === 'campaign';
+    value === 'recipients' || value === 'templates' || value === 'campaign' || value === 'settings';
 
 export default function MessagingWorkspaceClient({ locale }: { locale: string }) {
     const isArabic = locale === 'ar';
+    const t = useTranslations('messaging');
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const { user, ready, isChecking, error } = useRequireAuth(locale);
+    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
     const copy = useMemo(() => ({
         tabs: {
@@ -123,6 +138,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         sentCount: isArabic ? 'مرسل' : 'Sent',
         failedCount: isArabic ? 'فشل' : 'Failed',
         selectAll: isArabic ? 'تحديد الكل في الصفحة' : 'Select page',
+        deselectAll: isArabic ? 'إلغاء تحديد الكل' : 'Deselect all',
         clearSelection: isArabic ? 'إلغاء التحديد' : 'Clear selection',
         goToSend: isArabic ? 'الانتقال إلى الإرسال' : 'Go to send',
         name: isArabic ? 'الاسم' : 'Name',
@@ -136,10 +152,13 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         previous: isArabic ? 'السابق' : 'Previous',
         next: isArabic ? 'التالي' : 'Next',
         page: isArabic ? 'صفحة' : 'Page',
+        showing: isArabic ? 'عرض' : 'Showing',
+        of: isArabic ? 'من' : 'of',
         templatesTitle: isArabic ? 'القوالب الجاهزة' : 'Saved templates',
         templatesHint: isArabic
             ? 'أنشئ قوالب منفصلة للإيميل أو الواتساب أو الاثنين معًا، ثم استخدمها في الإرسال.'
             : 'Create reusable templates for email, WhatsApp or both, then use them in campaigns.',
+        templateSearchPlaceholder: isArabic ? 'ابحث في القوالب المحفوظة' : 'Search saved templates',
         templateName: isArabic ? 'اسم القالب' : 'Template name',
         templateType: isArabic ? 'قناة الإرسال' : 'Delivery channel',
         templateSubject: isArabic ? 'عنوان الإيميل' : 'Email subject',
@@ -149,6 +168,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         cancelEdit: isArabic ? 'إلغاء التعديل' : 'Cancel edit',
         useForCampaign: isArabic ? 'استخدمه في الإرسال' : 'Use in campaign',
         noTemplates: isArabic ? 'لا توجد قوالب محفوظة بعد.' : 'No templates saved yet.',
+        noTemplateMatches: isArabic ? 'لا توجد قوالب تطابق هذا البحث.' : 'No templates match this search yet.',
         campaignTitle: isArabic ? 'إعداد الإرسال' : 'Campaign setup',
         campaignHint: isArabic
             ? 'اختر قالبًا ثم حدّد هل تريد الإرسال للمحددين أو النتائج المفلترة أو كل المعلقين أو إعادة فاشلين.'
@@ -160,9 +180,12 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         sending: isArabic ? 'جاري الإرسال...' : 'Sending...',
         recentLogs: isArabic ? 'آخر السجلات' : 'Recent logs',
         logsHint: isArabic ? 'راجع حالة آخر محاولات الإرسال بسرعة.' : 'Review the latest delivery attempts quickly.',
+        showLogs: isArabic ? 'إظهار السجلات' : 'Show logs',
+        hideLogs: isArabic ? 'إخفاء السجلات' : 'Hide logs',
         openTemplates: isArabic ? 'افتح القوالب' : 'Open templates',
         needTemplate: isArabic ? 'اختر قالبًا قبل الإرسال.' : 'Choose a template before sending.',
         needSelection: isArabic ? 'حدد مستلمًا واحدًا على الأقل للإرسال المحدد.' : 'Select at least one recipient for targeted sending.',
+        selectedRowsSummary: isArabic ? 'محدد' : 'selected',
         uploadSuccess: isArabic ? 'تم استيراد المستلمين بنجاح.' : 'Recipients imported successfully.',
         uploadError: isArabic ? 'تعذر استيراد ملف Excel.' : 'Unable to import the Excel file.',
         templateSaved: isArabic ? 'تم حفظ القالب.' : 'Template saved.',
@@ -228,9 +251,15 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         subject: '',
         body: '',
     });
+    const [templateSearch, setTemplateSearch] = useState('');
     const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
     const [campaignTemplateId, setCampaignTemplateId] = useState('');
     const [sendScope, setSendScope] = useState<SendScope>('selected');
+    const [logsExpanded, setLogsExpanded] = useState(false);
+    const [emailSettingsForm, setEmailSettingsForm] = useState({
+        sender_name: '',
+        sender_email: '',
+    });
 
     useEffect(() => {
         const nextTab = searchParams.get('tab');
@@ -281,17 +310,36 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         enabled: ready,
     });
 
+    const emailSettingsQuery = useQuery<EmailSettingsRecord>({
+        queryKey: ['email-settings'],
+        queryFn: async () => {
+            const response = await api.get('/settings/email');
+            return response.data;
+        },
+        enabled: ready && isSuperAdmin,
+    });
+
     useEffect(() => {
         if (!campaignTemplateId && templatesQuery.data?.length) {
             setCampaignTemplateId(templatesQuery.data[0].id);
         }
     }, [campaignTemplateId, templatesQuery.data]);
 
+    useEffect(() => {
+        if (emailSettingsQuery.data) {
+            setEmailSettingsForm({
+                sender_name: emailSettingsQuery.data.sender_name,
+                sender_email: emailSettingsQuery.data.sender_email,
+            });
+        }
+    }, [emailSettingsQuery.data]);
+
     const refreshAll = async () => {
         await Promise.all([
             queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] }),
             queryClient.invalidateQueries({ queryKey: ['messaging-templates'] }),
             queryClient.invalidateQueries({ queryKey: ['messaging-logs'] }),
+            queryClient.invalidateQueries({ queryKey: ['email-settings'] }),
         ]);
     };
 
@@ -375,11 +423,51 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         },
     });
 
+    const saveEmailSettingsMutation = useMutation({
+        mutationFn: async () => {
+            await fetchCsrfToken();
+            const response = await api.patch('/settings/email', {
+                sender_name: emailSettingsForm.sender_name.trim(),
+                sender_email: emailSettingsForm.sender_email.trim(),
+            });
+            return response.data as EmailSettingsRecord;
+        },
+        onSuccess(data) {
+            setEmailSettingsForm({
+                sender_name: data.sender_name,
+                sender_email: data.sender_email,
+            });
+            void queryClient.invalidateQueries({ queryKey: ['email-settings'] });
+            toast.success(t('emailSettingsSaveSuccess'));
+        },
+        onError(error: any) {
+            toast.error(error?.message || t('emailSettingsSaveError'));
+        },
+    });
+
     const recipients = recipientsQuery.data?.items ?? EMPTY_RECIPIENTS;
     const totalRecipients = recipientsQuery.data?.total ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalRecipients / pageSize));
+    const visibleRangeStart = totalRecipients === 0 ? 0 : (page - 1) * pageSize + 1;
+    const visibleRangeEnd = totalRecipients === 0 ? 0 : Math.min(page * pageSize, totalRecipients);
+    const filteredTemplates = (templatesQuery.data ?? []).filter((template) => {
+        const query = templateSearch.trim().toLowerCase();
+        if (!query) {
+            return true;
+        }
+
+        return [
+            template.name,
+            template.subject,
+            template.body,
+            copy.templateTypeLabels[template.type],
+        ].some((value) => value.toLowerCase().includes(query));
+    });
     const currentTemplate = templatesQuery.data?.find((template) => template.id === campaignTemplateId) || null;
     const selectedVisibleRecipients = recipients.filter((recipient) => selectedRecipientIds.includes(recipient.id));
+    const emailIdentityPreview = emailSettingsForm.sender_email
+        ? `${emailSettingsForm.sender_name.trim() || t('senderNamePlaceholder')} <${emailSettingsForm.sender_email}>`
+        : emailSettingsForm.sender_name.trim() || '-';
 
     const pageStats = useMemo(() => ({
         pending: recipients.filter((recipient) => recipient.status === 'PENDING').length,
@@ -405,6 +493,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                 ? current.filter((id) => id !== recipientId)
                 : [...current, recipientId]
         ));
+    };
+
+    const stopRowToggle = (event: MouseEvent<HTMLElement>) => {
+        event.stopPropagation();
     };
 
     const toggleAllVisible = () => {
@@ -514,6 +606,14 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         saveTemplateMutation.mutate();
     };
 
+    const saveEmailSettings = () => {
+        if (!emailSettingsForm.sender_name.trim() || !emailSettingsForm.sender_email.trim()) {
+            toast.error(t('emailSettingsValidationError'));
+            return;
+        }
+        saveEmailSettingsMutation.mutate();
+    };
+
     const buildFilterPayload = (applyPendingFallback = true) => {
         const payload: Record<string, string> = {};
         if (filters.search.trim()) payload.search = filters.search.trim();
@@ -591,6 +691,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         { id: 'recipients', label: copy.tabs.recipients, icon: Users },
         { id: 'templates', label: copy.tabs.templates, icon: LayoutPanelTop },
         { id: 'campaign', label: copy.tabs.campaign, icon: SendHorizontal },
+        ...(isSuperAdmin ? [{ id: 'settings' as WorkspaceTab, label: t('settingsTab'), icon: Settings }] : []),
     ];
 
     const cardClass = 'rounded-[2rem] border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-900/5';
@@ -722,17 +823,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     <h2 className="text-xl font-semibold text-slate-950">{copy.recipientsSectionTitle}</h2>
                                     <p className="mt-2 text-sm leading-6 text-slate-500">{copy.recipientsSectionHint}</p>
                                 </div>
-
-                                <div className="flex flex-wrap gap-2">
-                                    <button type="button" className="btn-outline" onClick={() => toggleAllVisible()} disabled={!recipients.length}>
-                                        {allVisibleSelected ? copy.clearSelection : copy.selectAll}
-                                    </button>
-                                    <button type="button" className="btn-outline" onClick={() => setSelectedRecipientIds([])} disabled={!selectedRecipientIds.length}>
-                                        {copy.clearSelection}
-                                    </button>
-                                    <button type="button" className="btn-primary" onClick={() => updateTab('campaign')} disabled={!selectedRecipientIds.length}>
-                                        {copy.goToSend}
-                                    </button>
+                                <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600">
+                                    {selectedRecipientIds.length} {copy.selectedRowsSummary}
                                 </div>
                             </div>
 
@@ -763,35 +855,54 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             </div>
 
                             <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-slate-200">
-                                <div className="overflow-x-auto">
+                                <div className="max-h-[34rem] overflow-auto">
                                     <table className="min-w-full divide-y divide-slate-200 text-start text-sm">
                                         <thead className="bg-slate-50 text-slate-600">
                                             <tr>
-                                                <th className="px-4 py-3">
-                                                    <input type="checkbox" checked={allVisibleSelected} onChange={() => toggleAllVisible()} />
+                                                <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">
+                                                    <input type="checkbox" checked={allVisibleSelected} onChange={() => toggleAllVisible()} onClick={stopRowToggle} />
                                                 </th>
-                                                <th className="px-4 py-3">{copy.name}</th>
-                                                <th className="px-4 py-3">{copy.contact}</th>
-                                                <th className="px-4 py-3">{copy.details}</th>
-                                                <th className="px-4 py-3">{copy.status}</th>
-                                                <th className="px-4 py-3">{copy.attempts}</th>
-                                                <th className="px-4 py-3">{copy.lastAttempt}</th>
-                                                <th className="px-4 py-3">{copy.errorLabel}</th>
+                                                <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.name}</th>
+                                                <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.contact}</th>
+                                                <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.details}</th>
+                                                <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.status}</th>
+                                                <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.attempts}</th>
+                                                <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.lastAttempt}</th>
+                                                <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.errorLabel}</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-200 bg-white">
                                             {recipientsQuery.isLoading ? (
-                                                <tr>
-                                                    <td colSpan={8} className="px-4 py-12 text-center text-slate-500">{copy.loading}</td>
-                                                </tr>
+                                                Array.from({ length: 6 }).map((_, index) => (
+                                                    <tr key={`recipient-skeleton-${index}`}>
+                                                        <td colSpan={8} className="px-4 py-4">
+                                                            <div className="animate-pulse rounded-[1.25rem] bg-slate-100 px-4 py-5">
+                                                                <div className="grid gap-3 md:grid-cols-[0.6fr_1.4fr_1.2fr_1.4fr_0.9fr_0.5fr_0.9fr_1.1fr]">
+                                                                    {Array.from({ length: 8 }).map((__, cellIndex) => (
+                                                                        <div key={cellIndex} className="h-4 rounded-full bg-slate-200" />
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))
                                             ) : recipients.length === 0 ? (
                                                 <tr>
                                                     <td colSpan={8} className="px-4 py-12 text-center text-slate-500">{copy.emptyRecipients}</td>
                                                 </tr>
                                             ) : recipients.map((recipient) => (
-                                                <tr key={recipient.id} className="hover:bg-slate-50/80">
+                                                <tr
+                                                    key={recipient.id}
+                                                    className="cursor-pointer transition hover:bg-slate-50/80"
+                                                    onClick={() => toggleRecipient(recipient.id)}
+                                                >
                                                     <td className="px-4 py-4 align-top">
-                                                        <input type="checkbox" checked={selectedRecipientIds.includes(recipient.id)} onChange={() => toggleRecipient(recipient.id)} />
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedRecipientIds.includes(recipient.id)}
+                                                            onChange={() => toggleRecipient(recipient.id)}
+                                                            onClick={stopRowToggle}
+                                                        />
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
                                                         <div className="font-semibold text-slate-900">{recipient.name || '-'}</div>
@@ -818,7 +929,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
-                                                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[recipient.status]}`}>
+                                                        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[recipient.status]}`}>
+                                                            <span className="h-2.5 w-2.5 rounded-full bg-current opacity-80" />
                                                             {copy.statusLabels[recipient.status]}
                                                         </span>
                                                     </td>
@@ -826,7 +938,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                     <td className="px-4 py-4 align-top text-slate-700">
                                                         {recipient.last_attempt_at ? new Date(recipient.last_attempt_at).toLocaleString() : '-'}
                                                     </td>
-                                                    <td className="px-4 py-4 align-top text-xs text-rose-700">{recipient.error_message || '-'}</td>
+                                                    <td className="max-w-[220px] px-4 py-4 align-top text-xs text-rose-700">
+                                                        <div className="truncate" title={recipient.error_message || '-'}>
+                                                            {recipient.error_message || '-'}
+                                                        </div>
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -836,7 +952,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
                             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="text-sm text-slate-500">
-                                    {copy.page} {page} / {totalPages}
+                                    {copy.showing} {visibleRangeStart}-{visibleRangeEnd} {copy.of} {totalRecipients}
                                 </div>
                                 <div className="flex gap-2">
                                     <button type="button" className="btn-outline" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={page <= 1}>
@@ -849,11 +965,29 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             </div>
                         </div>
                     </div>
+
+                    {selectedRecipientIds.length > 0 && (
+                        <div className="sticky bottom-4 z-20">
+                            <div className="flex flex-col gap-3 rounded-[1.5rem] border border-emerald-200 bg-white/95 px-5 py-4 shadow-xl shadow-slate-900/10 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+                                <div className="text-sm font-semibold text-slate-900">
+                                    {selectedRecipientIds.length} {copy.selectedRowsSummary}
+                                </div>
+                                <div className="flex flex-wrap gap-3">
+                                    <button type="button" className="btn-primary" onClick={() => updateTab('campaign')}>
+                                        {copy.sendNow}
+                                    </button>
+                                    <button type="button" className="btn-outline" onClick={() => setSelectedRecipientIds([])}>
+                                        {copy.deselectAll}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
             {activeTab === 'templates' && (
-                <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+                <div className="space-y-6">
                     <div className={cardClass}>
                         <div className="flex items-start gap-3">
                             <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
@@ -927,13 +1061,40 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                     </div>
 
                     <div className={cardClass}>
-                        <h2 className="text-xl font-semibold text-slate-950">{copy.templatesTitle}</h2>
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <h2 className="text-xl font-semibold text-slate-950">{copy.templatesTitle}</h2>
+                            <label className="relative block w-full lg:max-w-sm">
+                                <Search className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                <input
+                                    value={templateSearch}
+                                    onChange={(event) => setTemplateSearch(event.target.value)}
+                                    className="input w-full !ps-11"
+                                    placeholder={copy.templateSearchPlaceholder}
+                                />
+                            </label>
+                        </div>
                         <div className="mt-5 space-y-4">
                             {templatesQuery.isLoading ? (
-                                <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">{copy.loading}</div>
-                            ) : templatesQuery.data?.length ? templatesQuery.data.map((template) => (
+                                <div className="space-y-3">
+                                    {Array.from({ length: 3 }).map((_, index) => (
+                                        <div key={`template-skeleton-${index}`} className="animate-pulse rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+                                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                                <div className="space-y-3">
+                                                    <div className="h-5 w-40 rounded-full bg-slate-200" />
+                                                    <div className="h-4 w-64 rounded-full bg-slate-200" />
+                                                    <div className="h-4 w-80 rounded-full bg-slate-200" />
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <div className="h-10 w-24 rounded-full bg-slate-200" />
+                                                    <div className="h-10 w-24 rounded-full bg-slate-200" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : filteredTemplates.length ? filteredTemplates.map((template) => (
                                 <div key={template.id} className="rounded-[1.5rem] border border-slate-200 p-5 transition hover:border-slate-300 hover:shadow-sm">
-                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                                         <div className="space-y-2">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <h3 className="text-lg font-semibold text-slate-950">{template.name}</h3>
@@ -971,131 +1132,138 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     </div>
                                 </div>
                             )) : (
-                                <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">{copy.noTemplates}</div>
+                                <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+                                    {templateSearch.trim() ? copy.noTemplateMatches : copy.noTemplates}
+                                </div>
                             )}
                         </div>
                     </div>
                 </div>
             )}
             {activeTab === 'campaign' && (
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_420px]">
-                    <div className="space-y-6">
-                        <div className={cardClass}>
-                            <div className="flex items-start gap-3">
-                                <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700">
-                                    <SendHorizontal size={22} />
-                                </div>
-                                <div>
-                                    <h2 className="text-xl font-semibold text-slate-950">{copy.campaignTitle}</h2>
-                                    <p className="mt-2 text-sm leading-6 text-slate-500">{copy.campaignHint}</p>
-                                </div>
+                <div className="space-y-6">
+                    <div className={cardClass}>
+                        <div className="flex items-start gap-3">
+                            <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700">
+                                <SendHorizontal size={22} />
                             </div>
-
-                            <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                                <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-                                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.selectedTemplate}</div>
-                                    {currentTemplate ? (
-                                        <div className="mt-3 space-y-3">
-                                            <select
-                                                value={campaignTemplateId}
-                                                onChange={(event) => setCampaignTemplateId(event.target.value)}
-                                                className="input w-full"
-                                            >
-                                                {templatesQuery.data?.map((template) => (
-                                                    <option key={template.id} value={template.id}>{template.name}</option>
-                                                ))}
-                                            </select>
-                                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${CHANNEL_STYLES[currentTemplate.type]}`}>
-                                                {copy.templateTypeLabels[currentTemplate.type]}
-                                            </span>
-                                            <div className="text-base font-semibold text-slate-900">{currentTemplate.subject}</div>
-                                            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">{currentTemplate.body}</p>
-                                        </div>
-                                    ) : (
-                                        <div className="mt-3 rounded-[1.25rem] border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
-                                            {copy.noTemplateSelected}
-                                            <div className="mt-3">
-                                                <button type="button" className="btn-outline" onClick={() => updateTab('templates')}>
-                                                    {copy.openTemplates}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-                                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.sendScopeTitle}</div>
-                                    <div className="mt-3 grid gap-3">
-                                        {(Object.keys(copy.sendScopes) as SendScope[]).map((scope) => {
-                                            const active = sendScope === scope;
-                                            return (
-                                                <button
-                                                    key={scope}
-                                                    type="button"
-                                                    onClick={() => setSendScope(scope)}
-                                                    className={`rounded-[1.25rem] border px-4 py-3 text-start transition ${
-                                                        active
-                                                            ? 'border-emerald-200 bg-emerald-50 shadow-sm'
-                                                            : 'border-slate-200 bg-white hover:border-slate-300'
-                                                    }`}
-                                                >
-                                                    <div className="text-sm font-semibold text-slate-900">{copy.sendScopes[scope].title}</div>
-                                                    <div className="mt-1 text-xs leading-5 text-slate-500">{copy.sendScopes[scope].description}</div>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-
-                                    <div className="mt-4 rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-xs leading-6 text-slate-500">
-                                        {copy.filtersFallback}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mt-5 grid gap-4 md:grid-cols-3">
-                                <div className={statClass}>
-                                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.selectedCount}</div>
-                                    <div className="mt-3 text-3xl font-semibold text-slate-950">{selectedRecipientIds.length}</div>
-                                </div>
-                                <div className={statClass}>
-                                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.visibleCount}</div>
-                                    <div className="mt-3 text-3xl font-semibold text-slate-950">{totalRecipients}</div>
-                                </div>
-                                <div className={statClass}>
-                                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.failedCount}</div>
-                                    <div className="mt-3 text-3xl font-semibold text-rose-700">{pageStats.failed}</div>
-                                </div>
-                            </div>
-
-                            <div className="mt-5 flex flex-wrap gap-3">
-                                <button
-                                    type="button"
-                                    className="btn-primary"
-                                    onClick={handleSend}
-                                    disabled={sendMutation.isPending || retryMutation.isPending || !currentTemplate}
-                                >
-                                    {sendMutation.isPending || retryMutation.isPending ? copy.sending : copy.sendNow}
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn-outline"
-                                    onClick={() => retryMutation.mutate({ templateId: campaignTemplateId })}
-                                    disabled={!campaignTemplateId || retryMutation.isPending || sendMutation.isPending}
-                                >
-                                    {copy.retryFailed}
-                                </button>
-                                {selectedVisibleRecipients.length > 0 && (
-                                    <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-700">
-                                        <Users size={15} />
-                                        <span>
-                                            Selected on this page: {selectedVisibleRecipients.map((recipient) => recipient.name).slice(0, 3).join(', ')}
-                                        </span>
-                                    </div>
-                                )}
+                            <div>
+                                <h2 className="text-xl font-semibold text-slate-950">{copy.campaignTitle}</h2>
+                                <p className="mt-2 text-sm leading-6 text-slate-500">{copy.campaignHint}</p>
                             </div>
                         </div>
 
-                        <div className={cardClass}>
+                        <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.selectedTemplate}</div>
+                            {currentTemplate ? (
+                                <div className="mt-4 space-y-4">
+                                    <select
+                                        value={campaignTemplateId}
+                                        onChange={(event) => setCampaignTemplateId(event.target.value)}
+                                        className="input w-full"
+                                    >
+                                        {templatesQuery.data?.map((template) => (
+                                            <option key={template.id} value={template.id}>{template.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="rounded-[1.25rem] border border-slate-200 bg-white p-4">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${CHANNEL_STYLES[currentTemplate.type]}`}>
+                                                {copy.templateTypeLabels[currentTemplate.type]}
+                                            </span>
+                                        </div>
+                                        <div className="mt-3 text-base font-semibold text-slate-900">{currentTemplate.subject}</div>
+                                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{currentTemplate.body}</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="mt-4 rounded-[1.25rem] border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
+                                    {copy.noTemplateSelected}
+                                    <div className="mt-3">
+                                        <button type="button" className="btn-outline" onClick={() => updateTab('templates')}>
+                                            {copy.openTemplates}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.sendScopeTitle}</div>
+                            <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                {(Object.keys(copy.sendScopes) as SendScope[]).map((scope) => {
+                                    const active = sendScope === scope;
+                                    return (
+                                        <button
+                                            key={scope}
+                                            type="button"
+                                            onClick={() => setSendScope(scope)}
+                                            className={`rounded-[1.25rem] border px-4 py-4 text-start transition ${
+                                                active
+                                                    ? 'border-emerald-200 bg-emerald-50 ring-2 ring-emerald-200 shadow-sm'
+                                                    : 'border-slate-200 bg-white hover:border-slate-300'
+                                            }`}
+                                        >
+                                            <div className="text-sm font-semibold text-slate-900">{copy.sendScopes[scope].title}</div>
+                                            <div className="mt-1 text-xs leading-5 text-slate-500">{copy.sendScopes[scope].description}</div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="mt-4 rounded-[1.25rem] border border-slate-200 bg-white px-4 py-3 text-xs leading-6 text-slate-500">
+                                {copy.filtersFallback}
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex flex-col gap-4 xl:flex-row">
+                            <div className={`${statClass} flex-1`}>
+                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.selectedCount}</div>
+                                <div className="mt-3 text-3xl font-semibold text-slate-950">{selectedRecipientIds.length}</div>
+                            </div>
+                            <div className={`${statClass} flex-1`}>
+                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.visibleCount}</div>
+                                <div className="mt-3 text-3xl font-semibold text-slate-950">{totalRecipients}</div>
+                            </div>
+                            <div className={`${statClass} flex-1`}>
+                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.failedCount}</div>
+                                <div className="mt-3 text-3xl font-semibold text-rose-700">{pageStats.failed}</div>
+                            </div>
+                        </div>
+
+                        {selectedVisibleRecipients.length > 0 && (
+                            <div className="mt-4 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                                <span className="font-semibold text-slate-900">Selected on this page:</span>{' '}
+                                {selectedVisibleRecipients.map((recipient) => recipient.name).slice(0, 3).join(', ')}
+                            </div>
+                        )}
+
+                        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                            <button
+                                type="button"
+                                className="inline-flex min-h-14 items-center justify-center rounded-[1.25rem] bg-cactus px-6 text-base font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                                onClick={handleSend}
+                                disabled={sendMutation.isPending || retryMutation.isPending || !currentTemplate}
+                            >
+                                {sendMutation.isPending || retryMutation.isPending ? copy.sending : copy.sendNow}
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-outline"
+                                onClick={() => retryMutation.mutate({ templateId: campaignTemplateId })}
+                                disabled={!campaignTemplateId || retryMutation.isPending || sendMutation.isPending}
+                            >
+                                {copy.retryFailed}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className={cardClass}>
+                        <button
+                            type="button"
+                            className="flex w-full items-center justify-between gap-4 text-start"
+                            onClick={() => setLogsExpanded((value) => !value)}
+                        >
                             <div className="flex items-start gap-3">
                                 <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
                                     <LayoutPanelTop size={22} />
@@ -1105,7 +1273,13 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     <p className="mt-2 text-sm leading-6 text-slate-500">{copy.logsHint}</p>
                                 </div>
                             </div>
+                            <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
+                                {logsExpanded ? copy.hideLogs : copy.showLogs}
+                                {logsExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </span>
+                        </button>
 
+                        {logsExpanded && (
                             <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-slate-200">
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-slate-200 text-start text-sm">
@@ -1126,11 +1300,16 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 <tr key={log.id}>
                                                     <td className="px-4 py-4 text-slate-900">{log.recipient?.name || log.recipient?.email || '-'}</td>
                                                     <td className="px-4 py-4">
-                                                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[log.status]}`}>
+                                                        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[log.status]}`}>
+                                                            <span className="h-2.5 w-2.5 rounded-full bg-current opacity-80" />
                                                             {copy.statusLabels[log.status]}
                                                         </span>
                                                     </td>
-                                                    <td className="px-4 py-4 text-xs text-rose-700">{log.error || '-'}</td>
+                                                    <td className="max-w-[280px] px-4 py-4 text-xs text-rose-700">
+                                                        <div className="truncate" title={log.error || '-'}>
+                                                            {log.error || '-'}
+                                                        </div>
+                                                    </td>
                                                     <td className="px-4 py-4 text-slate-600">{new Date(log.created_at).toLocaleString()}</td>
                                                 </tr>
                                             )) : (
@@ -1142,38 +1321,106 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     </table>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div className={cardClass}>
-                        <h2 className="text-xl font-semibold text-slate-950">Current workspace summary</h2>
-                        <div className="mt-5 space-y-4">
-                            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.sendScopes[sendScope].title}</div>
-                                <p className="mt-2 text-sm leading-6 text-slate-600">{copy.sendScopes[sendScope].description}</p>
-                            </div>
-                            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Current filters</div>
-                                <div className="mt-3 space-y-2 text-sm text-slate-700">
-                                    <div>{copy.examType}: <strong>{filters.exam_type || '-'}</strong></div>
-                                    <div>{copy.role}: <strong>{filters.role || '-'}</strong></div>
-                                    <div>{copy.day}: <strong>{filters.day || '-'}</strong></div>
-                                    <div>{copy.status}: <strong>{filters.status ? copy.statusLabels[filters.status as keyof typeof copy.statusLabels] : '-'}</strong></div>
-                                </div>
-                            </div>
-                            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Current user</div>
-                                <div className="mt-3 text-sm text-slate-700">
-                                    <div className="font-semibold text-slate-900">{user?.fullName}</div>
-                                    <div dir="ltr">{user?.email}</div>
-                                </div>
-                            </div>
-                            <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-                                To send to a single person, check the row in the recipients table then use the &quot;Selected rows&quot; scope in the campaign tab.
-                            </div>
-                        </div>
+                        )}
                     </div>
                 </div>
+            )}
+            {activeTab === 'settings' && (
+                isSuperAdmin ? (
+                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+                        <div className={cardClass}>
+                            <div className="flex items-start gap-3">
+                                <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
+                                    <Settings size={22} />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-semibold text-slate-950">{t('settingsTitle')}</h2>
+                                    <p className="mt-2 text-sm leading-6 text-slate-500">{t('settingsSubtitle')}</p>
+                                </div>
+                            </div>
+
+                            <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('emailIdentityTitle')}</div>
+                                <p className="mt-2 text-sm leading-6 text-slate-600">{t('emailIdentityDescription')}</p>
+
+                                <div className="mt-5 grid gap-4">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">{t('senderName')}</label>
+                                        <input
+                                            value={emailSettingsForm.sender_name}
+                                            onChange={(event) => setEmailSettingsForm((current) => ({ ...current, sender_name: event.target.value }))}
+                                            className="input w-full"
+                                            placeholder={t('senderNamePlaceholder')}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">{t('senderEmail')}</label>
+                                        <input
+                                            value={emailSettingsForm.sender_email}
+                                            readOnly
+                                            className="input w-full cursor-not-allowed bg-slate-100 text-slate-500"
+                                        />
+                                        <p className="mt-2 text-xs text-slate-500">{t('senderEmailHint')}</p>
+                                    </div>
+
+                                    <div className="rounded-[1.25rem] border border-emerald-200 bg-emerald-50 p-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">{t('fromPreview')}</div>
+                                        <div className="mt-3 text-base font-semibold text-emerald-900">{emailIdentityPreview}</div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 flex flex-wrap gap-3">
+                                    <button
+                                        type="button"
+                                        className="btn-primary"
+                                        onClick={saveEmailSettings}
+                                        disabled={saveEmailSettingsMutation.isPending || emailSettingsQuery.isLoading}
+                                    >
+                                        {t('saveChanges')}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div className={cardClass}>
+                                <div className="flex items-start gap-3">
+                                    <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700">
+                                        <Server size={22} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-semibold text-slate-950">{t('smtpServerTitle')}</h2>
+                                        <p className="mt-2 text-sm leading-6 text-slate-500">{t('smtpServerDescription')}</p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 space-y-4">
+                                    <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('host')}</div>
+                                        <div className="mt-2 text-sm font-semibold text-slate-900">{emailSettingsQuery.data?.smtp_host || '-'}</div>
+                                    </div>
+                                    <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('port')}</div>
+                                        <div className="mt-2 text-sm font-semibold text-slate-900">{emailSettingsQuery.data?.smtp_port ?? '-'}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className={cardClass}>
+                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('fromPreview')}</div>
+                                <div className="mt-3 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                                    {emailSettingsQuery.data?.mail_from || emailIdentityPreview}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className={cardClass}>
+                        <h2 className="text-xl font-semibold text-slate-950">{t('settingsPermissionTitle')}</h2>
+                        <p className="mt-3 text-sm leading-6 text-slate-600">{t('settingsPermissionHint')}</p>
+                    </div>
+                )
             )}
         </section>
     );

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import SMTPPool from 'nodemailer/lib/smtp-pool';
+import { PrismaService } from '../prisma/prisma.service';
 
 export type EmailDeliveryResult = {
     ok: boolean;
@@ -20,12 +21,20 @@ type SendEmailOptions = {
 
 const DEFAULT_RETRY_ATTEMPTS = 3;
 const DEFAULT_RETRY_DELAY_MS = 500;
+const EMAIL_SETTINGS_CACHE_MS = 60_000;
 const SIMPLE_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 @Injectable()
 export class EmailService {
     private readonly logger = new Logger(EmailService.name);
     private transporter?: nodemailer.Transporter;
+    private cachedMailFrom?: { value: string; expiresAt: number };
+
+    constructor(private readonly prisma: PrismaService) {}
+
+    clearMailFromCache() {
+        this.cachedMailFrom = undefined;
+    }
 
     hasConfig() {
         return Boolean(this.getMailHost() && this.getMailUser() && this.getMailPass());
@@ -61,7 +70,7 @@ export class EmailService {
         for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt += 1) {
             try {
                 const info = await this.getTransporter().sendMail({
-                    from: this.getMailFrom(),
+                    from: await this.getMailFrom(),
                     to: options.to,
                     subject: options.subject,
                     html: options.html,
@@ -122,12 +131,47 @@ export class EmailService {
         return process.env.MAIL_PASS || '';
     }
 
-    private getMailFrom() {
-        const senderEmail = (process.env.SENDER_EMAIL || '').trim();
-        const senderName = (process.env.SENDER_NAME || 'SPHINX HR').trim();
-        if (process.env.MAIL_FROM?.trim()) {
-            return process.env.MAIL_FROM.trim();
+    private async getMailFrom() {
+        if (this.cachedMailFrom && this.cachedMailFrom.expiresAt > Date.now()) {
+            return this.cachedMailFrom.value;
         }
+
+        try {
+            const record = await this.prisma.emailSettings.findUnique({
+                where: { id: 'default' },
+                select: {
+                    sender_name: true,
+                    sender_email: true,
+                },
+            });
+
+            const mailFrom = record
+                ? this.buildMailFrom(
+                    record.sender_name?.trim() || this.getDefaultSenderName(),
+                    record.sender_email?.trim() || this.getDefaultSenderEmail(),
+                )
+                : this.getEnvMailFrom();
+
+            this.cachedMailFrom = {
+                value: mailFrom,
+                expiresAt: Date.now() + EMAIL_SETTINGS_CACHE_MS,
+            };
+
+            return mailFrom;
+        } catch (error: any) {
+            this.logger.warn(`Failed to load email identity from database. Falling back to env values: ${error?.message || 'unknown error'}`);
+            return this.getEnvMailFrom();
+        }
+    }
+
+    private getEnvMailFrom() {
+        return this.buildMailFrom(
+            this.getDefaultSenderName(),
+            this.getDefaultSenderEmail(),
+        );
+    }
+
+    private buildMailFrom(senderName: string, senderEmail: string) {
         if (senderEmail) {
             return `${senderName} <${senderEmail}>`;
         }
@@ -135,6 +179,14 @@ export class EmailService {
             return `${senderName} <${this.getMailUser()}>`;
         }
         return 'SPHINX HR <noreply@sphinx.com>';
+    }
+
+    private getDefaultSenderName() {
+        return (process.env.SENDER_NAME || 'SPHINX HR').trim() || 'SPHINX HR';
+    }
+
+    private getDefaultSenderEmail() {
+        return (process.env.SENDER_EMAIL || '').trim();
     }
 
     private isSecure() {

@@ -8,6 +8,11 @@ import { EmailService } from './email.service';
 describe('EmailService', () => {
     const originalEnv = { ...process.env };
     const sendMail = jest.fn();
+    const prisma = {
+        emailSettings: {
+            findUnique: jest.fn(),
+        },
+    };
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -23,6 +28,7 @@ describe('EmailService', () => {
             MAIL_SECURE: 'false',
             MAIL_REQUIRE_TLS: 'true',
         };
+        prisma.emailSettings.findUnique.mockResolvedValue(null);
         (nodemailer.createTransport as jest.Mock).mockReturnValue({ sendMail });
     });
 
@@ -36,7 +42,7 @@ describe('EmailService', () => {
             .mockRejectedValueOnce(new Error('temporary failure again'))
             .mockResolvedValueOnce({ messageId: 'msg-3', response: '250 queued' });
 
-        const service = new EmailService();
+        const service = new EmailService(prisma as any);
         (service as any).waitBeforeRetry = jest.fn().mockResolvedValue(undefined);
 
         const result = await service.sendEmail({
@@ -58,7 +64,7 @@ describe('EmailService', () => {
     it('builds the sender header from SENDER_NAME and SENDER_EMAIL when MAIL_FROM is empty', async () => {
         sendMail.mockResolvedValue({ messageId: 'msg-1', response: '250 queued' });
 
-        const service = new EmailService();
+        const service = new EmailService(prisma as any);
 
         await service.sendEmail({
             to: 'employee@example.com',
@@ -70,6 +76,37 @@ describe('EmailService', () => {
             from: 'SPHINX HR <sender@example.com>',
             to: 'employee@example.com',
             subject: 'Hello',
+        }));
+    });
+
+    it('prefers the database email identity and caches it for subsequent sends', async () => {
+        prisma.emailSettings.findUnique.mockResolvedValue({
+            sender_name: 'EST',
+            sender_email: 'sender@example.com',
+            mail_from: 'EST <sender@example.com>',
+        });
+        sendMail.mockResolvedValue({ messageId: 'msg-1', response: '250 queued' });
+
+        const service = new EmailService(prisma as any);
+
+        await service.sendEmail({
+            to: 'employee@example.com',
+            subject: 'Hello',
+            html: '<p>Body</p>',
+        });
+
+        await service.sendEmail({
+            to: 'employee2@example.com',
+            subject: 'Hello again',
+            html: '<p>Body</p>',
+        });
+
+        expect(prisma.emailSettings.findUnique).toHaveBeenCalledTimes(1);
+        expect(sendMail).toHaveBeenNthCalledWith(1, expect.objectContaining({
+            from: 'EST <sender@example.com>',
+        }));
+        expect(sendMail).toHaveBeenNthCalledWith(2, expect.objectContaining({
+            from: 'EST <sender@example.com>',
         }));
     });
 });

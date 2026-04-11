@@ -242,6 +242,30 @@ async function upsertSeedUser(client: PrismaClient, user: SeedUserInput) {
   });
 }
 
+function buildDefaultMailFrom(senderName: string, senderEmail: string) {
+  if (senderEmail) {
+    return `${senderName} <${senderEmail}>`;
+  }
+  return senderName;
+}
+
+async function seedEmailSettings(client: PrismaClient) {
+  const senderName = (process.env.SENDER_NAME || 'SPHINX HR').trim() || 'SPHINX HR';
+  const senderEmail = (process.env.SENDER_EMAIL || process.env.MAIL_USER || '').trim();
+  const mailFrom = buildDefaultMailFrom(senderName, senderEmail);
+
+  await client.emailSettings.upsert({
+    where: { id: 'default' },
+    update: {},
+    create: {
+      id: 'default',
+      sender_name: senderName,
+      sender_email: senderEmail,
+      mail_from: mailFrom,
+    },
+  });
+}
+
 export async function seedMessagingData(client: PrismaClient) {
   for (const template of SEEDED_TEMPLATE_DEFINITIONS) {
     await client.template.upsert({
@@ -322,6 +346,7 @@ async function main() {
     passwordHash,
   });
 
+  await seedEmailSettings(prisma);
   await seedMessagingData(prisma);
 }
 

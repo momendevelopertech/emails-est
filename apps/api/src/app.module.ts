@@ -7,6 +7,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { SettingsModule } from './settings/settings.module';
 import { RootController } from './root.controller';
 
 const resolveEnvFilePaths = () => {
@@ -27,6 +28,7 @@ const resolveEnvFilePaths = () => {
     ConfigModule.forRoot({ isGlobal: true, envFilePath: resolveEnvFilePaths() }),
     ThrottlerModule.forRoot([{ ttl: parseInt(process.env.THROTTLE_TTL || '60') * 1000, limit: parseInt(process.env.THROTTLE_LIMIT || '100') }]),
     PrismaModule,
+    SettingsModule,
     NotificationsModule,
     AuthModule,
     MessagingModule,

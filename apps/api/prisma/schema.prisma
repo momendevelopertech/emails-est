@@ -105,3 +105,13 @@ model Log {
 
   recipient Recipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
 }
+
+model EmailSettings {
+  id           String   @id @default("default")
+  sender_name  String
+  sender_email String
+  mail_from    String
+  updated_at   DateTime @updatedAt
+
+  @@map("email_settings")
+}
