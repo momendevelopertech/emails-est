@@ -53,6 +53,19 @@ type Recipient = {
     last_attempt_at?: string | null;
 };
 
+type RecipientFormState = {
+    name: string;
+    email: string;
+    phone: string;
+    role: string;
+    room_est1: string;
+    type: string;
+    governorate: string;
+    address: string;
+    building: string;
+    location: string;
+};
+
 type RecipientFilters = {
     search: string;
     name: string;
@@ -97,6 +110,18 @@ type EmailSettingsRecord = {
 };
 
 const EMPTY_RECIPIENTS: Recipient[] = [];
+const EMPTY_RECIPIENT_FORM: RecipientFormState = {
+    name: '',
+    email: '',
+    phone: '',
+    role: '',
+    room_est1: '',
+    type: '',
+    governorate: '',
+    address: '',
+    building: '',
+    location: '',
+};
 const EMPTY_FILTERS: RecipientFilters = {
     search: '',
     name: '',
@@ -237,6 +262,21 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         retryFailed: isArabic ? 'إعادة الفاشلين' : 'Retry failed',
         filtersFallback: isArabic ? 'سيتم استخدام الفلاتر الحالية، وإذا لم تحدد حالة فسيتم استهداف المعلقين فقط.' : 'Current filters will be used. If no status is selected, pending recipients will be targeted by default.',
         noLogs: isArabic ? 'لا توجد سجلات حتى الآن.' : 'No logs yet.',
+        actions: isArabic ? 'الإجراءات' : 'Actions',
+        addRecipient: isArabic ? 'إضافة صف' : 'Add row',
+        createRecipientTitle: isArabic ? 'إضافة صف جديد' : 'Add a new row',
+        editRecipientTitle: isArabic ? 'تعديل الصف المحدد' : 'Edit selected row',
+        recipientFormHint: isArabic
+            ? 'تقدر تضيف صف مانيوال أو تعدل بيانات أي مستلم مباشرة من هنا.'
+            : 'Add a manual row or update any recipient directly from here.',
+        saveRecipient: isArabic ? 'حفظ الصف' : 'Save row',
+        recipientCreated: isArabic ? 'تم إضافة الصف بنجاح.' : 'Row added successfully.',
+        recipientUpdated: isArabic ? 'تم تحديث الصف بنجاح.' : 'Row updated successfully.',
+        recipientDeleted: isArabic ? 'تم حذف الصف بنجاح.' : 'Row deleted successfully.',
+        recipientSaveError: isArabic ? 'تعذر حفظ الصف.' : 'Unable to save the row.',
+        recipientDeleteError: isArabic ? 'تعذر حذف الصف.' : 'Unable to delete the row.',
+        recipientNameRequired: isArabic ? 'يرجى إدخال اسم المستلم.' : 'Please enter the recipient name.',
+        recipientDeleteConfirm: isArabic ? 'هل أنت متأكد من حذف هذا الصف؟' : 'Are you sure you want to delete this row?',
         statusLabels: {
             PENDING: isArabic ? 'معلق' : 'Pending',
             PROCESSING: isArabic ? 'قيد التنفيذ' : 'Processing',
@@ -293,6 +333,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         sender_name: '',
         sender_email: '',
     });
+    const [recipientForm, setRecipientForm] = useState<RecipientFormState>(EMPTY_RECIPIENT_FORM);
+    const [editingRecipientId, setEditingRecipientId] = useState<string | null>(null);
+    const [isRecipientFormOpen, setIsRecipientFormOpen] = useState(false);
 
     useEffect(() => {
         const nextTab = searchParams.get('tab');
@@ -389,6 +432,50 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         },
         onError(error: any) {
             toast.error(getImportErrorMessage(error, copy.uploadError));
+        },
+    });
+
+    const saveRecipientMutation = useMutation({
+        mutationFn: async ({ recipientId, values }: { recipientId: string | null; values: RecipientFormState }) => {
+            await fetchCsrfToken();
+            if (recipientId) {
+                const response = await api.put(`/messaging/recipients/${recipientId}`, values);
+                return response.data;
+            }
+
+            const response = await api.post('/messaging/recipients', values);
+            return response.data;
+        },
+        onSuccess(_data, variables) {
+            toast.success(variables.recipientId ? copy.recipientUpdated : copy.recipientCreated);
+            setRecipientForm(EMPTY_RECIPIENT_FORM);
+            setEditingRecipientId(null);
+            setIsRecipientFormOpen(false);
+            void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
+        },
+        onError(error: any) {
+            toast.error(getImportErrorMessage(error, copy.recipientSaveError));
+        },
+    });
+
+    const deleteRecipientMutation = useMutation({
+        mutationFn: async (recipientId: string) => {
+            await fetchCsrfToken();
+            const response = await api.delete(`/messaging/recipients/${recipientId}`);
+            return response.data;
+        },
+        onSuccess(_data, recipientId) {
+            toast.success(copy.recipientDeleted);
+            setSelectedRecipientIds((current) => current.filter((id) => id !== recipientId));
+            if (editingRecipientId === recipientId) {
+                setRecipientForm(EMPTY_RECIPIENT_FORM);
+                setEditingRecipientId(null);
+                setIsRecipientFormOpen(false);
+            }
+            void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
+        },
+        onError(error: any) {
+            toast.error(getImportErrorMessage(error, copy.recipientDeleteError));
         },
     });
 
@@ -585,6 +672,59 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         } finally {
             event.target.value = '';
         }
+    };
+
+    const openCreateRecipientForm = () => {
+        setEditingRecipientId(null);
+        setRecipientForm(EMPTY_RECIPIENT_FORM);
+        setIsRecipientFormOpen(true);
+    };
+
+    const openEditRecipientForm = (recipient: Recipient) => {
+        setEditingRecipientId(recipient.id);
+        setRecipientForm({
+            name: recipient.name || '',
+            email: recipient.email || '',
+            phone: recipient.phone || '',
+            role: recipient.role || '',
+            room_est1: recipient.room_est1 || '',
+            type: recipient.type || '',
+            governorate: recipient.governorate || '',
+            address: recipient.address || '',
+            building: recipient.building || '',
+            location: recipient.location || '',
+        });
+        setIsRecipientFormOpen(true);
+    };
+
+    const closeRecipientForm = () => {
+        setEditingRecipientId(null);
+        setRecipientForm(EMPTY_RECIPIENT_FORM);
+        setIsRecipientFormOpen(false);
+    };
+
+    const updateRecipientForm = (key: keyof RecipientFormState, value: string) => {
+        setRecipientForm((current) => ({ ...current, [key]: value }));
+    };
+
+    const saveRecipient = () => {
+        if (!recipientForm.name.trim()) {
+            toast.error(copy.recipientNameRequired);
+            return;
+        }
+
+        saveRecipientMutation.mutate({
+            recipientId: editingRecipientId,
+            values: recipientForm,
+        });
+    };
+
+    const deleteRecipient = (recipientId: string) => {
+        if (!window.confirm(copy.recipientDeleteConfirm)) {
+            return;
+        }
+
+        deleteRecipientMutation.mutate(recipientId);
     };
 
     const beginEditTemplate = (template: Template) => {
@@ -829,10 +969,108 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     <h2 className="text-xl font-semibold text-slate-950">{copy.recipientsSectionTitle}</h2>
                                     <p className="mt-2 text-sm leading-6 text-slate-500">{copy.recipientsSectionHint}</p>
                                 </div>
-                                <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600">
-                                    {selectedRecipientIds.length} {copy.selectedRowsSummary}
+                                <div className="flex flex-wrap items-center gap-3">
+                                    <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600">
+                                        {selectedRecipientIds.length} {copy.selectedRowsSummary}
+                                    </div>
+                                    <button type="button" className="btn-primary" onClick={openCreateRecipientForm}>
+                                        {copy.addRecipient}
+                                    </button>
                                 </div>
                             </div>
+
+                            {isRecipientFormOpen && (
+                                <div className="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+                                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                        <div>
+                                            <h3 className="text-lg font-semibold text-slate-950">
+                                                {editingRecipientId ? copy.editRecipientTitle : copy.createRecipientTitle}
+                                            </h3>
+                                            <p className="mt-2 text-sm leading-6 text-slate-500">{copy.recipientFormHint}</p>
+                                        </div>
+                                        <button type="button" className="btn-outline" onClick={closeRecipientForm}>
+                                            {copy.cancelEdit}
+                                        </button>
+                                    </div>
+
+                                    <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                        <input
+                                            value={recipientForm.name}
+                                            onChange={(event) => updateRecipientForm('name', event.target.value)}
+                                            className="input w-full"
+                                            placeholder={copy.name}
+                                        />
+                                        <input
+                                            value={recipientForm.email}
+                                            onChange={(event) => updateRecipientForm('email', event.target.value)}
+                                            className="input w-full"
+                                            placeholder={copy.emailLabel}
+                                        />
+                                        <input
+                                            value={recipientForm.phone}
+                                            onChange={(event) => updateRecipientForm('phone', event.target.value)}
+                                            className="input w-full"
+                                            placeholder="Phone"
+                                        />
+                                        <input
+                                            value={recipientForm.role}
+                                            onChange={(event) => updateRecipientForm('role', event.target.value)}
+                                            className="input w-full"
+                                            placeholder={copy.role}
+                                        />
+                                        <input
+                                            value={recipientForm.room_est1}
+                                            onChange={(event) => updateRecipientForm('room_est1', event.target.value)}
+                                            className="input w-full"
+                                            placeholder={copy.roomEst1}
+                                        />
+                                        <input
+                                            value={recipientForm.type}
+                                            onChange={(event) => updateRecipientForm('type', event.target.value)}
+                                            className="input w-full"
+                                            placeholder={copy.typeLabel}
+                                        />
+                                        <input
+                                            value={recipientForm.governorate}
+                                            onChange={(event) => updateRecipientForm('governorate', event.target.value)}
+                                            className="input w-full"
+                                            placeholder={copy.governorate}
+                                        />
+                                        <input
+                                            value={recipientForm.building}
+                                            onChange={(event) => updateRecipientForm('building', event.target.value)}
+                                            className="input w-full"
+                                            placeholder={copy.building}
+                                        />
+                                        <input
+                                            value={recipientForm.location}
+                                            onChange={(event) => updateRecipientForm('location', event.target.value)}
+                                            className="input w-full"
+                                            placeholder={copy.location}
+                                        />
+                                        <textarea
+                                            value={recipientForm.address}
+                                            onChange={(event) => updateRecipientForm('address', event.target.value)}
+                                            className="input min-h-28 w-full md:col-span-2 xl:col-span-3"
+                                            placeholder={copy.address}
+                                        />
+                                    </div>
+
+                                    <div className="mt-5 flex flex-wrap gap-3">
+                                        <button
+                                            type="button"
+                                            className="btn-primary"
+                                            onClick={saveRecipient}
+                                            disabled={saveRecipientMutation.isPending}
+                                        >
+                                            {copy.saveRecipient}
+                                        </button>
+                                        <button type="button" className="btn-outline" onClick={closeRecipientForm}>
+                                            {copy.cancelEdit}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                                 <label className="relative block xl:col-span-2">
@@ -881,16 +1119,17 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.attempts}</th>
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.lastAttempt}</th>
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.errorLabel}</th>
+                                                <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.actions}</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-200 bg-white">
                                             {recipientsQuery.isLoading ? (
                                                 Array.from({ length: 6 }).map((_, index) => (
                                                     <tr key={`recipient-skeleton-${index}`}>
-                                                        <td colSpan={8} className="px-4 py-4">
+                                                        <td colSpan={9} className="px-4 py-4">
                                                             <div className="animate-pulse rounded-[1.25rem] bg-slate-100 px-4 py-5">
-                                                                <div className="grid gap-3 md:grid-cols-[0.6fr_1.4fr_1.2fr_1.4fr_0.9fr_0.5fr_0.9fr_1.1fr]">
-                                                                    {Array.from({ length: 8 }).map((__, cellIndex) => (
+                                                                <div className="grid gap-3 md:grid-cols-[0.5fr_1.2fr_1.2fr_1.4fr_0.9fr_0.6fr_0.9fr_1.1fr_0.8fr]">
+                                                                    {Array.from({ length: 9 }).map((__, cellIndex) => (
                                                                         <div key={cellIndex} className="h-4 rounded-full bg-slate-200" />
                                                                     ))}
                                                                 </div>
@@ -900,7 +1139,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 ))
                                             ) : recipients.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={8} className="px-4 py-12 text-center text-slate-500">{copy.emptyRecipients}</td>
+                                                    <td colSpan={9} className="px-4 py-12 text-center text-slate-500">{copy.emptyRecipients}</td>
                                                 </tr>
                                             ) : recipients.map((recipient) => (
                                                 <tr
@@ -956,6 +1195,31 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                     <td className="max-w-[220px] px-4 py-4 align-top text-xs text-rose-700">
                                                         <div className="truncate" title={recipient.error_message || '-'}>
                                                             {recipient.error_message || '-'}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-4 align-top">
+                                                        <div className="flex flex-col gap-2">
+                                                            <button
+                                                                type="button"
+                                                                className="btn-outline"
+                                                                onClick={(event) => {
+                                                                    stopRowToggle(event);
+                                                                    openEditRecipientForm(recipient);
+                                                                }}
+                                                            >
+                                                                {copy.edit}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="btn-outline border-rose-200 text-rose-700 hover:bg-rose-50"
+                                                                onClick={(event) => {
+                                                                    stopRowToggle(event);
+                                                                    deleteRecipient(recipient.id);
+                                                                }}
+                                                                disabled={deleteRecipientMutation.isPending}
+                                                            >
+                                                                {copy.delete}
+                                                            </button>
                                                         </div>
                                                     </td>
                                                 </tr>

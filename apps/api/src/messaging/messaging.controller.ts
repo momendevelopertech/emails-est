@@ -29,6 +29,16 @@ export class MessagingController {
         return this.messagingService.createRecipient(body);
     }
 
+    @Put('recipients/:id')
+    async updateRecipient(@Param('id') id: string, @Body() body: CreateRecipientDto) {
+        return this.messagingService.updateRecipient(id, body);
+    }
+
+    @Delete('recipients/:id')
+    async deleteRecipient(@Param('id') id: string) {
+        return this.messagingService.deleteRecipient(id);
+    }
+
     @Get('templates')
     async getTemplates() {
         return this.messagingService.getTemplates();

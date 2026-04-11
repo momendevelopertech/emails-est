@@ -1,5 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { json, urlencoded } from 'express';
 import cookieParser = require('cookie-parser');
 import helmet from 'helmet';
 import csurf = require('csurf');
@@ -57,6 +58,8 @@ export async function configureApp(app: NestExpressApplication) {
     assertSecurityEnv(isProd);
     app.disable('x-powered-by');
     app.getHttpAdapter().getInstance().set('trust proxy', 1);
+    app.use(json({ limit: '10mb' }));
+    app.use(urlencoded({ extended: true, limit: '10mb' }));
 
     app.use(helmet());
     app.use(cookieParser(process.env.CSRF_SECRET || 'sphinx-csrf'));

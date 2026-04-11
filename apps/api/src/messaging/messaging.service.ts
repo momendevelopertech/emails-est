@@ -57,6 +57,29 @@ export class MessagingService {
         });
     }
 
+    async updateRecipient(id: string, dto: CreateRecipientDto) {
+        const roomEst1 = normalizeImportValue(dto.room_est1) ?? normalizeImportValue(dto.room);
+        const building = normalizeImportValue(dto.building) ?? normalizeImportValue(dto.test_center);
+        const location = normalizeImportValue(dto.location) ?? normalizeImportValue(dto.map_link);
+
+        return this.prisma.recipient.update({
+            where: { id },
+            data: {
+                ...dto,
+                room: roomEst1,
+                room_est1: roomEst1,
+                test_center: building,
+                building,
+                location,
+                map_link: location,
+            },
+        });
+    }
+
+    async deleteRecipient(id: string) {
+        return this.prisma.recipient.delete({ where: { id } });
+    }
+
     async importRecipients(recipients: ImportRecipientDto[]) {
         const normalized = recipients
             .map((recipient, index) => ({

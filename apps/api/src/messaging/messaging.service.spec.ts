@@ -4,7 +4,9 @@ import { RecipientStatus, TemplateType } from '@prisma/client';
 describe('MessagingService', () => {
   const prisma: any = {
     recipient: {
+      create: jest.fn(),
       createMany: jest.fn(),
+      delete: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
     },
@@ -38,6 +40,62 @@ describe('MessagingService', () => {
     const res = await service.sendCampaign({ templateId: 't1', mode: 'all_pending' } as any);
     expect(res.processed).toBe(1);
     expect(res.failed).toBe(0);
+  });
+
+  it('createRecipient normalizes EST-specific fields', async () => {
+    prisma.recipient.create.mockResolvedValue({ id: 'r1' });
+
+    await service.createRecipient({
+      name: 'Ali Hassan',
+      room_est1: 'EST-12',
+      test_center: 'Building A',
+      map_link: 'https://maps.example.test/a',
+    } as any);
+
+    expect(prisma.recipient.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        name: 'Ali Hassan',
+        room: 'EST-12',
+        room_est1: 'EST-12',
+        test_center: 'Building A',
+        building: 'Building A',
+        location: 'https://maps.example.test/a',
+        map_link: 'https://maps.example.test/a',
+        status: RecipientStatus.PENDING,
+      }),
+    });
+  });
+
+  it('updateRecipient keeps normalized alias fields in sync', async () => {
+    prisma.recipient.update.mockResolvedValue({ id: 'r1' });
+
+    await service.updateRecipient('r1', {
+      name: 'Mona Adel',
+      room: 'Room 22',
+      building: 'Rawasy',
+      location: 'https://maps.example.test/b',
+    } as any);
+
+    expect(prisma.recipient.update).toHaveBeenCalledWith({
+      where: { id: 'r1' },
+      data: expect.objectContaining({
+        name: 'Mona Adel',
+        room: 'Room 22',
+        room_est1: 'Room 22',
+        test_center: 'Rawasy',
+        building: 'Rawasy',
+        location: 'https://maps.example.test/b',
+        map_link: 'https://maps.example.test/b',
+      }),
+    });
+  });
+
+  it('deleteRecipient removes the selected row', async () => {
+    prisma.recipient.delete.mockResolvedValue({ id: 'r1' });
+
+    await service.deleteRecipient('r1');
+
+    expect(prisma.recipient.delete).toHaveBeenCalledWith({ where: { id: 'r1' } });
   });
 
   it('sendCampaign supports selected ids', async () => {
