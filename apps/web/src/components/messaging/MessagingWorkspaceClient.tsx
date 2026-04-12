@@ -20,9 +20,11 @@ import {
     Server,
     SquarePen,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import api, { fetchCsrfToken } from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import { getImportErrorMessage } from './upload-utils';
+import RecipientFormModal, { RecipientExcelFormState, RecipientFormErrors } from './RecipientFormModal';
 
 type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
 type TemplateType = 'BOTH' | 'EMAIL' | 'WHATSAPP';
@@ -59,28 +61,6 @@ type Recipient = {
         name: string;
         source_file_name?: string | null;
     } | null;
-};
-
-type RecipientFormState = {
-    name: string;
-    email: string;
-    phone: string;
-    exam_type: string;
-    role: string;
-    day: string;
-    date: string;
-    test_center: string;
-    faculty: string;
-    room: string;
-    room_est1: string;
-    type: string;
-    governorate: string;
-    address: string;
-    building: string;
-    location: string;
-    map_link: string;
-    arrival_time: string;
-    sheet: 'LEGACY' | 'EST1' | 'EST2';
 };
 
 type RecipientFilters = {
@@ -157,27 +137,33 @@ type EmailSettingsRecord = {
 };
 
 const EMPTY_RECIPIENTS: Recipient[] = [];
-const EMPTY_RECIPIENT_FORM: RecipientFormState = {
+const EMPTY_RECIPIENT_FORM: RecipientExcelFormState = {
+    room_est1: '',
     name: '',
     email: '',
-    phone: '',
-    exam_type: '',
     role: '',
-    day: '',
-    date: '',
-    test_center: '',
-    faculty: '',
-    room: '',
-    room_est1: '',
     type: '',
     governorate: '',
     address: '',
     building: '',
     location: '',
-    map_link: '',
-    arrival_time: '',
-    sheet: 'LEGACY',
+    sheet: '',
 };
+
+const RECIPIENT_EXPORT_COLUMNS = ['ROOM', 'name', 'Email', 'Role', 'Type', 'Governorate', 'Address', 'Building', 'Location', 'Sheet'] as const;
+
+const mapRecipientToExcelRow = (recipient: Pick<Recipient, 'room_est1' | 'name' | 'email' | 'role' | 'type' | 'governorate' | 'address' | 'building' | 'location' | 'sheet'>) => ({
+    ROOM: recipient.room_est1 || '',
+    name: recipient.name || '',
+    Email: recipient.email || '',
+    Role: recipient.role || '',
+    Type: recipient.type || '',
+    Governorate: recipient.governorate || '',
+    Address: recipient.address || '',
+    Building: recipient.building || '',
+    Location: recipient.location || '',
+    Sheet: recipient.sheet || '',
+});
 const EMPTY_FILTERS: RecipientFilters = {
     cycleId: '',
     search: '',
@@ -347,7 +333,14 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         recipientUpdated: isArabic ? 'تم تحديث الصف بنجاح.' : 'Row updated successfully.',
         recipientDeleted: isArabic ? 'تم حذف الصف بنجاح.' : 'Row deleted successfully.',
         recipientSaveError: isArabic ? 'تعذر حفظ الصف.' : 'Unable to save the row.',
+        recipientRoomRequired: isArabic ? 'يرجى إدخال ROOM.' : 'ROOM is required.',
+        recipientEmailRequired: isArabic ? 'يرجى إدخال Email.' : 'Email is required.',
+        recipientEmailInvalid: isArabic ? 'يرجى إدخال Email بصيغة صحيحة.' : 'Email must be valid.',
+        recipientSheetRequired: isArabic ? 'يرجى اختيار Sheet.' : 'Sheet is required.',
         recipientDeleteError: isArabic ? 'تعذر حذف الصف.' : 'Unable to delete the row.',
+        exportExcel: isArabic ? 'تصدير Excel' : 'Export Excel',
+        exportSuccess: isArabic ? 'تم تصدير ملف Excel بنجاح.' : 'Excel exported successfully.',
+        exportError: isArabic ? 'تعذر تصدير ملف Excel.' : 'Unable to export Excel.',
         cycleDelete: isArabic ? 'حذف الدورة' : 'Delete cycle',
         cycleDeleted: isArabic ? 'تم حذف الدورة بنجاح.' : 'Cycle deleted successfully.',
         cycleDeleteError: isArabic ? 'تعذر حذف الدورة.' : 'Unable to delete cycle.',
@@ -412,7 +405,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         sender_name: '',
         sender_email: '',
     });
-    const [recipientForm, setRecipientForm] = useState<RecipientFormState>(EMPTY_RECIPIENT_FORM);
+    const [recipientForm, setRecipientForm] = useState<RecipientExcelFormState>(EMPTY_RECIPIENT_FORM);
+    const [recipientFormErrors, setRecipientFormErrors] = useState<RecipientFormErrors>({});
     const [editingRecipientId, setEditingRecipientId] = useState<string | null>(null);
     const [isRecipientFormOpen, setIsRecipientFormOpen] = useState(false);
 
@@ -584,19 +578,24 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     };
 
     const saveRecipientMutation = useMutation({
-        mutationFn: async ({ recipientId, values }: { recipientId: string | null; values: RecipientFormState }) => {
+        mutationFn: async ({ recipientId, values }: { recipientId: string | null; values: RecipientExcelFormState }) => {
             await fetchCsrfToken();
+            const payload = {
+                ...values,
+                room: values.room_est1,
+            };
             if (recipientId) {
-                const response = await api.put(`/messaging/recipients/${recipientId}`, values);
+                const response = await api.put(`/messaging/recipients/${recipientId}`, payload);
                 return response.data;
             }
 
-            const response = await api.post('/messaging/recipients', values);
+            const response = await api.post('/messaging/recipients', payload);
             return response.data;
         },
         onSuccess(_data, variables) {
             toast.success(variables.recipientId ? copy.recipientUpdated : copy.recipientCreated);
             setRecipientForm(EMPTY_RECIPIENT_FORM);
+            setRecipientFormErrors({});
             setEditingRecipientId(null);
             setIsRecipientFormOpen(false);
             void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
@@ -617,6 +616,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             setSelectedRecipientIds((current) => current.filter((id) => id !== recipientId));
             if (editingRecipientId === recipientId) {
                 setRecipientForm(EMPTY_RECIPIENT_FORM);
+                setRecipientFormErrors({});
                 setEditingRecipientId(null);
                 setIsRecipientFormOpen(false);
             }
@@ -823,55 +823,113 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const openCreateRecipientForm = () => {
         setEditingRecipientId(null);
         setRecipientForm(EMPTY_RECIPIENT_FORM);
+        setRecipientFormErrors({});
         setIsRecipientFormOpen(true);
     };
 
     const openEditRecipientForm = (recipient: Recipient) => {
         setEditingRecipientId(recipient.id);
         setRecipientForm({
+            room_est1: recipient.room_est1 || recipient.room || '',
             name: recipient.name || '',
             email: recipient.email || '',
-            phone: recipient.phone || '',
-            exam_type: recipient.exam_type || '',
             role: recipient.role || '',
-            day: recipient.day || '',
-            date: recipient.date || '',
-            test_center: recipient.test_center || '',
-            faculty: recipient.faculty || '',
-            room: recipient.room || '',
-            room_est1: recipient.room_est1 || '',
             type: recipient.type || '',
             governorate: recipient.governorate || '',
             address: recipient.address || '',
             building: recipient.building || '',
             location: recipient.location || '',
-            map_link: recipient.map_link || '',
-            arrival_time: recipient.arrival_time || '',
-            sheet: recipient.sheet || 'LEGACY',
+            sheet: recipient.sheet === 'EST1' || recipient.sheet === 'EST2' ? recipient.sheet : '',
         });
+        setRecipientFormErrors({});
         setIsRecipientFormOpen(true);
     };
 
     const closeRecipientForm = () => {
         setEditingRecipientId(null);
         setRecipientForm(EMPTY_RECIPIENT_FORM);
+        setRecipientFormErrors({});
         setIsRecipientFormOpen(false);
     };
 
-    const updateRecipientForm = <K extends keyof RecipientFormState,>(key: K, value: RecipientFormState[K]) => {
+    const updateRecipientForm = <K extends keyof RecipientExcelFormState,>(key: K, value: RecipientExcelFormState[K]) => {
         setRecipientForm((current) => ({ ...current, [key]: value }));
+        setRecipientFormErrors((current) => ({ ...current, [key]: undefined }));
+    };
+
+    const validateRecipientForm = (): RecipientFormErrors => {
+        const errors: RecipientFormErrors = {};
+        if (!recipientForm.room_est1.trim()) errors.room_est1 = copy.recipientRoomRequired;
+        if (!recipientForm.name.trim()) errors.name = copy.recipientNameRequired;
+        if (!recipientForm.email.trim()) {
+            errors.email = copy.recipientEmailRequired;
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(recipientForm.email.trim())) {
+            errors.email = copy.recipientEmailInvalid;
+        }
+        if (!recipientForm.sheet) errors.sheet = copy.recipientSheetRequired;
+        return errors;
     };
 
     const saveRecipient = () => {
-        if (!recipientForm.name.trim()) {
-            toast.error(copy.recipientNameRequired);
+        const nextErrors = validateRecipientForm();
+        if (Object.keys(nextErrors).length) {
+            setRecipientFormErrors(nextErrors);
+            toast.error(Object.values(nextErrors)[0] || copy.recipientSaveError);
             return;
         }
 
         saveRecipientMutation.mutate({
             recipientId: editingRecipientId,
-            values: recipientForm,
+            values: {
+                ...recipientForm,
+                name: recipientForm.name.trim(),
+                email: recipientForm.email.trim(),
+                room_est1: recipientForm.room_est1.trim(),
+            },
         });
+    };
+
+    const exportRecipientsToExcel = async () => {
+        try {
+            const firstResponse = await api.get('/messaging/recipients', {
+                params: {
+                    ...filters,
+                    cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+                    sheet: selectedSheet || undefined,
+                    status: filters.status || undefined,
+                    page: 1,
+                    limit: 1000,
+                },
+            });
+
+            const firstPage = firstResponse.data as { items: Recipient[]; total: number };
+            let allItems = [...(firstPage.items ?? [])];
+            const total = firstPage.total ?? allItems.length;
+            const pages = Math.ceil(total / 1000);
+
+            for (let currentPage = 2; currentPage <= pages; currentPage += 1) {
+                const response = await api.get('/messaging/recipients', {
+                    params: {
+                        ...filters,
+                        cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+                        sheet: selectedSheet || undefined,
+                        status: filters.status || undefined,
+                        page: currentPage,
+                        limit: 1000,
+                    },
+                });
+                allItems = allItems.concat(response.data?.items ?? []);
+            }
+
+            const worksheet = XLSX.utils.json_to_sheet(allItems.map(mapRecipientToExcelRow), { header: [...RECIPIENT_EXPORT_COLUMNS] });
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Recipients');
+            const fileName = selectedSheet ? `recipients_${selectedSheet.toLowerCase()}.xlsx` : 'recipients.xlsx';
+            XLSX.writeFile(workbook, fileName);
+            toast.success(copy.exportSuccess);
+        } catch (error: any) {
+            toast.error(getImportErrorMessage(error, copy.exportError));
+        }
     };
 
     const deleteRecipient = (recipientId: string) => {
@@ -1093,6 +1151,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 </button>
                                 <button type="button" className="btn-primary" onClick={openCreateRecipientForm}>
                                     {copy.addRecipient}
+                                </button>
+                                <button type="button" className="btn-outline" onClick={() => void exportRecipientsToExcel()}>
+                                    <FileSpreadsheet size={16} />
+                                    <span>{copy.exportExcel}</span>
                                 </button>
                             </div>
                         </div>
@@ -1404,163 +1466,23 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             </div>
                         </div>
 
-                    {isRecipientFormOpen && (
-                        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 md:p-6">
-                            <button
-                                type="button"
-                                className="overlay-backdrop absolute inset-0"
-                                aria-label={copy.cancelEdit}
-                                onClick={closeRecipientForm}
-                            />
-                            <div className="modal-shell relative z-10 max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] p-5 md:p-6">
-                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                    <div>
-                                        <h3 className="text-lg font-semibold text-slate-950">
-                                            {editingRecipientId ? copy.editRecipientTitle : copy.createRecipientTitle}
-                                        </h3>
-                                        <p className="mt-2 text-sm leading-6 text-slate-500">{copy.recipientFormHint}</p>
-                                    </div>
-                                    <button type="button" className="btn-outline" onClick={closeRecipientForm}>
-                                        {copy.cancelEdit}
-                                    </button>
-                                </div>
-
-                                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                    <input
-                                        value={recipientForm.name}
-                                        onChange={(event) => updateRecipientForm('name', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.name}
-                                    />
-                                    <input
-                                        value={recipientForm.email}
-                                        onChange={(event) => updateRecipientForm('email', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.emailLabel}
-                                    />
-                                    <input
-                                        value={recipientForm.phone}
-                                        onChange={(event) => updateRecipientForm('phone', event.target.value)}
-                                        className="input w-full"
-                                        placeholder="Phone"
-                                    />
-                                    <input
-                                        value={recipientForm.exam_type}
-                                        onChange={(event) => updateRecipientForm('exam_type', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.examType}
-                                    />
-                                    <input
-                                        value={recipientForm.role}
-                                        onChange={(event) => updateRecipientForm('role', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.role}
-                                    />
-                                    <input
-                                        value={recipientForm.day}
-                                        onChange={(event) => updateRecipientForm('day', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.day}
-                                    />
-                                    <input
-                                        value={recipientForm.date}
-                                        onChange={(event) => updateRecipientForm('date', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.date}
-                                    />
-                                    <input
-                                        value={recipientForm.test_center}
-                                        onChange={(event) => updateRecipientForm('test_center', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.testCenter}
-                                    />
-                                    <input
-                                        value={recipientForm.faculty}
-                                        onChange={(event) => updateRecipientForm('faculty', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.faculty}
-                                    />
-                                    <input
-                                        value={recipientForm.room}
-                                        onChange={(event) => updateRecipientForm('room', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.room}
-                                    />
-                                    <input
-                                        value={recipientForm.room_est1}
-                                        onChange={(event) => updateRecipientForm('room_est1', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.roomEst1}
-                                    />
-                                    <input
-                                        value={recipientForm.type}
-                                        onChange={(event) => updateRecipientForm('type', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.typeLabel}
-                                    />
-                                    <input
-                                        value={recipientForm.governorate}
-                                        onChange={(event) => updateRecipientForm('governorate', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.governorate}
-                                    />
-                                    <input
-                                        value={recipientForm.building}
-                                        onChange={(event) => updateRecipientForm('building', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.building}
-                                    />
-                                    <input
-                                        value={recipientForm.location}
-                                        onChange={(event) => updateRecipientForm('location', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.location}
-                                    />
-                                    <input
-                                        value={recipientForm.map_link}
-                                        onChange={(event) => updateRecipientForm('map_link', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.mapLink}
-                                    />
-                                    <input
-                                        value={recipientForm.arrival_time}
-                                        onChange={(event) => updateRecipientForm('arrival_time', event.target.value)}
-                                        className="input w-full"
-                                        placeholder={copy.arrivalTime}
-                                    />
-                                    <select
-                                        value={recipientForm.sheet}
-                                        onChange={(event) => updateRecipientForm('sheet', event.target.value as RecipientFormState['sheet'])}
-                                        className="input w-full"
-                                    >
-                                        <option value="LEGACY">{copy.legacySheet}</option>
-                                        <option value="EST1">EST1</option>
-                                        <option value="EST2">EST2</option>
-                                    </select>
-                                    <textarea
-                                        value={recipientForm.address}
-                                        onChange={(event) => updateRecipientForm('address', event.target.value)}
-                                        className="textarea w-full md:col-span-2 xl:col-span-3"
-                                        placeholder={copy.address}
-                                    />
-                                </div>
-
-                                <div className="mt-5 flex flex-wrap gap-3">
-                                    <button
-                                        type="button"
-                                        className="btn-primary"
-                                        onClick={saveRecipient}
-                                        disabled={saveRecipientMutation.isPending}
-                                    >
-                                        {copy.saveRecipient}
-                                    </button>
-                                    <button type="button" className="btn-outline" onClick={closeRecipientForm}>
-                                        {copy.cancelEdit}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    <RecipientFormModal
+                        isOpen={isRecipientFormOpen}
+                        mode={editingRecipientId ? 'edit' : 'add'}
+                        form={recipientForm}
+                        errors={recipientFormErrors}
+                        isSaving={saveRecipientMutation.isPending}
+                        onChange={updateRecipientForm}
+                        onClose={closeRecipientForm}
+                        onSubmit={saveRecipient}
+                        copy={{
+                            cancelEdit: copy.cancelEdit,
+                            createRecipientTitle: copy.createRecipientTitle,
+                            editRecipientTitle: copy.editRecipientTitle,
+                            recipientFormHint: copy.recipientFormHint,
+                            saveRecipient: copy.saveRecipient,
+                        }}
+                    />
 
                     {selectedRecipientIds.length > 0 && (
                         <div className="sticky bottom-4 z-20">
