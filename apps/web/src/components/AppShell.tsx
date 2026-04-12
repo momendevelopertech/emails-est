@@ -5,6 +5,7 @@ import { ReactNode, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { FileSpreadsheet, LayoutPanelTop, LogOut, Menu, SendHorizontal, Settings } from 'lucide-react';
 import TopNav from './TopNav';
+import ConfirmDialog from './ConfirmDialog';
 import { useAuthContext } from '@/context/AuthContext';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -15,6 +16,7 @@ export default function AppShell({ locale, children }: { locale: string; childre
     const { user } = useAuthStore();
     const [collapsed, setCollapsed] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
     const activeTab = searchParams.get('tab') || 'recipients';
     const isMessagingRoute = pathname?.includes('/messaging');
     const isUploadRoute = pathname?.includes('/messaging/upload');
@@ -62,16 +64,7 @@ export default function AppShell({ locale, children }: { locale: string; childre
 
     const closeMobile = () => setMobileOpen(false);
     const handleLogout = () => {
-        const confirmed = window.confirm(
-            locale === 'ar'
-                ? 'هل أنت متأكد أنك تريد تسجيل الخروج؟'
-                : 'Are you sure you want to log out?',
-        );
-
-        if (!confirmed) {
-            return;
-        }
-
+        setIsLogoutDialogOpen(false);
         logout();
     };
 
@@ -123,7 +116,7 @@ export default function AppShell({ locale, children }: { locale: string; childre
                 </div>
 
                 <div className="sidebar-footer">
-                    <button type="button" className="btn-outline w-full" onClick={handleLogout}>
+                    <button type="button" className="btn-outline w-full" onClick={() => setIsLogoutDialogOpen(true)}>
                         <LogOut size={16} />
                         <span>{locale === 'ar' ? 'تسجيل الخروج' : 'Log out'}</span>
                     </button>
@@ -133,6 +126,16 @@ export default function AppShell({ locale, children }: { locale: string; childre
             <div className="app-main px-4 pb-10 md:px-6 xl:px-8">
                 {children}
             </div>
+
+            <ConfirmDialog
+                open={isLogoutDialogOpen}
+                title={locale === 'ar' ? 'تأكيد تسجيل الخروج' : 'Confirm logout'}
+                description={locale === 'ar' ? 'هل أنت متأكد أنك تريد تسجيل الخروج؟' : 'Are you sure you want to log out?'}
+                confirmLabel={locale === 'ar' ? 'تسجيل الخروج' : 'Log out'}
+                cancelLabel={locale === 'ar' ? 'إلغاء' : 'Cancel'}
+                onCancel={() => setIsLogoutDialogOpen(false)}
+                onConfirm={handleLogout}
+            />
         </div>
     );
 }
