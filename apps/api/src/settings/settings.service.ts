@@ -16,6 +16,8 @@ export class SettingsService {
     const record = await this.prisma.emailSettings.findUnique({
       where: { id: EMAIL_SETTINGS_ID },
     });
+    const sent_today_success_count = await this.getTodaySuccessfulEmailCount();
+    const smtp_daily_limit = this.getDailyLimit();
 
     const sender_name = record?.sender_name?.trim() || this.getFallbackSenderName();
     const sender_email = record?.sender_email?.trim() || this.getFallbackSenderEmail();
@@ -27,6 +29,9 @@ export class SettingsService {
       mail_from,
       smtp_host: (process.env.MAIL_HOST || '').trim(),
       smtp_port: this.getMailPort(),
+      sent_today_success_count,
+      smtp_daily_limit,
+      smtp_remaining_today: smtp_daily_limit === null ? null : Math.max(smtp_daily_limit - sent_today_success_count, 0),
     };
   }
 
@@ -52,13 +57,43 @@ export class SettingsService {
 
     this.emailService.clearMailFromCache();
 
+    const sent_today_success_count = await this.getTodaySuccessfulEmailCount();
+    const smtp_daily_limit = this.getDailyLimit();
+
     return {
       sender_name: record.sender_name,
       sender_email: record.sender_email,
       mail_from: record.mail_from,
       smtp_host: (process.env.MAIL_HOST || '').trim(),
       smtp_port: this.getMailPort(),
+      sent_today_success_count,
+      smtp_daily_limit,
+      smtp_remaining_today: smtp_daily_limit === null ? null : Math.max(smtp_daily_limit - sent_today_success_count, 0),
     };
+  }
+
+  private async getTodaySuccessfulEmailCount() {
+    const todayUtcStart = new Date();
+    todayUtcStart.setUTCHours(0, 0, 0, 0);
+
+    return this.prisma.log.count({
+      where: {
+        status: 'SENT',
+        created_at: {
+          gte: todayUtcStart,
+        },
+        recipient: {
+          email: {
+            not: null,
+          },
+        },
+      },
+    });
+  }
+
+  private getDailyLimit() {
+    const parsed = parseInt(process.env.MAIL_DAILY_LIMIT || '', 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }
 
   private buildMailFrom(senderName: string, senderEmail: string) {

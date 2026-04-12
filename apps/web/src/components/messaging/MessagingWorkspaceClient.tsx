@@ -134,6 +134,9 @@ type EmailSettingsRecord = {
     mail_from: string;
     smtp_host: string;
     smtp_port: number;
+    sent_today_success_count: number;
+    smtp_daily_limit: number | null;
+    smtp_remaining_today: number | null;
 };
 
 const EMPTY_RECIPIENTS: Recipient[] = [];
@@ -1956,6 +1959,18 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
                                         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('port')}</div>
                                         <div className="mt-2 text-sm font-semibold text-slate-900">{emailSettingsQuery.data?.smtp_port ?? '-'}</div>
+                                    </div>
+                                    <div className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">{t('sentToday')}</div>
+                                        <div className="mt-2 text-sm font-semibold text-emerald-900">{emailSettingsQuery.data?.sent_today_success_count ?? 0}</div>
+                                    </div>
+                                    <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">{t('smtpLimitRemaining')}</div>
+                                        <div className="mt-2 text-sm font-semibold text-amber-900">
+                                            {emailSettingsQuery.data?.smtp_daily_limit
+                                                ? `${emailSettingsQuery.data.smtp_remaining_today ?? 0} / ${emailSettingsQuery.data.smtp_daily_limit}`
+                                                : t('smtpLimitNotConfigured')}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
