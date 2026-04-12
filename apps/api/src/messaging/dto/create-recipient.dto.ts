@@ -1,5 +1,6 @@
+import { RecipientSheet } from '@prisma/client';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
@@ -22,6 +23,10 @@ const normalizeOptionalEmail = (value: unknown) => {
 };
 
 export class CreateRecipientDto {
+    @IsOptional()
+    @IsString()
+    cycleId?: string | null;
+
     @Transform(({ value }) => normalizeOptionalString(value) ?? '')
     @IsString()
     name: string;
@@ -110,4 +115,8 @@ export class CreateRecipientDto {
     @IsOptional()
     @IsString()
     arrival_time?: string | null;
+
+    @IsOptional()
+    @IsEnum(RecipientSheet)
+    sheet?: RecipientSheet;
 }

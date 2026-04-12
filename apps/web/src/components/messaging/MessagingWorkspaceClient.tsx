@@ -37,6 +37,7 @@ type SendScope = 'selected' | 'filtered' | 'all_pending' | 'failed';
 
 type Recipient = {
     id: string;
+    cycleId?: string | null;
     name: string;
     email?: string | null;
     phone?: string | null;
@@ -47,10 +48,16 @@ type Recipient = {
     address?: string | null;
     building?: string | null;
     location?: string | null;
+    sheet?: 'LEGACY' | 'EST1' | 'EST2';
     status: 'PENDING' | 'PROCESSING' | 'SENT' | 'FAILED';
     error_message?: string | null;
     attempts_count?: number;
     last_attempt_at?: string | null;
+    cycle?: {
+        id: string;
+        name: string;
+        source_file_name?: string | null;
+    } | null;
 };
 
 type RecipientFormState = {
@@ -67,6 +74,7 @@ type RecipientFormState = {
 };
 
 type RecipientFilters = {
+    cycleId: string;
     search: string;
     name: string;
     email: string;
@@ -78,6 +86,26 @@ type RecipientFilters = {
     building: string;
     location: string;
     status: string;
+};
+
+type CycleSummary = {
+    id: string;
+    name: string;
+    source_file_name?: string | null;
+    imported_count: number;
+    skipped_count: number;
+    recipients_count: number;
+    pending_count: number;
+    processing_count: number;
+    sent_count: number;
+    failed_count: number;
+    created_at: string;
+};
+
+type RecipientFilterOptions = {
+    roles: string[];
+    types: string[];
+    governorates: string[];
 };
 
 type Template = {
@@ -98,6 +126,11 @@ type LogRow = {
         name?: string | null;
         email?: string | null;
         phone?: string | null;
+        cycle?: {
+            id: string;
+            name: string;
+        } | null;
+        sheet?: 'LEGACY' | 'EST1' | 'EST2';
     };
 };
 
@@ -123,6 +156,7 @@ const EMPTY_RECIPIENT_FORM: RecipientFormState = {
     location: '',
 };
 const EMPTY_FILTERS: RecipientFilters = {
+    cycleId: '',
     search: '',
     name: '',
     email: '',
@@ -135,6 +169,8 @@ const EMPTY_FILTERS: RecipientFilters = {
     location: '',
     status: '',
 };
+
+const ALL_CYCLES_VALUE = '__all_cycles__';
 
 const STATUS_STYLES: Record<Recipient['status'], string> = {
     PENDING: 'bg-amber-50 text-amber-800 border border-amber-200',
@@ -312,6 +348,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [activeTab, setActiveTab] = useState<WorkspaceTab>(() => (
         isWorkspaceTab(searchParams.get('tab')) ? (searchParams.get('tab') as WorkspaceTab) : 'recipients'
     ));
+    const [selectedCycleId, setSelectedCycleId] = useState('');
+    const [cycleSelectionReady, setCycleSelectionReady] = useState(false);
     const [page, setPage] = useState(1);
     const [pageSize] = useState(25);
     const [filters, setFilters] = useState<RecipientFilters>(EMPTY_FILTERS);
@@ -351,12 +389,47 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     };
 
+    const cyclesQuery = useQuery<CycleSummary[]>({
+        queryKey: ['messaging-cycles'],
+        queryFn: async () => {
+            const response = await api.get('/messaging/cycles');
+            return response.data;
+        },
+        enabled: ready,
+    });
+
+    useEffect(() => {
+        if (cycleSelectionReady) {
+            return;
+        }
+
+        if (!cyclesQuery.isFetched) {
+            return;
+        }
+
+        const nextCycleId = cyclesQuery.data?.[0]?.id || ALL_CYCLES_VALUE;
+        setSelectedCycleId(nextCycleId);
+        setCycleSelectionReady(true);
+    }, [cycleSelectionReady, cyclesQuery.data, cyclesQuery.isFetched]);
+
+    useEffect(() => {
+        if (!cycleSelectionReady) {
+            return;
+        }
+
+        setFilters((current) => ({
+            ...current,
+            cycleId: selectedCycleId === ALL_CYCLES_VALUE ? '' : selectedCycleId,
+        }));
+    }, [cycleSelectionReady, selectedCycleId]);
+
     const recipientsQuery = useQuery<{ items: Recipient[]; total: number; page: number; limit: number }>({
-        queryKey: ['messaging-recipients', filters, page, pageSize],
+        queryKey: ['messaging-recipients', filters, selectedCycleId, page, pageSize],
         queryFn: async () => {
             const response = await api.get('/messaging/recipients', {
                 params: {
                     ...filters,
+                    cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
                     status: filters.status || undefined,
                     page,
                     limit: pageSize,
@@ -364,8 +437,21 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             });
             return response.data;
         },
-        enabled: ready,
+        enabled: ready && cycleSelectionReady,
         placeholderData: keepPreviousData,
+    });
+
+    const recipientFilterOptionsQuery = useQuery<RecipientFilterOptions>({
+        queryKey: ['messaging-recipient-filter-options', selectedCycleId],
+        queryFn: async () => {
+            const response = await api.get('/messaging/filters/options', {
+                params: {
+                    cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+                },
+            });
+            return response.data;
+        },
+        enabled: ready && cycleSelectionReady,
     });
 
     const templatesQuery = useQuery<Template[]>({
@@ -378,12 +464,17 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     });
 
     const logsQuery = useQuery<{ items: LogRow[] }>({
-        queryKey: ['messaging-logs'],
+        queryKey: ['messaging-logs', selectedCycleId],
         queryFn: async () => {
-            const response = await api.get('/messaging/logs', { params: { limit: 12 } });
+            const response = await api.get('/messaging/logs', {
+                params: {
+                    limit: 12,
+                    cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+                },
+            });
             return response.data;
         },
-        enabled: ready,
+        enabled: ready && cycleSelectionReady,
     });
 
     const emailSettingsQuery = useQuery<EmailSettingsRecord>({
@@ -412,7 +503,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const refreshAll = async () => {
         await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['messaging-cycles'] }),
             queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] }),
+            queryClient.invalidateQueries({ queryKey: ['messaging-recipient-filter-options'] }),
             queryClient.invalidateQueries({ queryKey: ['messaging-templates'] }),
             queryClient.invalidateQueries({ queryKey: ['messaging-logs'] }),
             queryClient.invalidateQueries({ queryKey: ['email-settings'] }),
@@ -420,15 +513,22 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     };
 
     const importMutation = useMutation({
-        mutationFn: async (rows: RecipientImportRow[]) => {
+        mutationFn: async (payload: { sourceFileName: string; recipients: Array<Record<string, string>> }) => {
             await fetchCsrfToken();
-            const response = await api.post('/messaging/recipients/import', { recipients: rows });
+            const response = await api.post('/messaging/recipients/import', {
+                source_file_name: payload.sourceFileName,
+                recipients: payload.recipients,
+            });
             return response.data;
         },
         onSuccess(data) {
             setPreviewCount(data.imported ?? 0);
+            if (data.cycle?.id) {
+                setSelectedCycleId(data.cycle.id);
+                setCycleSelectionReady(true);
+            }
             toast.success(copy.uploadSuccess);
-            void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
+            void refreshAll();
         },
         onError(error: any) {
             toast.error(getImportErrorMessage(error, copy.uploadError));
@@ -566,6 +666,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     });
 
     const recipients = recipientsQuery.data?.items ?? EMPTY_RECIPIENTS;
+    const cycles = cyclesQuery.data ?? [];
+    const currentCycle = cycles.find((cycle) => cycle.id === selectedCycleId) || null;
     const totalRecipients = recipientsQuery.data?.total ?? 0;
     const totalPages = Math.max(1, Math.ceil(totalRecipients / pageSize));
     const visibleRangeStart = totalRecipients === 0 ? 0 : (page - 1) * pageSize + 1;
@@ -595,13 +697,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         failed: recipients.filter((recipient) => recipient.status === 'FAILED').length,
     }), [recipients]);
 
-    const recipientFilterFields = useMemo(() => ([
+    const textRecipientFilterFields = useMemo(() => ([
         { key: 'name', label: copy.name },
         { key: 'email', label: copy.emailLabel },
-        { key: 'role', label: copy.role },
         { key: 'room_est1', label: copy.roomEst1 },
-        { key: 'type', label: copy.typeLabel },
-        { key: 'governorate', label: copy.governorate },
         { key: 'address', label: copy.address },
         { key: 'building', label: copy.building },
         { key: 'location', label: copy.location },
@@ -609,13 +708,12 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         copy.address,
         copy.building,
         copy.emailLabel,
-        copy.governorate,
         copy.location,
         copy.name,
-        copy.role,
         copy.roomEst1,
-        copy.typeLabel,
     ]);
+
+    const filterOptions = recipientFilterOptionsQuery.data ?? { roles: [], types: [], governorates: [] };
 
     const allVisibleSelected = recipients.length > 0 && recipients.every((recipient) => selectedRecipientIds.includes(recipient.id));
 
@@ -626,7 +724,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const clearFilters = () => {
         setPage(1);
-        setFilters(EMPTY_FILTERS);
+        setFilters({
+            ...EMPTY_FILTERS,
+            cycleId: selectedCycleId === ALL_CYCLES_VALUE ? '' : selectedCycleId,
+        });
     };
 
     const toggleRecipient = (recipientId: string) => {
@@ -662,11 +763,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         setPreviewCount(null);
 
         try {
-            const rows = await parseWorkbook(file);
-            if (!rows.length) {
+            const parsedWorkbook = await parseWorkbook(file);
+            if (!parsedWorkbook.recipients.length) {
                 throw new Error(isArabic ? 'لم يتم العثور على مستلمين داخل الملف.' : 'No recipients were found in the file.');
             }
-            importMutation.mutate(rows);
+            importMutation.mutate(parsedWorkbook);
         } catch (error: any) {
             toast.error(getImportErrorMessage(error, copy.uploadError));
         } finally {
@@ -756,6 +857,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const buildFilterPayload = (applyPendingFallback = true) => {
         const payload: Record<string, string> = {};
+        if (selectedCycleId !== ALL_CYCLES_VALUE) payload.cycleId = selectedCycleId;
         if (filters.search.trim()) payload.search = filters.search.trim();
         if (filters.name.trim()) payload.name = filters.name.trim();
         if (filters.email.trim()) payload.email = filters.email.trim();
@@ -785,7 +887,12 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                 toast.error(copy.needSelection);
                 return;
             }
-            sendMutation.mutate({ templateId: campaignTemplateId, mode: 'selected', ids: selectedRecipientIds });
+            sendMutation.mutate({
+                templateId: campaignTemplateId,
+                mode: 'selected',
+                cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+                ids: selectedRecipientIds,
+            });
             return;
         }
 
@@ -799,11 +906,18 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         }
 
         if (sendScope === 'all_pending') {
-            sendMutation.mutate({ templateId: campaignTemplateId, mode: 'all_pending' });
+            sendMutation.mutate({
+                templateId: campaignTemplateId,
+                mode: 'all_pending',
+                cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+            });
             return;
         }
 
-        retryMutation.mutate({ templateId: campaignTemplateId });
+        retryMutation.mutate({
+            templateId: campaignTemplateId,
+            cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+        });
     };
 
     if (isChecking) {
@@ -1072,7 +1186,43 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 </div>
                             )}
 
-                            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                                <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                        {isArabic ? 'الدورة النشطة' : 'Active cycle'}
+                                    </div>
+                                    <select
+                                        value={selectedCycleId}
+                                        onChange={(event) => {
+                                            setPage(1);
+                                            setSelectedRecipientIds([]);
+                                            setSelectedCycleId(event.target.value);
+                                        }}
+                                        className="input mt-3 w-full"
+                                    >
+                                        <option value={ALL_CYCLES_VALUE}>{isArabic ? 'كل الدورات' : 'All cycles'}</option>
+                                        {cycles.map((cycle) => (
+                                            <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="mt-3 text-xs leading-6 text-slate-500">
+                                        {currentCycle ? (
+                                            <>
+                                                <div>{isArabic ? 'المستلمين:' : 'Recipients:'} <strong>{currentCycle.recipients_count}</strong></div>
+                                                <div>{isArabic ? 'تم الاستيراد:' : 'Imported:'} <strong>{new Date(currentCycle.created_at).toLocaleString()}</strong></div>
+                                                <div>{isArabic ? 'الملف:' : 'File:'} <strong>{currentCycle.source_file_name || '-'}</strong></div>
+                                            </>
+                                        ) : (
+                                            <div>{isArabic ? 'عرض كل البيانات المتاحة من جميع الدورات.' : 'Showing recipients from every saved cycle.'}</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
+                                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                        {isArabic ? 'فلاتر المستلمين' : 'Recipient filters'}
+                                    </div>
+                                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                                 <label className="relative block xl:col-span-2">
                                     <Search className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                     <input
@@ -1083,7 +1233,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     />
                                 </label>
 
-                                {recipientFilterFields.map((field) => (
+                                {textRecipientFilterFields.map((field) => (
                                     <input
                                         key={field.key}
                                         value={filters[field.key]}
@@ -1092,6 +1242,24 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                         placeholder={field.label}
                                     />
                                 ))}
+                                <select value={filters.role} onChange={(event) => updateFilter('role', event.target.value)} className="input w-full">
+                                    <option value="">{copy.role}</option>
+                                    {filterOptions.roles.map((role) => (
+                                        <option key={role} value={role}>{role}</option>
+                                    ))}
+                                </select>
+                                <select value={filters.type} onChange={(event) => updateFilter('type', event.target.value)} className="input w-full">
+                                    <option value="">{copy.typeLabel}</option>
+                                    {filterOptions.types.map((type) => (
+                                        <option key={type} value={type}>{type}</option>
+                                    ))}
+                                </select>
+                                <select value={filters.governorate} onChange={(event) => updateFilter('governorate', event.target.value)} className="input w-full">
+                                    <option value="">{copy.governorate}</option>
+                                    {filterOptions.governorates.map((governorate) => (
+                                        <option key={governorate} value={governorate}>{governorate}</option>
+                                    ))}
+                                </select>
                                 <select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)} className="input w-full">
                                     <option value="">{copy.status}</option>
                                     {Object.entries(copy.statusLabels).map(([value, label]) => (
@@ -1102,6 +1270,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     <Filter size={16} />
                                     <span>{copy.clearFilters}</span>
                                 </button>
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-slate-200">
@@ -1157,7 +1327,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
                                                         <div className="font-semibold text-slate-900">{recipient.name || '-'}</div>
-                                                        <div className="mt-1 text-xs text-slate-500">{recipient.id}</div>
+                                                        <div className="mt-1 text-xs text-slate-500">
+                                                            {recipient.cycle?.name || recipient.id}
+                                                            {recipient.sheet && recipient.sheet !== 'LEGACY' ? ` • ${recipient.sheet}` : ''}
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
                                                         <div className="space-y-1">
@@ -1173,6 +1346,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
                                                         <div className="space-y-1 text-xs text-slate-600">
+                                                            <div><strong>{isArabic ? 'الشيت' : 'Sheet'}:</strong> {recipient.sheet || 'LEGACY'}</div>
                                                             <div><strong>{copy.roomEst1}:</strong> {recipient.room_est1 || '-'}</div>
                                                             <div><strong>{copy.role}:</strong> {recipient.role || '-'}</div>
                                                             <div><strong>{copy.typeLabel}:</strong> {recipient.type || '-'}</div>
@@ -1529,7 +1703,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             <button
                                 type="button"
                                 className="btn-outline"
-                                onClick={() => retryMutation.mutate({ templateId: campaignTemplateId })}
+                                onClick={() => retryMutation.mutate({
+                                    templateId: campaignTemplateId,
+                                    cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+                                })}
                                 disabled={!campaignTemplateId || retryMutation.isPending || sendMutation.isPending}
                             >
                                 {copy.retryFailed}

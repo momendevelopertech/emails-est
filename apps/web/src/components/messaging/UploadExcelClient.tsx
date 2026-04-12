@@ -64,15 +64,18 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
         setPreviewCount(null);
 
         try {
-            const rows = await parseRecipientWorkbook(file, locale);
-            if (rows.length === 0) {
+            const parsedWorkbook = await parseRecipientWorkbook(file, locale);
+            if (parsedWorkbook.recipients.length === 0) {
                 throw new Error('No recipients were found in the file.');
             }
 
             await fetchCsrfToken();
-            await api.post('/messaging/recipients/import', { recipients: rows });
-            setPreviewCount(rows.length);
-            toast.success(t('uploadSuccess') || `Imported ${rows.length} recipients successfully.`);
+            await api.post('/messaging/recipients/import', {
+                source_file_name: parsedWorkbook.sourceFileName,
+                recipients: parsedWorkbook.recipients,
+            });
+            setPreviewCount(parsedWorkbook.recipients.length);
+            toast.success(t('uploadSuccess') || `Imported ${parsedWorkbook.recipients.length} recipients successfully.`);
         } catch (error: any) {
             toast.error(getImportErrorMessage(error, t('uploadError') || 'Unable to import recipients.'));
         } finally {
@@ -106,7 +109,7 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
                         </div>
                     )}
                     <div className="mt-4 text-xs text-slate-500">
-                        {t('uploadColumnsHint') || 'The EST workbook format is supported directly, including multiple sheets. Emails are replaced automatically with test addresses during import.'}
+                        {t('uploadColumnsHint') || 'The EST workbook format is supported directly, including EST1 and EST2 with flexible header names.'}
                     </div>
                 </div>
 

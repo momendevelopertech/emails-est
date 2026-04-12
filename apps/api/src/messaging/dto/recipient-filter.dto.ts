@@ -1,3 +1,4 @@
+import { RecipientSheet } from '@prisma/client';
 import { IsEnum, IsNumber, IsOptional, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -9,6 +10,10 @@ export enum RecipientStatus {
 }
 
 export class RecipientFilterDto {
+    @IsOptional()
+    @IsString()
+    cycleId?: string;
+
     @IsOptional()
     @IsString()
     name?: string;
@@ -56,6 +61,10 @@ export class RecipientFilterDto {
     @IsOptional()
     @IsString()
     location?: string;
+
+    @IsOptional()
+    @IsEnum(RecipientSheet)
+    sheet?: RecipientSheet;
 
     @IsOptional()
     @IsEnum(RecipientStatus)

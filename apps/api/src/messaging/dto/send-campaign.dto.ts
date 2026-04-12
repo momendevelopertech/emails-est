@@ -14,6 +14,10 @@ export class SendCampaignDto {
     @IsString()
     templateId: string;
 
+    @IsOptional()
+    @IsString()
+    cycleId?: string;
+
     @IsEnum(SendMode)
     mode: SendMode;
 

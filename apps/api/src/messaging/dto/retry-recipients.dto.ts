@@ -6,6 +6,10 @@ export class RetryRecipientsDto {
     templateId: string;
 
     @IsOptional()
+    @IsString()
+    cycleId?: string;
+
+    @IsOptional()
     @ArrayNotEmpty()
     @IsArray()
     @IsString({ each: true })

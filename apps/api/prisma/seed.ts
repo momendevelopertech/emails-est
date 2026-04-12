@@ -28,12 +28,21 @@ const SEEDED_TEMPLATE_DEFINITIONS = [
 
 const SEEDED_RECIPIENTS = EST1_ALL_FIXTURE_ROWS.map((row, index) => ({
   id: `seed-est1-${String(index + 1).padStart(4, '0')}`,
-  ...normalizeRecipientImport(row, index),
+  ...normalizeRecipientImport({ ...row, sheet: 'EST1' }),
   status: RecipientStatus.PENDING,
   error_message: null,
   attempts_count: 0,
   last_attempt_at: null,
 }));
+
+const SEEDED_CYCLE = {
+  id: 'seed-cycle-est1-all',
+  name: 'Seed EST1 Cycle',
+  slug: 'seed-est1-cycle',
+  source_file_name: 'seed-est1.xlsx',
+  imported_count: SEEDED_RECIPIENTS.length,
+  skipped_count: 0,
+};
 
 const SEEDED_LOGS: Array<{
   recipientName: string;
@@ -161,6 +170,17 @@ export async function seedMessagingData(client: PrismaClient) {
 
   const seededRecipientIds = SEEDED_RECIPIENTS.map((recipient) => recipient.id);
 
+  const seedCycle = await client.recipientCycle.upsert({
+    where: { slug: SEEDED_CYCLE.slug },
+    update: {
+      name: SEEDED_CYCLE.name,
+      source_file_name: SEEDED_CYCLE.source_file_name,
+      imported_count: SEEDED_CYCLE.imported_count,
+      skipped_count: SEEDED_CYCLE.skipped_count,
+    },
+    create: SEEDED_CYCLE,
+  });
+
   const existingSeedRecipients = await client.recipient.findMany({
     where: { id: { in: seededRecipientIds } },
     select: { id: true },
@@ -178,7 +198,12 @@ export async function seedMessagingData(client: PrismaClient) {
 
   const createdRecipients = [] as Array<{ id: string; name: string }>;
   for (const recipient of SEEDED_RECIPIENTS) {
-    const created = await client.recipient.create({ data: recipient });
+    const created = await client.recipient.create({
+      data: {
+        ...recipient,
+        cycleId: seedCycle.id,
+      },
+    });
     createdRecipients.push({ id: created.id, name: created.name });
   }
 

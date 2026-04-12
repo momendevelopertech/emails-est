@@ -19,9 +19,19 @@ export class MessagingController {
         return this.messagingService.findRecipients(filter);
     }
 
+    @Get('cycles')
+    async getCycles() {
+        return this.messagingService.getCycles();
+    }
+
+    @Get('filters/options')
+    async getRecipientFilterOptions(@Query('cycleId') cycleId?: string) {
+        return this.messagingService.getRecipientFilterOptions(cycleId);
+    }
+
     @Post('recipients/import')
     async importRecipients(@Body() body: ImportRecipientsDto) {
-        return this.messagingService.importRecipients(body.recipients);
+        return this.messagingService.importRecipients(body);
     }
 
     @Post('recipients')
@@ -70,7 +80,7 @@ export class MessagingController {
     }
 
     @Get('logs')
-    async getLogs(@Query('page') page = '1', @Query('limit') limit = '100') {
-        return this.messagingService.getLogs(parseInt(page, 10), parseInt(limit, 10));
+    async getLogs(@Query('page') page = '1', @Query('limit') limit = '100', @Query('cycleId') cycleId?: string) {
+        return this.messagingService.getLogs(parseInt(page, 10), parseInt(limit, 10), cycleId);
     }
 }

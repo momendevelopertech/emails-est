@@ -28,6 +28,12 @@ enum RecipientStatus {
   FAILED
 }
 
+enum RecipientSheet {
+  LEGACY
+  EST1
+  EST2
+}
+
 enum TemplateType {
   EMAIL
   WHATSAPP
@@ -72,8 +78,23 @@ model Template {
   created_at DateTime     @default(now())
 }
 
+model RecipientCycle {
+  id               String      @id @default(cuid())
+  name             String
+  slug             String      @unique
+  source_file_name String?
+  imported_count   Int         @default(0)
+  skipped_count    Int         @default(0)
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+  recipients       Recipient[]
+
+  @@index([created_at])
+}
+
 model Recipient {
   id              String          @id @default(cuid())
+  cycleId         String?
   name            String
   email           String?
   phone           String?
@@ -92,13 +113,19 @@ model Recipient {
   location        String?
   map_link        String?
   arrival_time    String?
+  sheet           RecipientSheet  @default(LEGACY)
   status          RecipientStatus @default(PENDING)
   error_message   String?
   attempts_count  Int             @default(0)
   last_attempt_at DateTime?
   created_at      DateTime        @default(now())
   updated_at      DateTime        @updatedAt
+  cycle           RecipientCycle? @relation(fields: [cycleId], references: [id], onDelete: SetNull)
   logs            Log[]
+
+  @@index([cycleId, created_at])
+  @@index([cycleId, status])
+  @@index([cycleId, sheet])
 }
 
 model Log {
