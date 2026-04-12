@@ -9,7 +9,7 @@ import { SendCampaignDto } from './dto/send-campaign.dto';
 import { RetryRecipientsDto } from './dto/retry-recipients.dto';
 import { RecipientFilterDto } from './dto/recipient-filter.dto';
 import { ImportRecipientsDto } from './dto/import-recipients.dto';
-import { Prisma, RecipientStatus, TemplateType } from '@prisma/client';
+import { Prisma, RecipientSheet, RecipientStatus, TemplateType } from '@prisma/client';
 import { format } from 'date-fns';
 import { randomUUID } from 'crypto';
 import {
@@ -232,8 +232,17 @@ export class MessagingService {
         if (!normalized.name) {
             throw new BadRequestException('Recipient name is required.');
         }
+        if (!normalized.room_est1) {
+            throw new BadRequestException('Recipient ROOM is required.');
+        }
+        if (!normalized.email) {
+            throw new BadRequestException('Recipient email is required.');
+        }
+        if (normalized.sheet === RecipientSheet.LEGACY) {
+            throw new BadRequestException('Recipient sheet must be EST1 or EST2.');
+        }
 
-        if (normalized.email && !isValidEmail(normalized.email)) {
+        if (!isValidEmail(normalized.email)) {
             throw new BadRequestException('Recipient email is invalid.');
         }
 
@@ -250,8 +259,17 @@ export class MessagingService {
         if (!normalized.name) {
             throw new BadRequestException('Recipient name is required.');
         }
+        if (!normalized.room_est1) {
+            throw new BadRequestException('Recipient ROOM is required.');
+        }
+        if (!normalized.email) {
+            throw new BadRequestException('Recipient email is required.');
+        }
+        if (normalized.sheet === RecipientSheet.LEGACY) {
+            throw new BadRequestException('Recipient sheet must be EST1 or EST2.');
+        }
 
-        if (normalized.email && !isValidEmail(normalized.email)) {
+        if (!isValidEmail(normalized.email)) {
             throw new BadRequestException('Recipient email is invalid.');
         }
 

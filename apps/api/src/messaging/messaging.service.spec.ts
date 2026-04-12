@@ -71,6 +71,7 @@ describe('MessagingService', () => {
         await service.createRecipient({
             name: 'Ali Hassan',
             room_est1: 'EST-12',
+            email: 'ali@example.com',
             test_center: 'Building A',
             map_link: 'https://maps.example.test/a',
             sheet: RecipientSheet.EST1,
@@ -97,6 +98,7 @@ describe('MessagingService', () => {
         await service.updateRecipient('r1', {
             name: 'Mona Adel',
             room: 'Room 22',
+            email: 'mona@example.com',
             building: 'Rawasy',
             location: 'https://maps.example.test/b',
             sheet: RecipientSheet.EST2,
@@ -115,6 +117,44 @@ describe('MessagingService', () => {
                 sheet: RecipientSheet.EST2,
             }),
         });
+    });
+
+    it('createRecipient rejects missing required Excel fields', async () => {
+        await expect(service.createRecipient({
+            name: 'Ali Hassan',
+            email: '',
+            room_est1: '',
+            sheet: RecipientSheet.EST1,
+        } as any)).rejects.toThrow('Recipient ROOM is required.');
+
+        await expect(service.createRecipient({
+            name: 'Ali Hassan',
+            room_est1: 'EST-12',
+            sheet: RecipientSheet.EST1,
+        } as any)).rejects.toThrow('Recipient email is required.');
+
+        await expect(service.createRecipient({
+            name: 'Ali Hassan',
+            room_est1: 'EST-12',
+            email: 'ali@example.com',
+            sheet: RecipientSheet.LEGACY,
+        } as any)).rejects.toThrow('Recipient sheet must be EST1 or EST2.');
+    });
+
+    it('updateRecipient rejects invalid or missing required fields', async () => {
+        await expect(service.updateRecipient('r1', {
+            name: 'Mona Adel',
+            room_est1: 'EST-15',
+            email: 'invalid-email',
+            sheet: RecipientSheet.EST1,
+        } as any)).rejects.toThrow('Recipient email is invalid.');
+
+        await expect(service.updateRecipient('r1', {
+            name: 'Mona Adel',
+            room_est1: 'EST-15',
+            email: 'mona@example.com',
+            sheet: RecipientSheet.LEGACY,
+        } as any)).rejects.toThrow('Recipient sheet must be EST1 or EST2.');
     });
 
     it('deleteRecipient removes the selected row', async () => {
