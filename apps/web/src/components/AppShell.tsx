@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { FileSpreadsheet, LayoutPanelTop, LogOut, Menu, SendHorizontal, Settings } from 'lucide-react';
 import TopNav from './TopNav';
@@ -21,15 +21,6 @@ export default function AppShell({ locale, children }: { locale: string; childre
     const isTemplatesRoute = pathname?.includes('/messaging/templates');
     const isWorkspaceRoute = isMessagingRoute && !isUploadRoute && !isTemplatesRoute;
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-    const initials = useMemo(() => {
-        const value = user?.fullName?.trim();
-        if (!value) return 'HR';
-        return value
-            .split(/\s+/)
-            .slice(0, 2)
-            .map((part) => part[0]?.toUpperCase())
-            .join('') || 'HR';
-    }, [user?.fullName]);
 
     const navItems = [
         {
@@ -56,7 +47,7 @@ export default function AppShell({ locale, children }: { locale: string; childre
         {
             id: 'campaign',
             href: `/${locale}/messaging?tab=campaign`,
-            label: locale === 'ar' ? 'الإرسال والسجل' : 'Campaign',
+            label: locale === 'ar' ? 'الإرسال' : 'Campaign',
             icon: SendHorizontal,
             active: Boolean(isWorkspaceRoute && activeTab === 'campaign'),
         },
@@ -70,6 +61,19 @@ export default function AppShell({ locale, children }: { locale: string; childre
     ];
 
     const closeMobile = () => setMobileOpen(false);
+    const handleLogout = () => {
+        const confirmed = window.confirm(
+            locale === 'ar'
+                ? 'هل أنت متأكد أنك تريد تسجيل الخروج؟'
+                : 'Are you sure you want to log out?',
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        logout();
+    };
 
     return (
         <div className="app-shell min-h-screen">
@@ -119,22 +123,7 @@ export default function AppShell({ locale, children }: { locale: string; childre
                 </div>
 
                 <div className="sidebar-footer">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                            {locale === 'ar' ? 'حسابك الحالي' : 'Current Session'}
-                        </div>
-                        <div className="mt-3 flex items-center gap-3">
-                            <div className="uav">{initials}</div>
-                            {!collapsed && (
-                                <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold text-slate-900">{user?.fullName || 'SPHINX Admin'}</div>
-                                    <div className="truncate text-xs text-slate-500">{user?.email || 'superadmin@sphinx.com'}</div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <button type="button" className="btn-outline mt-3 w-full" onClick={logout}>
+                    <button type="button" className="btn-outline w-full" onClick={handleLogout}>
                         <LogOut size={16} />
                         <span>{locale === 'ar' ? 'تسجيل الخروج' : 'Log out'}</span>
                     </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent, MouseEvent, useEffect, useMemo, useState } from 'react';
+import { MouseEvent, useEffect, useMemo, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -8,7 +8,6 @@ import toast from 'react-hot-toast';
 import {
     ChevronDown,
     ChevronUp,
-    CheckCircle2,
     FileSpreadsheet,
     Filter,
     LayoutPanelTop,
@@ -20,14 +19,10 @@ import {
     Settings,
     Server,
     SquarePen,
-    Users,
 } from 'lucide-react';
 import api, { fetchCsrfToken } from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
-import {
-    getImportErrorMessage,
-    parseRecipientWorkbook,
-} from './upload-utils';
+import { getImportErrorMessage } from './upload-utils';
 
 type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
 type TemplateType = 'BOTH' | 'EMAIL' | 'WHATSAPP';
@@ -362,8 +357,6 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [pageSize, setPageSize] = useState<number>(20);
     const [filters, setFilters] = useState<RecipientFilters>(EMPTY_FILTERS);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
-    const [fileName, setFileName] = useState('');
-    const [previewCount, setPreviewCount] = useState<number | null>(null);
     const [templateForm, setTemplateForm] = useState({
         name: '',
         type: 'BOTH' as TemplateType,
@@ -527,6 +520,19 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         }
     }, [emailSettingsQuery.data]);
 
+    useEffect(() => {
+        if (!isRecipientFormOpen && !isTemplateComposerOpen) {
+            return;
+        }
+
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [isRecipientFormOpen, isTemplateComposerOpen]);
+
     const refreshAll = async () => {
         await Promise.all([
             queryClient.invalidateQueries({ queryKey: ['messaging-cycles'] }),
@@ -537,29 +543,6 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             queryClient.invalidateQueries({ queryKey: ['email-settings'] }),
         ]);
     };
-
-    const importMutation = useMutation({
-        mutationFn: async (payload: { sourceFileName: string; recipients: Array<Record<string, string>> }) => {
-            await fetchCsrfToken();
-            const response = await api.post('/messaging/recipients/import', {
-                source_file_name: payload.sourceFileName,
-                recipients: payload.recipients,
-            });
-            return response.data;
-        },
-        onSuccess(data) {
-            setPreviewCount(data.imported ?? 0);
-            if (data.cycle?.id) {
-                setSelectedCycleId(data.cycle.id);
-                setCycleSelectionReady(true);
-            }
-            toast.success(copy.uploadSuccess);
-            void refreshAll();
-        },
-        onError(error: any) {
-            toast.error(getImportErrorMessage(error, copy.uploadError));
-        },
-    });
 
     const saveRecipientMutation = useMutation({
         mutationFn: async ({ recipientId, values }: { recipientId: string | null; values: RecipientFormState }) => {
@@ -781,26 +764,6 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         setSelectedRecipientIds((current) => Array.from(new Set([...current, ...recipients.map((recipient) => recipient.id)])));
     };
 
-    const parseWorkbook = async (file: File) => parseRecipientWorkbook(file, locale);
-    const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        setFileName(file.name);
-        setPreviewCount(null);
-
-        try {
-            const parsedWorkbook = await parseWorkbook(file);
-            if (!parsedWorkbook.recipients.length) {
-                throw new Error(isArabic ? 'لم يتم العثور على مستلمين داخل الملف.' : 'No recipients were found in the file.');
-            }
-            importMutation.mutate(parsedWorkbook);
-        } catch (error: any) {
-            toast.error(getImportErrorMessage(error, copy.uploadError));
-        } finally {
-            event.target.value = '';
-        }
-    };
-
     const openCreateRecipientForm = () => {
         setEditingRecipientId(null);
         setRecipientForm(EMPTY_RECIPIENT_FORM);
@@ -987,316 +950,167 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         return null;
     }
 
-    const tabs: Array<{ id: WorkspaceTab; label: string; icon: typeof Users }> = [
-        { id: 'recipients', label: isArabic ? 'المستلمين' : 'Recipients', icon: Users },
-        { id: 'templates', label: copy.tabs.templates, icon: LayoutPanelTop },
-        { id: 'campaign', label: copy.tabs.campaign, icon: SendHorizontal },
-        ...(isSuperAdmin ? [{ id: 'settings' as WorkspaceTab, label: t('settingsTab'), icon: Settings }] : []),
-    ];
-
-    const cardClass = 'rounded-[2rem] border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-900/5';
-    const statClass = 'rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm';
+    const cardClass = 'rounded-[1.75rem] border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-900/5 md:p-5';
+    const statClass = 'rounded-[1.35rem] border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm';
 
     return (
-        <section className="space-y-6 py-6">
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_340px]">
-                <div className="rounded-[2rem] border border-slate-200/80 bg-white/95 p-6 shadow-xl shadow-slate-900/5">
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="space-y-3">
-                            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                                <CheckCircle2 size={14} />
-                                <span>{copy.readyCredentials}</span>
-                            </div>
-                            <div>
-                                <h1 className="text-3xl font-semibold text-slate-950">{copy.heroTitle}</h1>
-                                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{copy.heroSubtitle}</p>
-                            </div>
+        <section className="space-y-4 py-4 md:space-y-5 md:py-5">
+            <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/95 p-4 shadow-sm shadow-slate-900/5 md:p-5">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                        <h1 className="text-2xl font-semibold text-slate-950 md:text-[2rem]">{copy.heroTitle}</h1>
+                        <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500 md:text-sm">
+                            {copy.heroSubtitle}
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                        <div className={statClass}>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.visibleCount}</div>
+                            <div className="mt-2 text-2xl font-semibold text-slate-950">{totalRecipients}</div>
                         </div>
-
-                        <div className="flex flex-col items-start gap-3 lg:items-end">
-                            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                                <div className="font-semibold text-slate-900">{user?.fullName || 'SPHINX Admin'}</div>
-                                <div dir="ltr" className="text-xs text-slate-500">{user?.email || 'superadmin@sphinx.com'}</div>
-                            </div>
-                            <button
-                                className="btn-outline shrink-0"
-                                type="button"
-                                onClick={() => void refreshAll()}
-                                disabled={recipientsQuery.isFetching || templatesQuery.isFetching || logsQuery.isFetching}
-                            >
-                                <RefreshCcw size={16} />
-                                <span>{copy.refresh}</span>
-                            </button>
+                        <div className={statClass}>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.selectedCount}</div>
+                            <div className="mt-2 text-2xl font-semibold text-slate-950">{selectedRecipientIds.length}</div>
                         </div>
-                    </div>
-                </div>
-
-                <div className={`${cardClass} grid gap-3 sm:grid-cols-2 xl:grid-cols-2`}>
-                    <div className={statClass}>
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.visibleCount}</div>
-                        <div className="mt-3 text-3xl font-semibold text-slate-950">{totalRecipients}</div>
-                    </div>
-                    <div className={statClass}>
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.selectedCount}</div>
-                        <div className="mt-3 text-3xl font-semibold text-slate-950">{selectedRecipientIds.length}</div>
-                    </div>
-                    <div className={statClass}>
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.pendingCount}</div>
-                        <div className="mt-3 text-3xl font-semibold text-amber-700">{pageStats.pending}</div>
-                    </div>
-                    <div className={statClass}>
-                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.sentCount}</div>
-                        <div className="mt-3 text-3xl font-semibold text-emerald-700">{pageStats.sent}</div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-                {tabs.map((tab) => {
-                    const Icon = tab.icon;
-                    const active = activeTab === tab.id;
-                    return (
+                        <div className={statClass}>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.pendingCount}</div>
+                            <div className="mt-2 text-2xl font-semibold text-amber-700">{pageStats.pending}</div>
+                        </div>
+                        <div className={statClass}>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.sentCount}</div>
+                            <div className="mt-2 text-2xl font-semibold text-emerald-700">{pageStats.sent}</div>
+                        </div>
                         <button
-                            key={tab.id}
+                            className="btn-outline shrink-0"
                             type="button"
-                            onClick={() => updateTab(tab.id)}
-                            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                                active
-                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 shadow-sm'
-                                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
-                            }`}
+                            onClick={() => void refreshAll()}
+                            disabled={recipientsQuery.isFetching || templatesQuery.isFetching || logsQuery.isFetching}
                         >
-                            <Icon size={16} />
-                            <span>{tab.label}</span>
+                            <RefreshCcw size={16} />
+                            <span>{copy.refresh}</span>
                         </button>
-                    );
-                })}
+                    </div>
+                </div>
             </div>
 
             {activeTab === 'recipients' && (
                 <div className="space-y-6">
                     <div className={cardClass}>
-                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                                <div>
-                                    <h2 className="text-xl font-semibold text-slate-950">{copy.recipientsSectionTitle}</h2>
-                                    <p className="mt-2 text-sm leading-6 text-slate-500">{copy.recipientsSectionHint}</p>
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                                <h2 className="text-lg font-semibold text-slate-950 md:text-xl">{copy.recipientsSectionTitle}</h2>
+                                <p className="mt-1 text-xs leading-5 text-slate-500 md:text-sm">{copy.recipientsSectionHint}</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600 md:px-4 md:py-2 md:text-sm">
+                                    {selectedRecipientIds.length} {copy.selectedRowsSummary}
                                 </div>
-                                <div className="flex flex-wrap items-center gap-3">
-                                    <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600">
-                                        {selectedRecipientIds.length} {copy.selectedRowsSummary}
+                                <button
+                                    type="button"
+                                    className="btn-outline"
+                                    onClick={() => router.push(`/${locale}/messaging/upload`)}
+                                >
+                                    <FileSpreadsheet size={16} />
+                                    <span>{isArabic ? 'صفحة الرفع' : 'Upload page'}</span>
+                                </button>
+                                <button type="button" className="btn-primary" onClick={openCreateRecipientForm}>
+                                    {copy.addRecipient}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(360px,0.95fr)]">
+                            <div className="rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(180deg,#faf7f1_0%,#f6f2ea_100%)] p-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                    {isArabic ? 'الدورة النشطة' : 'Active cycle'}
+                                </div>
+                                <select
+                                    value={selectedCycleId}
+                                    onChange={(event) => {
+                                        setPage(1);
+                                        setSelectedRecipientIds([]);
+                                        setSelectedCycleId(event.target.value);
+                                    }}
+                                    className="input mt-3 w-full"
+                                >
+                                    <option value={ALL_CYCLES_VALUE}>{isArabic ? 'كل الدورات' : 'All cycles'}</option>
+                                    {cycles.map((cycle) => (
+                                        <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
+                                    ))}
+                                </select>
+                                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                                    <div className="rounded-[1.15rem] border border-white/70 bg-white/80 px-3 py-2 text-xs text-slate-600">
+                                        <div className="font-semibold text-slate-900">{isArabic ? 'المستلمين' : 'Recipients'}</div>
+                                        <div className="mt-1">{currentCycle ? currentCycle.recipients_count : totalRecipients}</div>
                                     </div>
-                                    <button
-                                        type="button"
-                                        className="btn-outline"
-                                        onClick={() => router.push(`/${locale}/messaging/upload`)}
-                                    >
-                                        <FileSpreadsheet size={16} />
-                                        <span>{isArabic ? 'صفحة الرفع' : 'Upload page'}</span>
-                                    </button>
-                                    <button type="button" className="btn-primary" onClick={openCreateRecipientForm}>
-                                        {copy.addRecipient}
-                                    </button>
+                                    <div className="rounded-[1.15rem] border border-white/70 bg-white/80 px-3 py-2 text-xs text-slate-600 sm:col-span-2">
+                                        <div className="font-semibold text-slate-900">{isArabic ? 'تم الاستيراد' : 'Imported'}</div>
+                                        <div className="mt-1 truncate">{currentCycle ? new Date(currentCycle.created_at).toLocaleString() : (isArabic ? 'كل الدورات' : 'All cycles')}</div>
+                                    </div>
+                                    <div className="rounded-[1.15rem] border border-white/70 bg-white/80 px-3 py-2 text-xs text-slate-600 sm:col-span-3">
+                                        <div className="font-semibold text-slate-900">{isArabic ? 'الملف' : 'File'}</div>
+                                        <div className="mt-1 truncate">{currentCycle?.source_file_name || (isArabic ? 'عرض كل الملفات المستوردة' : 'Showing all imported files')}</div>
+                                    </div>
                                 </div>
                             </div>
 
-                            <input
-                                type="file"
-                                accept=".xlsx,.xls"
-                                className="hidden"
-                                aria-hidden="true"
-                                tabIndex={-1}
-                                onChange={handleFileChange}
-                                disabled={importMutation.isPending}
-                            />
-
-                            {(fileName || previewCount !== null) && (
-                                <div className="mt-5 rounded-[1.25rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                                    {previewCount !== null
-                                        ? `${copy.importedCount} ${previewCount}`
-                                        : fileName}
+                            <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                    {isArabic ? 'فلاتر المستلمين' : 'Recipient filters'}
                                 </div>
-                            )}
+                                <div className="mt-3 grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                                    <label className="relative block sm:col-span-2 2xl:col-span-3">
+                                        <Search className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                        <input
+                                            value={filters.search}
+                                            onChange={(event) => updateFilter('search', event.target.value)}
+                                            className="input w-full !ps-11"
+                                            placeholder={copy.searchPlaceholder}
+                                        />
+                                    </label>
 
-                            {isRecipientFormOpen && (
-                                <div className="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-                                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                                        <div>
-                                            <h3 className="text-lg font-semibold text-slate-950">
-                                                {editingRecipientId ? copy.editRecipientTitle : copy.createRecipientTitle}
-                                            </h3>
-                                            <p className="mt-2 text-sm leading-6 text-slate-500">{copy.recipientFormHint}</p>
-                                        </div>
-                                        <button type="button" className="btn-outline" onClick={closeRecipientForm}>
-                                            {copy.cancelEdit}
-                                        </button>
-                                    </div>
+                                    {textRecipientFilterFields.map((field) => (
+                                        <input
+                                            key={field.key}
+                                            value={filters[field.key]}
+                                            onChange={(event) => updateFilter(field.key, event.target.value)}
+                                            className="input w-full"
+                                            placeholder={field.label}
+                                        />
+                                    ))}
 
-                                    <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                        <input
-                                            value={recipientForm.name}
-                                            onChange={(event) => updateRecipientForm('name', event.target.value)}
-                                            className="input w-full"
-                                            placeholder={copy.name}
-                                        />
-                                        <input
-                                            value={recipientForm.email}
-                                            onChange={(event) => updateRecipientForm('email', event.target.value)}
-                                            className="input w-full"
-                                            placeholder={copy.emailLabel}
-                                        />
-                                        <input
-                                            value={recipientForm.phone}
-                                            onChange={(event) => updateRecipientForm('phone', event.target.value)}
-                                            className="input w-full"
-                                            placeholder="Phone"
-                                        />
-                                        <input
-                                            value={recipientForm.role}
-                                            onChange={(event) => updateRecipientForm('role', event.target.value)}
-                                            className="input w-full"
-                                            placeholder={copy.role}
-                                        />
-                                        <input
-                                            value={recipientForm.room_est1}
-                                            onChange={(event) => updateRecipientForm('room_est1', event.target.value)}
-                                            className="input w-full"
-                                            placeholder={copy.roomEst1}
-                                        />
-                                        <input
-                                            value={recipientForm.type}
-                                            onChange={(event) => updateRecipientForm('type', event.target.value)}
-                                            className="input w-full"
-                                            placeholder={copy.typeLabel}
-                                        />
-                                        <input
-                                            value={recipientForm.governorate}
-                                            onChange={(event) => updateRecipientForm('governorate', event.target.value)}
-                                            className="input w-full"
-                                            placeholder={copy.governorate}
-                                        />
-                                        <input
-                                            value={recipientForm.building}
-                                            onChange={(event) => updateRecipientForm('building', event.target.value)}
-                                            className="input w-full"
-                                            placeholder={copy.building}
-                                        />
-                                        <input
-                                            value={recipientForm.location}
-                                            onChange={(event) => updateRecipientForm('location', event.target.value)}
-                                            className="input w-full"
-                                            placeholder={copy.location}
-                                        />
-                                        <textarea
-                                            value={recipientForm.address}
-                                            onChange={(event) => updateRecipientForm('address', event.target.value)}
-                                            className="input min-h-28 w-full md:col-span-2 xl:col-span-3"
-                                            placeholder={copy.address}
-                                        />
-                                    </div>
-
-                                    <div className="mt-5 flex flex-wrap gap-3">
-                                        <button
-                                            type="button"
-                                            className="btn-primary"
-                                            onClick={saveRecipient}
-                                            disabled={saveRecipientMutation.isPending}
-                                        >
-                                            {copy.saveRecipient}
-                                        </button>
-                                        <button type="button" className="btn-outline" onClick={closeRecipientForm}>
-                                            {copy.cancelEdit}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-                                <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-                                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                        {isArabic ? 'الدورة النشطة' : 'Active cycle'}
-                                    </div>
-                                    <select
-                                        value={selectedCycleId}
-                                        onChange={(event) => {
-                                            setPage(1);
-                                            setSelectedRecipientIds([]);
-                                            setSelectedCycleId(event.target.value);
-                                        }}
-                                        className="input mt-3 w-full"
-                                    >
-                                        <option value={ALL_CYCLES_VALUE}>{isArabic ? 'كل الدورات' : 'All cycles'}</option>
-                                        {cycles.map((cycle) => (
-                                            <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
+                                    <select value={filters.role} onChange={(event) => updateFilter('role', event.target.value)} className="input w-full">
+                                        <option value="">{copy.role}</option>
+                                        {filterOptions.roles.map((role) => (
+                                            <option key={role} value={role}>{role}</option>
                                         ))}
                                     </select>
-                                    <div className="mt-3 text-xs leading-6 text-slate-500">
-                                        {currentCycle ? (
-                                            <>
-                                                <div>{isArabic ? 'المستلمين:' : 'Recipients:'} <strong>{currentCycle.recipients_count}</strong></div>
-                                                <div>{isArabic ? 'تم الاستيراد:' : 'Imported:'} <strong>{new Date(currentCycle.created_at).toLocaleString()}</strong></div>
-                                                <div>{isArabic ? 'الملف:' : 'File:'} <strong>{currentCycle.source_file_name || '-'}</strong></div>
-                                            </>
-                                        ) : (
-                                            <div>{isArabic ? 'عرض كل البيانات المتاحة من جميع الدورات.' : 'Showing recipients from every saved cycle.'}</div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
-                                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                        {isArabic ? 'فلاتر المستلمين' : 'Recipient filters'}
-                                    </div>
-                                    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                                <label className="relative block xl:col-span-2">
-                                    <Search className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                                    <input
-                                        value={filters.search}
-                                        onChange={(event) => updateFilter('search', event.target.value)}
-                                        className="input w-full !ps-11"
-                                        placeholder={copy.searchPlaceholder}
-                                    />
-                                </label>
-
-                                {textRecipientFilterFields.map((field) => (
-                                    <input
-                                        key={field.key}
-                                        value={filters[field.key]}
-                                        onChange={(event) => updateFilter(field.key, event.target.value)}
-                                        className="input w-full"
-                                        placeholder={field.label}
-                                    />
-                                ))}
-                                <select value={filters.role} onChange={(event) => updateFilter('role', event.target.value)} className="input w-full">
-                                    <option value="">{copy.role}</option>
-                                    {filterOptions.roles.map((role) => (
-                                        <option key={role} value={role}>{role}</option>
-                                    ))}
-                                </select>
-                                <select value={filters.type} onChange={(event) => updateFilter('type', event.target.value)} className="input w-full">
-                                    <option value="">{copy.typeLabel}</option>
-                                    {filterOptions.types.map((type) => (
-                                        <option key={type} value={type}>{type}</option>
-                                    ))}
-                                </select>
-                                <select value={filters.governorate} onChange={(event) => updateFilter('governorate', event.target.value)} className="input w-full">
-                                    <option value="">{copy.governorate}</option>
-                                    {filterOptions.governorates.map((governorate) => (
-                                        <option key={governorate} value={governorate}>{governorate}</option>
-                                    ))}
-                                </select>
-                                <select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)} className="input w-full">
-                                    <option value="">{copy.status}</option>
-                                    {Object.entries(copy.statusLabels).map(([value, label]) => (
-                                        <option key={value} value={value}>{label}</option>
-                                    ))}
-                                </select>
-                                <button type="button" className="btn-outline xl:col-span-2" onClick={clearFilters}>
-                                    <Filter size={16} />
-                                    <span>{copy.clearFilters}</span>
-                                </button>
-                                    </div>
+                                    <select value={filters.type} onChange={(event) => updateFilter('type', event.target.value)} className="input w-full">
+                                        <option value="">{copy.typeLabel}</option>
+                                        {filterOptions.types.map((type) => (
+                                            <option key={type} value={type}>{type}</option>
+                                        ))}
+                                    </select>
+                                    <select value={filters.governorate} onChange={(event) => updateFilter('governorate', event.target.value)} className="input w-full">
+                                        <option value="">{copy.governorate}</option>
+                                        {filterOptions.governorates.map((governorate) => (
+                                            <option key={governorate} value={governorate}>{governorate}</option>
+                                        ))}
+                                    </select>
+                                    <select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)} className="input w-full sm:col-span-2 2xl:col-span-1">
+                                        <option value="">{copy.status}</option>
+                                        {Object.entries(copy.statusLabels).map(([value, label]) => (
+                                            <option key={value} value={value}>{label}</option>
+                                        ))}
+                                    </select>
+                                    <button type="button" className="btn-outline sm:col-span-2 2xl:col-span-2" onClick={clearFilters}>
+                                        <Filter size={16} />
+                                        <span>{copy.clearFilters}</span>
+                                    </button>
                                 </div>
                             </div>
+                        </div>
 
                             <div className="mt-5 flex flex-col gap-4 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1490,6 +1304,107 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             </div>
                     </div>
 
+                    {isRecipientFormOpen && (
+                        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 md:p-6">
+                            <button
+                                type="button"
+                                className="overlay-backdrop absolute inset-0"
+                                aria-label={copy.cancelEdit}
+                                onClick={closeRecipientForm}
+                            />
+                            <div className="modal-shell relative z-10 max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[2rem] p-5 md:p-6">
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-slate-950">
+                                            {editingRecipientId ? copy.editRecipientTitle : copy.createRecipientTitle}
+                                        </h3>
+                                        <p className="mt-2 text-sm leading-6 text-slate-500">{copy.recipientFormHint}</p>
+                                    </div>
+                                    <button type="button" className="btn-outline" onClick={closeRecipientForm}>
+                                        {copy.cancelEdit}
+                                    </button>
+                                </div>
+
+                                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                    <input
+                                        value={recipientForm.name}
+                                        onChange={(event) => updateRecipientForm('name', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.name}
+                                    />
+                                    <input
+                                        value={recipientForm.email}
+                                        onChange={(event) => updateRecipientForm('email', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.emailLabel}
+                                    />
+                                    <input
+                                        value={recipientForm.phone}
+                                        onChange={(event) => updateRecipientForm('phone', event.target.value)}
+                                        className="input w-full"
+                                        placeholder="Phone"
+                                    />
+                                    <input
+                                        value={recipientForm.role}
+                                        onChange={(event) => updateRecipientForm('role', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.role}
+                                    />
+                                    <input
+                                        value={recipientForm.room_est1}
+                                        onChange={(event) => updateRecipientForm('room_est1', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.roomEst1}
+                                    />
+                                    <input
+                                        value={recipientForm.type}
+                                        onChange={(event) => updateRecipientForm('type', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.typeLabel}
+                                    />
+                                    <input
+                                        value={recipientForm.governorate}
+                                        onChange={(event) => updateRecipientForm('governorate', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.governorate}
+                                    />
+                                    <input
+                                        value={recipientForm.building}
+                                        onChange={(event) => updateRecipientForm('building', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.building}
+                                    />
+                                    <input
+                                        value={recipientForm.location}
+                                        onChange={(event) => updateRecipientForm('location', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.location}
+                                    />
+                                    <textarea
+                                        value={recipientForm.address}
+                                        onChange={(event) => updateRecipientForm('address', event.target.value)}
+                                        className="textarea w-full md:col-span-2 xl:col-span-3"
+                                        placeholder={copy.address}
+                                    />
+                                </div>
+
+                                <div className="mt-5 flex flex-wrap gap-3">
+                                    <button
+                                        type="button"
+                                        className="btn-primary"
+                                        onClick={saveRecipient}
+                                        disabled={saveRecipientMutation.isPending}
+                                    >
+                                        {copy.saveRecipient}
+                                    </button>
+                                    <button type="button" className="btn-outline" onClick={closeRecipientForm}>
+                                        {copy.cancelEdit}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {selectedRecipientIds.length > 0 && (
                         <div className="sticky bottom-4 z-20">
                             <div className="flex flex-col gap-3 rounded-[1.5rem] border border-emerald-200 bg-white/95 px-5 py-4 shadow-xl shadow-slate-900/10 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
@@ -1528,16 +1443,18 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 <button type="button" className="btn-primary" onClick={openTemplateComposer}>
                                     {isArabic ? 'إضافة قالب' : 'Add template'}
                                 </button>
-                                {isTemplateComposerOpen && (
-                                    <button type="button" className="btn-outline" onClick={closeTemplateComposer}>
-                                        {copy.cancelEdit}
-                                    </button>
-                                )}
                             </div>
                         </div>
 
                         {isTemplateComposerOpen && (
-                            <div className="mt-6 rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5 md:p-6">
+                            <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 md:p-6">
+                                <button
+                                    type="button"
+                                    className="overlay-backdrop absolute inset-0"
+                                    aria-label={copy.cancelEdit}
+                                    onClick={closeTemplateComposer}
+                                />
+                                <div className="modal-shell relative z-10 max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-[2rem] p-5 md:p-6">
                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                     <div>
                                         <h3 className="text-lg font-semibold text-slate-950">
@@ -1600,6 +1517,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     <button type="button" className="btn-outline" onClick={closeTemplateComposer}>
                                         {copy.cancelEdit}
                                     </button>
+                                </div>
                                 </div>
                             </div>
                         )}
