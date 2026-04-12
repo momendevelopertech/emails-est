@@ -1436,6 +1436,18 @@ select,
     background-size: 1rem;
 }
 
+select option,
+select optgroup {
+    background-color: var(--surface);
+    color: var(--ink);
+}
+
+:root[data-theme='dark'] select option,
+:root[data-theme='dark'] select optgroup {
+    background-color: #0f172a;
+    color: #e2e8f0;
+}
+
 html[dir='rtl'] select,
 html[dir='rtl'] .input[type='date'],
 html[dir='rtl'] .input[type='time'] {
