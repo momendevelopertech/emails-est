@@ -17,6 +17,9 @@ export default function AppShell({ locale, children }: { locale: string; childre
     const [mobileOpen, setMobileOpen] = useState(false);
     const activeTab = searchParams.get('tab') || 'recipients';
     const isMessagingRoute = pathname?.includes('/messaging');
+    const isUploadRoute = pathname?.includes('/messaging/upload');
+    const isTemplatesRoute = pathname?.includes('/messaging/templates');
+    const isWorkspaceRoute = isMessagingRoute && !isUploadRoute && !isTemplatesRoute;
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
     const initials = useMemo(() => {
         const value = user?.fullName?.trim();
@@ -30,32 +33,39 @@ export default function AppShell({ locale, children }: { locale: string; childre
 
     const navItems = [
         {
+            id: 'upload',
+            href: `/${locale}/messaging/upload`,
+            label: locale === 'ar' ? 'رفع Excel' : 'Upload Excel',
+            icon: FileSpreadsheet,
+            active: Boolean(isUploadRoute),
+        },
+        {
             id: 'recipients',
             href: `/${locale}/messaging?tab=recipients`,
-            label: locale === 'ar' ? 'المستلمين والرفع' : 'Recipients',
+            label: locale === 'ar' ? 'المستلمين' : 'Recipients',
             icon: FileSpreadsheet,
-            active: isMessagingRoute && activeTab === 'recipients',
+            active: Boolean(isWorkspaceRoute && activeTab === 'recipients'),
         },
         {
             id: 'templates',
             href: `/${locale}/messaging?tab=templates`,
             label: locale === 'ar' ? 'القوالب' : 'Templates',
             icon: LayoutPanelTop,
-            active: isMessagingRoute && activeTab === 'templates',
+            active: Boolean(isTemplatesRoute || (isWorkspaceRoute && activeTab === 'templates')),
         },
         {
             id: 'campaign',
             href: `/${locale}/messaging?tab=campaign`,
             label: locale === 'ar' ? 'الإرسال والسجل' : 'Campaign',
             icon: SendHorizontal,
-            active: isMessagingRoute && activeTab === 'campaign',
+            active: Boolean(isWorkspaceRoute && activeTab === 'campaign'),
         },
         ...(isSuperAdmin ? [{
             id: 'settings',
             href: `/${locale}/messaging?tab=settings`,
             label: locale === 'ar' ? 'الإعدادات' : 'Settings',
             icon: Settings,
-            active: isMessagingRoute && activeTab === 'settings',
+            active: Boolean(isWorkspaceRoute && activeTab === 'settings'),
         }] : []),
     ];
 

@@ -25,7 +25,6 @@ import {
 import api, { fetchCsrfToken } from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import {
-    downloadWorkbook as downloadRecipientWorkbook,
     getImportErrorMessage,
     parseRecipientWorkbook,
 } from './upload-utils';
@@ -373,6 +372,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     });
     const [templateSearch, setTemplateSearch] = useState('');
     const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+    const [isTemplateComposerOpen, setIsTemplateComposerOpen] = useState(false);
     const [campaignTemplateId, setCampaignTemplateId] = useState('');
     const [sendScope, setSendScope] = useState<SendScope>('selected');
     const [logsExpanded, setLogsExpanded] = useState(false);
@@ -619,6 +619,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             toast.success(copy.templateSaved);
             setTemplateForm({ name: '', type: 'BOTH', subject: '', body: '' });
             setEditingTemplateId(null);
+            setIsTemplateComposerOpen(false);
             setCampaignTemplateId(savedTemplate?.id || campaignTemplateId);
             void queryClient.invalidateQueries({ queryKey: ['messaging-templates'] });
         },
@@ -635,6 +636,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         onSuccess() {
             toast.success(copy.templateDeleted);
             setEditingTemplateId(null);
+            setIsTemplateComposerOpen(false);
+            setTemplateForm({ name: '', type: 'BOTH', subject: '', body: '' });
             void queryClient.invalidateQueries({ queryKey: ['messaging-templates'] });
         },
     });
@@ -778,10 +781,6 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         setSelectedRecipientIds((current) => Array.from(new Set([...current, ...recipients.map((recipient) => recipient.id)])));
     };
 
-    const downloadWorkbook = (kind: 'template' | 'sample') => {
-        downloadRecipientWorkbook(kind);
-    };
-
     const parseWorkbook = async (file: File) => parseRecipientWorkbook(file, locale);
     const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -863,7 +862,20 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             subject: template.subject,
             body: template.body,
         });
+        setIsTemplateComposerOpen(true);
         updateTab('templates');
+    };
+
+    const openTemplateComposer = () => {
+        setEditingTemplateId(null);
+        setTemplateForm({ name: '', type: 'BOTH', subject: '', body: '' });
+        setIsTemplateComposerOpen(true);
+    };
+
+    const closeTemplateComposer = () => {
+        setEditingTemplateId(null);
+        setTemplateForm({ name: '', type: 'BOTH', subject: '', body: '' });
+        setIsTemplateComposerOpen(false);
     };
 
     const saveTemplate = () => {
@@ -976,7 +988,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     }
 
     const tabs: Array<{ id: WorkspaceTab; label: string; icon: typeof Users }> = [
-        { id: 'recipients', label: copy.tabs.recipients, icon: Users },
+        { id: 'recipients', label: isArabic ? 'المستلمين' : 'Recipients', icon: Users },
         { id: 'templates', label: copy.tabs.templates, icon: LayoutPanelTop },
         { id: 'campaign', label: copy.tabs.campaign, icon: SendHorizontal },
         ...(isSuperAdmin ? [{ id: 'settings' as WorkspaceTab, label: t('settingsTab'), icon: Settings }] : []),
@@ -1063,49 +1075,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
             {activeTab === 'recipients' && (
                 <div className="space-y-6">
-                    <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-                        <div className={cardClass}>
-                            <div className="flex items-start gap-3">
-                                <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
-                                    <FileSpreadsheet size={22} />
-                                </div>
-                                <div>
-                                    <h2 className="text-xl font-semibold text-slate-950">{copy.uploadCardTitle}</h2>
-                                    <p className="mt-2 text-sm leading-6 text-slate-500">{copy.uploadCardHint}</p>
-                                </div>
-                            </div>
-
-                            <div className="mt-5 rounded-[1.5rem] border border-dashed border-slate-300 bg-slate-50 p-4">
-                                <label className="block text-sm font-medium text-slate-700">{copy.selectFile}</label>
-                                <div className="mt-3">
-                                    <input
-                                        type="file"
-                                        accept=".xlsx,.xls"
-                                        className="file-input"
-                                        onChange={handleFileChange}
-                                        disabled={importMutation.isPending}
-                                    />
-                                </div>
-                                <div className="mt-3 text-xs text-slate-500">{fileName || 'No file selected yet.'}</div>
-                            </div>
-
-                            <div className="mt-4 flex flex-wrap gap-3">
-                                <button type="button" className="btn-outline" onClick={() => downloadWorkbook('template')}>
-                                    {copy.uploadTemplate}
-                                </button>
-                                <button type="button" className="btn-secondary" onClick={() => downloadWorkbook('sample')}>
-                                    {copy.uploadSample}
-                                </button>
-                            </div>
-
-                            {previewCount !== null && (
-                                <div className="mt-5 rounded-[1.5rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                                    {copy.importedCount} <strong>{previewCount}</strong>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className={cardClass}>
+                    <div className={cardClass}>
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                 <div>
                                     <h2 className="text-xl font-semibold text-slate-950">{copy.recipientsSectionTitle}</h2>
@@ -1115,11 +1085,37 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     <div className="rounded-full bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600">
                                         {selectedRecipientIds.length} {copy.selectedRowsSummary}
                                     </div>
+                                    <button
+                                        type="button"
+                                        className="btn-outline"
+                                        onClick={() => router.push(`/${locale}/messaging/upload`)}
+                                    >
+                                        <FileSpreadsheet size={16} />
+                                        <span>{isArabic ? 'صفحة الرفع' : 'Upload page'}</span>
+                                    </button>
                                     <button type="button" className="btn-primary" onClick={openCreateRecipientForm}>
                                         {copy.addRecipient}
                                     </button>
                                 </div>
                             </div>
+
+                            <input
+                                type="file"
+                                accept=".xlsx,.xls"
+                                className="hidden"
+                                aria-hidden="true"
+                                tabIndex={-1}
+                                onChange={handleFileChange}
+                                disabled={importMutation.isPending}
+                            />
+
+                            {(fileName || previewCount !== null) && (
+                                <div className="mt-5 rounded-[1.25rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                                    {previewCount !== null
+                                        ? `${copy.importedCount} ${previewCount}`
+                                        : fileName}
+                                </div>
+                            )}
 
                             {isRecipientFormOpen && (
                                 <div className="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
@@ -1492,7 +1488,6 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     </button>
                                 </div>
                             </div>
-                        </div>
                     </div>
 
                     {selectedRecipientIds.length > 0 && (
@@ -1518,75 +1513,96 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             {activeTab === 'templates' && (
                 <div className="space-y-6">
                     <div className={cardClass}>
-                        <div className="flex items-start gap-3">
-                            <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
-                                <SquarePen size={22} />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-semibold text-slate-950">{copy.tabs.templates}</h2>
-                                <p className="mt-2 text-sm leading-6 text-slate-500">{copy.templatesHint}</p>
-                            </div>
-                        </div>
-
-                        <div className="mt-5 space-y-4">
-                            <input
-                                value={templateForm.name}
-                                onChange={(event) => setTemplateForm((current) => ({ ...current, name: event.target.value }))}
-                                className="input w-full"
-                                placeholder={copy.templateName}
-                            />
-                            <select
-                                value={templateForm.type}
-                                onChange={(event) => setTemplateForm((current) => ({ ...current, type: event.target.value as TemplateType }))}
-                                className="input w-full"
-                            >
-                                {Object.entries(copy.templateTypeLabels).map(([value, label]) => (
-                                    <option key={value} value={value}>{label}</option>
-                                ))}
-                            </select>
-                            <input
-                                value={templateForm.subject}
-                                onChange={(event) => setTemplateForm((current) => ({ ...current, subject: event.target.value }))}
-                                className="input w-full"
-                                placeholder={copy.templateSubject}
-                            />
-                            <textarea
-                                rows={10}
-                                value={templateForm.body}
-                                onChange={(event) => setTemplateForm((current) => ({ ...current, body: event.target.value }))}
-                                className="textarea w-full"
-                                placeholder={copy.templateBody}
-                            />
-
-                            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
-                                <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.preview}</div>
-                                <div className="space-y-3">
-                                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${CHANNEL_STYLES[templateForm.type]}`}>
-                                        {copy.templateTypeLabels[templateForm.type]}
-                                    </span>
-                                    <div className="text-base font-semibold text-slate-900">{templateForm.subject || copy.templateSubject}</div>
-                                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">{templateForm.body || copy.templateBody}</p>
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="flex items-start gap-3">
+                                <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
+                                    <SquarePen size={22} />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-semibold text-slate-950">{copy.tabs.templates}</h2>
+                                    <p className="mt-2 text-sm leading-6 text-slate-500">{copy.templatesHint}</p>
                                 </div>
                             </div>
 
                             <div className="flex flex-wrap gap-3">
-                                <button type="button" className="btn-primary" onClick={saveTemplate} disabled={saveTemplateMutation.isPending}>
-                                    {editingTemplateId ? copy.updateTemplate : copy.createTemplate}
+                                <button type="button" className="btn-primary" onClick={openTemplateComposer}>
+                                    {isArabic ? 'إضافة قالب' : 'Add template'}
                                 </button>
-                                {editingTemplateId && (
-                                    <button
-                                        type="button"
-                                        className="btn-outline"
-                                        onClick={() => {
-                                            setEditingTemplateId(null);
-                                            setTemplateForm({ name: '', type: 'BOTH', subject: '', body: '' });
-                                        }}
-                                    >
+                                {isTemplateComposerOpen && (
+                                    <button type="button" className="btn-outline" onClick={closeTemplateComposer}>
                                         {copy.cancelEdit}
                                     </button>
                                 )}
                             </div>
                         </div>
+
+                        {isTemplateComposerOpen && (
+                            <div className="mt-6 rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5 md:p-6">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-slate-950">
+                                            {editingTemplateId ? copy.updateTemplate : (isArabic ? 'إضافة قالب جديد' : 'Create a new template')}
+                                        </h3>
+                                        <p className="mt-2 text-sm leading-6 text-slate-500">
+                                            {isArabic ? 'اكتب القالب هنا ثم احفظه لاستخدامه مباشرة في الحملات.' : 'Build the template here, then save it to use it directly in campaigns.'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+                                    <div className="space-y-4">
+                                        <input
+                                            value={templateForm.name}
+                                            onChange={(event) => setTemplateForm((current) => ({ ...current, name: event.target.value }))}
+                                            className="input w-full"
+                                            placeholder={copy.templateName}
+                                        />
+                                        <select
+                                            value={templateForm.type}
+                                            onChange={(event) => setTemplateForm((current) => ({ ...current, type: event.target.value as TemplateType }))}
+                                            className="input w-full"
+                                        >
+                                            {Object.entries(copy.templateTypeLabels).map(([value, label]) => (
+                                                <option key={value} value={value}>{label}</option>
+                                            ))}
+                                        </select>
+                                        <input
+                                            value={templateForm.subject}
+                                            onChange={(event) => setTemplateForm((current) => ({ ...current, subject: event.target.value }))}
+                                            className="input w-full"
+                                            placeholder={copy.templateSubject}
+                                        />
+                                        <textarea
+                                            rows={10}
+                                            value={templateForm.body}
+                                            onChange={(event) => setTemplateForm((current) => ({ ...current, body: event.target.value }))}
+                                            className="textarea w-full"
+                                            placeholder={copy.templateBody}
+                                        />
+                                    </div>
+
+                                    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4 md:p-5">
+                                        <div className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.preview}</div>
+                                        <div className="space-y-3">
+                                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${CHANNEL_STYLES[templateForm.type]}`}>
+                                                {copy.templateTypeLabels[templateForm.type]}
+                                            </span>
+                                            <div className="text-base font-semibold text-slate-900">{templateForm.subject || copy.templateSubject}</div>
+                                            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">{templateForm.body || copy.templateBody}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 flex flex-wrap gap-3">
+                                    <button type="button" className="btn-primary" onClick={saveTemplate} disabled={saveTemplateMutation.isPending}>
+                                        {editingTemplateId ? copy.updateTemplate : copy.createTemplate}
+                                    </button>
+                                    <button type="button" className="btn-outline" onClick={closeTemplateComposer}>
+                                        {copy.cancelEdit}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className={cardClass}>
@@ -1662,7 +1678,14 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 </div>
                             )) : (
                                 <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-                                    {templateSearch.trim() ? copy.noTemplateMatches : copy.noTemplates}
+                                    <div>{templateSearch.trim() ? copy.noTemplateMatches : copy.noTemplates}</div>
+                                    {!templateSearch.trim() && (
+                                        <div className="mt-4">
+                                            <button type="button" className="btn-outline" onClick={openTemplateComposer}>
+                                                {isArabic ? 'ابدأ بإضافة قالب' : 'Create your first template'}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
