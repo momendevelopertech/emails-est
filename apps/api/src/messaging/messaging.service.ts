@@ -130,6 +130,49 @@ export class MessagingService {
         });
     }
 
+    async deleteCycle(cycleId: string) {
+        const cycle = await this.prisma.recipientCycle.findUnique({
+            where: { id: cycleId },
+            select: { id: true },
+        });
+
+        if (!cycle) {
+            throw new BadRequestException('Cycle not found.');
+        }
+
+        return this.prisma.$transaction(async (tx) => {
+            const cycleRecipients = await tx.recipient.findMany({
+                where: { cycleId },
+                select: { id: true },
+            });
+
+            const recipientIds = cycleRecipients.map((recipient) => recipient.id);
+
+            if (recipientIds.length) {
+                await tx.log.deleteMany({
+                    where: {
+                        recipientId: { in: recipientIds },
+                    },
+                });
+
+                await tx.recipient.deleteMany({
+                    where: {
+                        id: { in: recipientIds },
+                    },
+                });
+            }
+
+            await tx.recipientCycle.delete({
+                where: { id: cycleId },
+            });
+
+            return {
+                success: true,
+                deletedRecipients: recipientIds.length,
+            };
+        });
+    }
+
     async getRecipientFilterOptions(cycleId?: string) {
         const scopedWhere = cycleId ? { cycleId } : {};
 

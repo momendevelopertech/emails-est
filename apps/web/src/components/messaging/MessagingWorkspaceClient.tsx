@@ -34,13 +34,21 @@ type Recipient = {
     name: string;
     email?: string | null;
     phone?: string | null;
+    exam_type?: string | null;
     role?: string | null;
+    day?: string | null;
+    date?: string | null;
+    test_center?: string | null;
+    faculty?: string | null;
+    room?: string | null;
     room_est1?: string | null;
     type?: string | null;
     governorate?: string | null;
     address?: string | null;
     building?: string | null;
     location?: string | null;
+    map_link?: string | null;
+    arrival_time?: string | null;
     sheet?: 'LEGACY' | 'EST1' | 'EST2';
     status: 'PENDING' | 'PROCESSING' | 'SENT' | 'FAILED';
     error_message?: string | null;
@@ -57,13 +65,22 @@ type RecipientFormState = {
     name: string;
     email: string;
     phone: string;
+    exam_type: string;
     role: string;
+    day: string;
+    date: string;
+    test_center: string;
+    faculty: string;
+    room: string;
     room_est1: string;
     type: string;
     governorate: string;
     address: string;
     building: string;
     location: string;
+    map_link: string;
+    arrival_time: string;
+    sheet: 'LEGACY' | 'EST1' | 'EST2';
 };
 
 type RecipientFilters = {
@@ -144,13 +161,22 @@ const EMPTY_RECIPIENT_FORM: RecipientFormState = {
     name: '',
     email: '',
     phone: '',
+    exam_type: '',
     role: '',
+    day: '',
+    date: '',
+    test_center: '',
+    faculty: '',
+    room: '',
     room_est1: '',
     type: '',
     governorate: '',
     address: '',
     building: '',
     location: '',
+    map_link: '',
+    arrival_time: '',
+    sheet: 'LEGACY',
 };
 const EMPTY_FILTERS: RecipientFilters = {
     cycleId: '',
@@ -221,12 +247,21 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             : 'Filter by any header from the Excel sheet, then select the rows you want to use in a campaign.',
         searchPlaceholder: isArabic ? 'ابحث بالاسم أو الإيميل أو الغرفة أو المبنى أو المحافظة' : 'Search by name, email, room, building or governorate',
         role: isArabic ? 'الدور' : 'Role',
+        examType: isArabic ? 'نوع الامتحان' : 'Exam type',
+        day: isArabic ? 'اليوم' : 'Day',
+        date: isArabic ? 'التاريخ' : 'Date',
+        testCenter: isArabic ? 'مركز الاختبار' : 'Test center',
+        faculty: isArabic ? 'الكلية' : 'Faculty',
+        room: isArabic ? 'الغرفة' : 'Room',
         roomEst1: isArabic ? 'غرفة EST1' : 'ROOM EST1',
         typeLabel: isArabic ? 'النوع' : 'Type',
         governorate: isArabic ? 'المحافظة' : 'Governorate',
         address: isArabic ? 'العنوان' : 'Address',
         building: isArabic ? 'المبنى' : 'Building',
         location: isArabic ? 'الموقع' : 'Location',
+        mapLink: isArabic ? 'رابط الخريطة' : 'Map link',
+        arrivalTime: isArabic ? 'وقت الوصول' : 'Arrival time',
+        sheet: isArabic ? 'الشيت' : 'Sheet',
         emailLabel: isArabic ? 'الإيميل' : 'Email',
         status: isArabic ? 'الحالة' : 'Status',
         clearFilters: isArabic ? 'مسح الفلاتر' : 'Clear filters',
@@ -313,6 +348,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         recipientDeleted: isArabic ? 'تم حذف الصف بنجاح.' : 'Row deleted successfully.',
         recipientSaveError: isArabic ? 'تعذر حفظ الصف.' : 'Unable to save the row.',
         recipientDeleteError: isArabic ? 'تعذر حذف الصف.' : 'Unable to delete the row.',
+        cycleDelete: isArabic ? 'حذف الدورة' : 'Delete cycle',
+        cycleDeleted: isArabic ? 'تم حذف الدورة بنجاح.' : 'Cycle deleted successfully.',
+        cycleDeleteError: isArabic ? 'تعذر حذف الدورة.' : 'Unable to delete cycle.',
+        cycleDeleteConfirm: isArabic ? 'سيتم حذف الدورة وكل المستلمين داخلها. هل تريد المتابعة؟' : 'This will delete the cycle and all its recipients. Continue?',
         recipientNameRequired: isArabic ? 'يرجى إدخال اسم المستلم.' : 'Please enter the recipient name.',
         recipientDeleteConfirm: isArabic ? 'هل أنت متأكد من حذف هذا الصف؟' : 'Are you sure you want to delete this row?',
         statusLabels: {
@@ -588,6 +627,23 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         },
     });
 
+    const deleteCycleMutation = useMutation({
+        mutationFn: async (cycleId: string) => {
+            await fetchCsrfToken();
+            const response = await api.delete(`/messaging/cycles/${cycleId}`);
+            return response.data;
+        },
+        onSuccess() {
+            toast.success(copy.cycleDeleted);
+            setSelectedRecipientIds([]);
+            setSelectedCycleId(ALL_CYCLES_VALUE);
+            void refreshAll();
+        },
+        onError(error: any) {
+            toast.error(getImportErrorMessage(error, copy.cycleDeleteError));
+        },
+    });
+
     const saveTemplateMutation = useMutation({
         mutationFn: async () => {
             if (editingTemplateId) {
@@ -776,13 +832,22 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             name: recipient.name || '',
             email: recipient.email || '',
             phone: recipient.phone || '',
+            exam_type: recipient.exam_type || '',
             role: recipient.role || '',
+            day: recipient.day || '',
+            date: recipient.date || '',
+            test_center: recipient.test_center || '',
+            faculty: recipient.faculty || '',
+            room: recipient.room || '',
             room_est1: recipient.room_est1 || '',
             type: recipient.type || '',
             governorate: recipient.governorate || '',
             address: recipient.address || '',
             building: recipient.building || '',
             location: recipient.location || '',
+            map_link: recipient.map_link || '',
+            arrival_time: recipient.arrival_time || '',
+            sheet: recipient.sheet || 'LEGACY',
         });
         setIsRecipientFormOpen(true);
     };
@@ -793,7 +858,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         setIsRecipientFormOpen(false);
     };
 
-    const updateRecipientForm = (key: keyof RecipientFormState, value: string) => {
+    const updateRecipientForm = <K extends keyof RecipientFormState,>(key: K, value: RecipientFormState[K]) => {
         setRecipientForm((current) => ({ ...current, [key]: value }));
     };
 
@@ -815,6 +880,18 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         }
 
         deleteRecipientMutation.mutate(recipientId);
+    };
+
+    const deleteCycle = () => {
+        if (!currentCycle?.id) {
+            return;
+        }
+
+        if (!window.confirm(copy.cycleDeleteConfirm)) {
+            return;
+        }
+
+        deleteCycleMutation.mutate(currentCycle.id);
     };
 
     const beginEditTemplate = (template: Template) => {
@@ -1020,8 +1097,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             </div>
                         </div>
 
-                        <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(360px,0.95fr)]">
-                            <div className="rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(180deg,#faf7f1_0%,#f6f2ea_100%)] p-4">
+                        <div className="mt-4 grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+                            <aside className="space-y-3">
+                                <div className="rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(180deg,#faf7f1_0%,#f6f2ea_100%)] p-4">
                                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                                     {isArabic ? 'الدورة النشطة' : 'Active cycle'}
                                 </div>
@@ -1053,14 +1131,24 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                         <div className="mt-1 truncate">{currentCycle?.source_file_name || (isArabic ? 'عرض كل الملفات المستوردة' : 'Showing all imported files')}</div>
                                     </div>
                                 </div>
-                            </div>
+                                {currentCycle && (
+                                    <button
+                                        type="button"
+                                        className="btn-danger mt-3 w-full justify-center"
+                                        onClick={deleteCycle}
+                                        disabled={deleteCycleMutation.isPending}
+                                    >
+                                        {copy.cycleDelete}
+                                    </button>
+                                )}
+                                </div>
 
-                            <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
+                                <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4">
                                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                                     {isArabic ? 'فلاتر المستلمين' : 'Recipient filters'}
                                 </div>
-                                <div className="mt-3 grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-                                    <label className="relative block sm:col-span-2 2xl:col-span-3">
+                                <div className="mt-3 space-y-3">
+                                    <label className="relative block">
                                         <Search className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                         <input
                                             value={filters.search}
@@ -1070,6 +1158,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                         />
                                     </label>
 
+                                    <div className="grid gap-3">
                                     {textRecipientFilterFields.map((field) => (
                                         <input
                                             key={field.key}
@@ -1079,6 +1168,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             placeholder={field.label}
                                         />
                                     ))}
+                                    </div>
 
                                     <select value={filters.role} onChange={(event) => updateFilter('role', event.target.value)} className="input w-full">
                                         <option value="">{copy.role}</option>
@@ -1104,14 +1194,14 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             <option key={value} value={value}>{label}</option>
                                         ))}
                                     </select>
-                                    <button type="button" className="btn-outline sm:col-span-2 2xl:col-span-2" onClick={clearFilters}>
+                                    <button type="button" className="btn-outline w-full justify-center" onClick={clearFilters}>
                                         <Filter size={16} />
                                         <span>{copy.clearFilters}</span>
                                     </button>
                                 </div>
-                            </div>
-                        </div>
-
+                                </div>
+                            </aside>
+                            <div className="min-w-0">
                             <div className="mt-5 flex flex-col gap-4 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                                     <div>
@@ -1233,6 +1323,12 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
                                                         <div className="space-y-1 text-xs text-slate-600">
+                                                            <div><strong>{copy.examType}:</strong> {recipient.exam_type || '-'}</div>
+                                                            <div><strong>{copy.day}:</strong> {recipient.day || '-'}</div>
+                                                            <div><strong>{copy.date}:</strong> {recipient.date || '-'}</div>
+                                                            <div><strong>{copy.testCenter}:</strong> {recipient.test_center || '-'}</div>
+                                                            <div><strong>{copy.faculty}:</strong> {recipient.faculty || '-'}</div>
+                                                            <div><strong>{copy.room}:</strong> {recipient.room || '-'}</div>
                                                             <div><strong>{copy.roomEst1}:</strong> {recipient.room_est1 || '-'}</div>
                                                             <div><strong>{copy.role}:</strong> {recipient.role || '-'}</div>
                                                             <div><strong>{copy.typeLabel}:</strong> {recipient.type || '-'}</div>
@@ -1240,6 +1336,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                             <div><strong>{copy.building}:</strong> {recipient.building || '-'}</div>
                                                             <div><strong>{copy.address}:</strong> {recipient.address || '-'}</div>
                                                             <div><strong>{copy.location}:</strong> {recipient.location || '-'}</div>
+                                                            <div><strong>{copy.mapLink}:</strong> {recipient.map_link || '-'}</div>
+                                                            <div><strong>{copy.arrivalTime}:</strong> {recipient.arrival_time || '-'}</div>
+                                                            <div><strong>{copy.sheet}:</strong> {recipient.sheet || '-'}</div>
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
@@ -1302,7 +1401,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     </button>
                                 </div>
                             </div>
-                    </div>
+                            </div>
+                        </div>
 
                     {isRecipientFormOpen && (
                         <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 md:p-6">
@@ -1345,10 +1445,46 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                         placeholder="Phone"
                                     />
                                     <input
+                                        value={recipientForm.exam_type}
+                                        onChange={(event) => updateRecipientForm('exam_type', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.examType}
+                                    />
+                                    <input
                                         value={recipientForm.role}
                                         onChange={(event) => updateRecipientForm('role', event.target.value)}
                                         className="input w-full"
                                         placeholder={copy.role}
+                                    />
+                                    <input
+                                        value={recipientForm.day}
+                                        onChange={(event) => updateRecipientForm('day', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.day}
+                                    />
+                                    <input
+                                        value={recipientForm.date}
+                                        onChange={(event) => updateRecipientForm('date', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.date}
+                                    />
+                                    <input
+                                        value={recipientForm.test_center}
+                                        onChange={(event) => updateRecipientForm('test_center', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.testCenter}
+                                    />
+                                    <input
+                                        value={recipientForm.faculty}
+                                        onChange={(event) => updateRecipientForm('faculty', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.faculty}
+                                    />
+                                    <input
+                                        value={recipientForm.room}
+                                        onChange={(event) => updateRecipientForm('room', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.room}
                                     />
                                     <input
                                         value={recipientForm.room_est1}
@@ -1380,6 +1516,27 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                         className="input w-full"
                                         placeholder={copy.location}
                                     />
+                                    <input
+                                        value={recipientForm.map_link}
+                                        onChange={(event) => updateRecipientForm('map_link', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.mapLink}
+                                    />
+                                    <input
+                                        value={recipientForm.arrival_time}
+                                        onChange={(event) => updateRecipientForm('arrival_time', event.target.value)}
+                                        className="input w-full"
+                                        placeholder={copy.arrivalTime}
+                                    />
+                                    <select
+                                        value={recipientForm.sheet}
+                                        onChange={(event) => updateRecipientForm('sheet', event.target.value as RecipientFormState['sheet'])}
+                                        className="input w-full"
+                                    >
+                                        <option value="LEGACY">{copy.legacySheet}</option>
+                                        <option value="EST1">EST1</option>
+                                        <option value="EST2">EST2</option>
+                                    </select>
                                     <textarea
                                         value={recipientForm.address}
                                         onChange={(event) => updateRecipientForm('address', event.target.value)}
@@ -1422,6 +1579,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             </div>
                         </div>
                     )}
+                </div>
                 </div>
             )}
 
@@ -1898,4 +2056,3 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         </section>
     );
 }
-
