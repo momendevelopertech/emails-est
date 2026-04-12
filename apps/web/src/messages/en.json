@@ -129,6 +129,9 @@
     "smtpServerDescription": "These values come from the environment and are shown here for confirmation only.",
     "host": "Host",
     "port": "Port",
+    "sentToday": "Sent successfully today",
+    "smtpLimitRemaining": "Remaining from daily SMTP limit",
+    "smtpLimitNotConfigured": "Daily limit is not configured (set MAIL_DAILY_LIMIT).",
     "settingsPermissionTitle": "You don't have permission",
     "settingsPermissionHint": "Only super admins can manage email identity settings."
   },

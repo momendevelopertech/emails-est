@@ -129,6 +129,9 @@
     "smtpServerDescription": "هذه القيم مقروءة من البيئة ومعروضة للتأكد فقط.",
     "host": "المضيف",
     "port": "المنفذ",
+    "sentToday": "تم الإرسال بنجاح اليوم",
+    "smtpLimitRemaining": "المتبقي من حد SMTP اليومي",
+    "smtpLimitNotConfigured": "الحد اليومي غير مُعد (اضبط MAIL_DAILY_LIMIT).",
     "settingsPermissionTitle": "ليس لديك صلاحية",
     "settingsPermissionHint": "تعديل هوية البريد متاح للسوبر أدمن فقط."
   },
