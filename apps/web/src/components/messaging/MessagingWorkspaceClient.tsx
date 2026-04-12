@@ -12,7 +12,6 @@ import {
     Filter,
     LayoutPanelTop,
     Mail,
-    MessageSquare,
     RefreshCcw,
     Search,
     SendHorizontal,
@@ -25,6 +24,7 @@ import api, { fetchCsrfToken } from '@/lib/api';
 import { useRequireAuth } from '@/lib/use-auth';
 import { getImportErrorMessage } from './upload-utils';
 import RecipientFormModal, { RecipientExcelFormState, RecipientFormErrors } from './RecipientFormModal';
+import ConfirmDialog from '../ConfirmDialog';
 
 type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
 type TemplateType = 'BOTH' | 'EMAIL' | 'WHATSAPP';
@@ -242,7 +242,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         testCenter: isArabic ? 'مركز الاختبار' : 'Test center',
         faculty: isArabic ? 'الكلية' : 'Faculty',
         room: isArabic ? 'الغرفة' : 'Room',
-        roomEst1: isArabic ? 'غرفة EST1' : 'ROOM EST1',
+        roomEst1: isArabic ? 'الغرفة' : 'Room',
         typeLabel: isArabic ? 'النوع' : 'Type',
         governorate: isArabic ? 'المحافظة' : 'Governorate',
         address: isArabic ? 'العنوان' : 'Address',
@@ -268,7 +268,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         clearSelection: isArabic ? 'إلغاء التحديد' : 'Clear selection',
         goToSend: isArabic ? 'الانتقال إلى الإرسال' : 'Go to send',
         name: isArabic ? 'الاسم' : 'Name',
-        contact: isArabic ? 'التواصل' : 'Contact',
+        contact: isArabic ? 'الإيميل' : 'Email',
         details: isArabic ? 'التفاصيل' : 'Details',
         attempts: isArabic ? 'المحاولات' : 'Attempts',
         lastAttempt: isArabic ? 'آخر محاولة' : 'Last attempt',
@@ -413,6 +413,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [editingRecipientId, setEditingRecipientId] = useState<string | null>(null);
     const [editingRecipientCycleId, setEditingRecipientCycleId] = useState<string | null>(null);
     const [isRecipientFormOpen, setIsRecipientFormOpen] = useState(false);
+    const [deleteConfirmState, setDeleteConfirmState] = useState<{ type: 'recipient'; recipientId: string } | { type: 'cycle'; cycleId: string } | null>(null);
 
     useEffect(() => {
         const nextTab = searchParams.get('tab');
@@ -607,6 +608,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             setEditingRecipientCycleId(null);
             setIsRecipientFormOpen(false);
             void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
+            void queryClient.invalidateQueries({ queryKey: ['messaging-recipient-filter-options'] });
         },
         onError(error: any) {
             toast.error(getImportErrorMessage(error, copy.recipientSaveError));
@@ -630,6 +632,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                 setIsRecipientFormOpen(false);
             }
             void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
+            void queryClient.invalidateQueries({ queryKey: ['messaging-recipient-filter-options'] });
         },
         onError(error: any) {
             toast.error(getImportErrorMessage(error, copy.recipientDeleteError));
@@ -945,11 +948,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     };
 
     const deleteRecipient = (recipientId: string) => {
-        if (!window.confirm(copy.recipientDeleteConfirm)) {
-            return;
-        }
-
-        deleteRecipientMutation.mutate(recipientId);
+        setDeleteConfirmState({ type: 'recipient', recipientId });
     };
 
     const deleteCycle = () => {
@@ -957,11 +956,24 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             return;
         }
 
-        if (!window.confirm(copy.cycleDeleteConfirm)) {
+        setDeleteConfirmState({ type: 'cycle', cycleId: currentCycle.id });
+    };
+
+    const confirmDeleteAction = () => {
+        if (!deleteConfirmState) {
             return;
         }
 
-        deleteCycleMutation.mutate(currentCycle.id);
+        if (deleteConfirmState.type === 'recipient') {
+            const { recipientId } = deleteConfirmState;
+            setDeleteConfirmState(null);
+            deleteRecipientMutation.mutate(recipientId);
+            return;
+        }
+
+        const { cycleId } = deleteConfirmState;
+        setDeleteConfirmState(null);
+        deleteCycleMutation.mutate(cycleId);
     };
 
     const beginEditTemplate = (template: Template) => {
@@ -1384,15 +1396,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
-                                                        <div className="space-y-1">
-                                                            <div className="flex items-center gap-2 text-slate-700">
-                                                                <Mail size={14} className="text-slate-400" />
-                                                                <span dir="ltr">{recipient.email || '-'}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 text-slate-700">
-                                                                <MessageSquare size={14} className="text-slate-400" />
-                                                                <span dir="ltr">{recipient.phone || '-'}</span>
-                                                            </div>
+                                                        <div className="flex items-center gap-2 text-slate-700">
+                                                            <Mail size={14} className="text-slate-400" />
+                                                            <span dir="ltr">{recipient.email || '-'}</span>
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
@@ -1485,6 +1491,25 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             recipientFormHint: copy.recipientFormHint,
                             saveRecipient: copy.saveRecipient,
                         }}
+                    />
+                    <ConfirmDialog
+                        open={Boolean(deleteConfirmState)}
+                        title={
+                            deleteConfirmState?.type === 'cycle'
+                                ? (isArabic ? 'تأكيد حذف الدورة' : 'Confirm cycle deletion')
+                                : (isArabic ? 'تأكيد حذف الصف' : 'Confirm row deletion')
+                        }
+                        description={
+                            deleteConfirmState?.type === 'cycle'
+                                ? copy.cycleDeleteConfirm
+                                : copy.recipientDeleteConfirm
+                        }
+                        confirmLabel={copy.delete}
+                        cancelLabel={isArabic ? 'إلغاء' : 'Cancel'}
+                        destructive
+                        isLoading={deleteRecipientMutation.isPending || deleteCycleMutation.isPending}
+                        onCancel={() => setDeleteConfirmState(null)}
+                        onConfirm={confirmDeleteAction}
                     />
 
                     {selectedRecipientIds.length > 0 && (
