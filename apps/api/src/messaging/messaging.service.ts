@@ -277,6 +277,7 @@ export class MessagingService {
             where: { id },
             data: {
                 ...normalized,
+                cycleId: normalized.cycleId ?? undefined,
             },
         });
     }
