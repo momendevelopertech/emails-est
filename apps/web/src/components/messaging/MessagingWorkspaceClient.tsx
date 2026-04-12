@@ -408,6 +408,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [recipientForm, setRecipientForm] = useState<RecipientExcelFormState>(EMPTY_RECIPIENT_FORM);
     const [recipientFormErrors, setRecipientFormErrors] = useState<RecipientFormErrors>({});
     const [editingRecipientId, setEditingRecipientId] = useState<string | null>(null);
+    const [editingRecipientCycleId, setEditingRecipientCycleId] = useState<string | null>(null);
     const [isRecipientFormOpen, setIsRecipientFormOpen] = useState(false);
 
     useEffect(() => {
@@ -583,6 +584,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             const payload = {
                 ...values,
                 room: values.room_est1,
+                cycleId: recipientId
+                    ? editingRecipientCycleId || undefined
+                    : (selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId),
             };
             if (recipientId) {
                 const response = await api.put(`/messaging/recipients/${recipientId}`, payload);
@@ -597,6 +601,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             setRecipientForm(EMPTY_RECIPIENT_FORM);
             setRecipientFormErrors({});
             setEditingRecipientId(null);
+            setEditingRecipientCycleId(null);
             setIsRecipientFormOpen(false);
             void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
         },
@@ -618,6 +623,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                 setRecipientForm(EMPTY_RECIPIENT_FORM);
                 setRecipientFormErrors({});
                 setEditingRecipientId(null);
+                setEditingRecipientCycleId(null);
                 setIsRecipientFormOpen(false);
             }
             void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
@@ -822,6 +828,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const openCreateRecipientForm = () => {
         setEditingRecipientId(null);
+        setEditingRecipientCycleId(null);
         setRecipientForm(EMPTY_RECIPIENT_FORM);
         setRecipientFormErrors({});
         setIsRecipientFormOpen(true);
@@ -829,6 +836,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const openEditRecipientForm = (recipient: Recipient) => {
         setEditingRecipientId(recipient.id);
+        setEditingRecipientCycleId(recipient.cycleId || null);
         setRecipientForm({
             room_est1: recipient.room_est1 || recipient.room || '',
             name: recipient.name || '',
@@ -847,6 +855,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const closeRecipientForm = () => {
         setEditingRecipientId(null);
+        setEditingRecipientCycleId(null);
         setRecipientForm(EMPTY_RECIPIENT_FORM);
         setRecipientFormErrors({});
         setIsRecipientFormOpen(false);
@@ -1385,22 +1394,13 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
                                                         <div className="space-y-1 text-xs text-slate-600">
-                                                            <div><strong>{copy.examType}:</strong> {recipient.exam_type || '-'}</div>
-                                                            <div><strong>{copy.day}:</strong> {recipient.day || '-'}</div>
-                                                            <div><strong>{copy.date}:</strong> {recipient.date || '-'}</div>
-                                                            <div><strong>{copy.testCenter}:</strong> {recipient.test_center || '-'}</div>
-                                                            <div><strong>{copy.faculty}:</strong> {recipient.faculty || '-'}</div>
-                                                            <div><strong>{copy.room}:</strong> {recipient.room || '-'}</div>
                                                             <div><strong>{copy.roomEst1}:</strong> {recipient.room_est1 || '-'}</div>
                                                             <div><strong>{copy.role}:</strong> {recipient.role || '-'}</div>
                                                             <div><strong>{copy.typeLabel}:</strong> {recipient.type || '-'}</div>
                                                             <div><strong>{copy.governorate}:</strong> {recipient.governorate || '-'}</div>
-                                                            <div><strong>{copy.building}:</strong> {recipient.building || '-'}</div>
                                                             <div><strong>{copy.address}:</strong> {recipient.address || '-'}</div>
+                                                            <div><strong>{copy.building}:</strong> {recipient.building || '-'}</div>
                                                             <div><strong>{copy.location}:</strong> {recipient.location || '-'}</div>
-                                                            <div><strong>{copy.mapLink}:</strong> {recipient.map_link || '-'}</div>
-                                                            <div><strong>{copy.arrivalTime}:</strong> {recipient.arrival_time || '-'}</div>
-                                                            <div><strong>{copy.sheet}:</strong> {recipient.sheet || '-'}</div>
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-4 align-top">

@@ -1,24 +1,16 @@
 import { RecipientSheet } from '@prisma/client';
 
 export const RECIPIENT_TEXT_FILTER_FIELDS = [
-    'name',
-    'email',
-    'phone',
-    'exam_type',
-    'role',
-    'day',
-    'date',
-    'test_center',
-    'faculty',
     'room',
     'room_est1',
+    'name',
+    'email',
+    'role',
     'type',
     'governorate',
     'address',
     'building',
     'location',
-    'map_link',
-    'arrival_time',
 ] as const;
 
 type RecipientImportInput = Partial<Record<
