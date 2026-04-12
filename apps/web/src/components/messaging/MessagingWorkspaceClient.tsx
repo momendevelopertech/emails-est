@@ -28,7 +28,6 @@ import {
     downloadWorkbook as downloadRecipientWorkbook,
     getImportErrorMessage,
     parseRecipientWorkbook,
-    type RecipientImportRow,
 } from './upload-utils';
 
 type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
@@ -106,6 +105,10 @@ type RecipientFilterOptions = {
     roles: string[];
     types: string[];
     governorates: string[];
+    sheets: Array<{
+        value: 'LEGACY' | 'EST1' | 'EST2';
+        count: number;
+    }>;
 };
 
 type Template = {
@@ -171,6 +174,7 @@ const EMPTY_FILTERS: RecipientFilters = {
 };
 
 const ALL_CYCLES_VALUE = '__all_cycles__';
+const PAGE_SIZE_OPTIONS = [20, 50, 100, 500, 1000, 1500] as const;
 
 const STATUS_STYLES: Record<Recipient['status'], string> = {
     PENDING: 'bg-amber-50 text-amber-800 border border-amber-200',
@@ -232,6 +236,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         emailLabel: isArabic ? 'الإيميل' : 'Email',
         status: isArabic ? 'الحالة' : 'Status',
         clearFilters: isArabic ? 'مسح الفلاتر' : 'Clear filters',
+        recordsPerPage: isArabic ? 'عدد الصفوف في الصفحة' : 'Records per page',
+        sheetTabsTitle: isArabic ? 'الشيتات' : 'Sheets',
+        noSheets: isArabic ? 'لا توجد شيتات متاحة' : 'No sheets available',
+        legacySheet: isArabic ? 'بيانات قديمة' : 'Legacy',
         visibleCount: isArabic ? 'إجمالي النتائج' : 'Matching recipients',
         selectedCount: isArabic ? 'المحدد' : 'Selected',
         pendingCount: isArabic ? 'معلق' : 'Pending',
@@ -350,8 +358,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     ));
     const [selectedCycleId, setSelectedCycleId] = useState('');
     const [cycleSelectionReady, setCycleSelectionReady] = useState(false);
+    const [selectedSheet, setSelectedSheet] = useState<'LEGACY' | 'EST1' | 'EST2' | ''>('');
     const [page, setPage] = useState(1);
-    const [pageSize] = useState(25);
+    const [pageSize, setPageSize] = useState<number>(20);
     const [filters, setFilters] = useState<RecipientFilters>(EMPTY_FILTERS);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
     const [fileName, setFileName] = useState('');
@@ -424,12 +433,13 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     }, [cycleSelectionReady, selectedCycleId]);
 
     const recipientsQuery = useQuery<{ items: Recipient[]; total: number; page: number; limit: number }>({
-        queryKey: ['messaging-recipients', filters, selectedCycleId, page, pageSize],
+        queryKey: ['messaging-recipients', filters, selectedCycleId, selectedSheet, page, pageSize],
         queryFn: async () => {
             const response = await api.get('/messaging/recipients', {
                 params: {
                     ...filters,
                     cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+                    sheet: selectedSheet || undefined,
                     status: filters.status || undefined,
                     page,
                     limit: pageSize,
@@ -453,6 +463,22 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         },
         enabled: ready && cycleSelectionReady,
     });
+
+    useEffect(() => {
+        const availableSheets = recipientFilterOptionsQuery.data?.sheets?.map((sheet) => sheet.value) ?? [];
+        if (!availableSheets.length) {
+            setSelectedSheet('');
+            return;
+        }
+
+        if (selectedSheet && availableSheets.includes(selectedSheet)) {
+            return;
+        }
+
+        const preferred = (['EST1', 'EST2', 'LEGACY'] as const).find((sheet) => availableSheets.includes(sheet));
+        setSelectedSheet(preferred ?? availableSheets[0]);
+        setPage(1);
+    }, [recipientFilterOptionsQuery.data?.sheets, selectedSheet]);
 
     const templatesQuery = useQuery<Template[]>({
         queryKey: ['messaging-templates'],
@@ -713,7 +739,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         copy.roomEst1,
     ]);
 
-    const filterOptions = recipientFilterOptionsQuery.data ?? { roles: [], types: [], governorates: [] };
+    const filterOptions = recipientFilterOptionsQuery.data ?? { roles: [], types: [], governorates: [], sheets: [] };
+    const availableSheets = filterOptions.sheets;
 
     const allVisibleSelected = recipients.length > 0 && recipients.every((recipient) => selectedRecipientIds.includes(recipient.id));
 
@@ -858,6 +885,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const buildFilterPayload = (applyPendingFallback = true) => {
         const payload: Record<string, string> = {};
         if (selectedCycleId !== ALL_CYCLES_VALUE) payload.cycleId = selectedCycleId;
+        if (selectedSheet) payload.sheet = selectedSheet;
         if (filters.search.trim()) payload.search = filters.search.trim();
         if (filters.name.trim()) payload.name = filters.name.trim();
         if (filters.email.trim()) payload.email = filters.email.trim();
@@ -1274,6 +1302,56 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 </div>
                             </div>
 
+                            <div className="mt-5 flex flex-col gap-4 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                    <div>
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.sheetTabsTitle}</div>
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                            {availableSheets.length ? availableSheets.map((sheet) => {
+                                                const active = selectedSheet === sheet.value;
+                                                const sheetLabel = sheet.value === 'LEGACY' ? copy.legacySheet : sheet.value;
+                                                return (
+                                                    <button
+                                                        key={sheet.value}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setPage(1);
+                                                            setSelectedRecipientIds([]);
+                                                            setSelectedSheet(sheet.value);
+                                                        }}
+                                                        className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                                                            active
+                                                                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 shadow-sm'
+                                                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                                                        }`}
+                                                    >
+                                                        {sheetLabel} ({sheet.count})
+                                                    </button>
+                                                );
+                                            }) : (
+                                                <div className="text-sm text-slate-500">{copy.noSheets}</div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="min-w-[220px]">
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">{copy.recordsPerPage}</label>
+                                        <select
+                                            value={pageSize}
+                                            onChange={(event) => {
+                                                setPage(1);
+                                                setPageSize(parseInt(event.target.value, 10));
+                                            }}
+                                            className="input w-full"
+                                        >
+                                            {PAGE_SIZE_OPTIONS.map((option) => (
+                                                <option key={option} value={option}>{option}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-slate-200">
                                 <div className="max-h-[34rem] overflow-auto">
                                     <table className="min-w-full divide-y divide-slate-200 text-start text-sm">
@@ -1329,7 +1407,6 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                         <div className="font-semibold text-slate-900">{recipient.name || '-'}</div>
                                                         <div className="mt-1 text-xs text-slate-500">
                                                             {recipient.cycle?.name || recipient.id}
-                                                            {recipient.sheet && recipient.sheet !== 'LEGACY' ? ` • ${recipient.sheet}` : ''}
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
@@ -1346,7 +1423,6 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
                                                         <div className="space-y-1 text-xs text-slate-600">
-                                                            <div><strong>{isArabic ? 'الشيت' : 'Sheet'}:</strong> {recipient.sheet || 'LEGACY'}</div>
                                                             <div><strong>{copy.roomEst1}:</strong> {recipient.room_est1 || '-'}</div>
                                                             <div><strong>{copy.role}:</strong> {recipient.role || '-'}</div>
                                                             <div><strong>{copy.typeLabel}:</strong> {recipient.type || '-'}</div>

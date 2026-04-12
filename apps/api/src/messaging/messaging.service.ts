@@ -3,7 +3,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../notifications/email.service';
 import { WhatsAppService } from '../notifications/whatsapp.service';
 import { CreateRecipientDto } from './dto/create-recipient.dto';
-import { ImportRecipientDto } from './dto/import-recipient.dto';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { UpdateTemplateDto } from './dto/update-template.dto';
 import { SendCampaignDto } from './dto/send-campaign.dto';
@@ -35,7 +34,7 @@ export class MessagingService {
 
     async findRecipients(filter: RecipientFilterDto) {
         const page = Math.max(filter.page ?? 1, 1);
-        const limit = Math.min(Math.max(filter.limit ?? 100, 1), 500);
+        const limit = Math.min(Math.max(filter.limit ?? 100, 1), 1500);
         const where = this.buildRecipientWhere(filter);
 
         const [items, total] = await Promise.all([
@@ -134,7 +133,7 @@ export class MessagingService {
     async getRecipientFilterOptions(cycleId?: string) {
         const scopedWhere = cycleId ? { cycleId } : {};
 
-        const [roles, types, governorates] = await Promise.all([
+        const [roles, types, governorates, sheets] = await Promise.all([
             this.prisma.recipient.findMany({
                 where: {
                     ...scopedWhere,
@@ -162,12 +161,26 @@ export class MessagingService {
                 distinct: ['governorate'],
                 orderBy: { governorate: 'asc' },
             }),
+            this.prisma.recipient.groupBy({
+                by: ['sheet'],
+                where: scopedWhere,
+                _count: {
+                    _all: true,
+                },
+                orderBy: {
+                    sheet: 'asc',
+                },
+            }),
         ]);
 
         return {
             roles: roles.map((item) => item.role).filter(Boolean),
             types: types.map((item) => item.type).filter(Boolean),
             governorates: governorates.map((item) => item.governorate).filter(Boolean),
+            sheets: sheets.map((item) => ({
+                value: item.sheet,
+                count: item._count._all,
+            })),
         };
     }
 
