@@ -24,6 +24,11 @@ export class MessagingController {
         return this.messagingService.getCycles();
     }
 
+    @Delete('cycles/:id')
+    async deleteCycle(@Param('id') id: string) {
+        return this.messagingService.deleteCycle(id);
+    }
+
     @Get('filters/options')
     async getRecipientFilterOptions(@Query('cycleId') cycleId?: string) {
         return this.messagingService.getRecipientFilterOptions(cycleId);
