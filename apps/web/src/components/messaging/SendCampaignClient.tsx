@@ -5,6 +5,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
+import FormSelect from '@/components/FormSelect';
 
 const statusOptions = ['pending', 'processing', 'sent', 'failed'];
 
@@ -104,16 +105,16 @@ export default function SendCampaignClient({ locale }: { locale: string }) {
                 <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label className="mb-2 block text-sm font-medium text-slate-700">{t('template') || 'Template'}</label>
-                        <select
+                        <FormSelect
                             value={templateId}
-                            onChange={(event) => setTemplateId(event.target.value)}
-                            className="input w-full"
-                        >
-                            <option value="">{t('chooseTemplate') || 'Choose template'}</option>
-                            {templates?.map((template: any) => (
-                                <option key={template.id} value={template.id}>{template.name}</option>
-                            ))}
-                        </select>
+                            onChange={setTemplateId}
+                            placeholder={t('chooseTemplate') || 'Choose template'}
+                            ariaLabel={t('template') || 'Template'}
+                            options={(templates ?? []).map((template: any) => ({
+                                value: template.id,
+                                label: template.name,
+                            }))}
+                        />
                     </div>
                     <div>
                         <label className="mb-2 block text-sm font-medium text-slate-700">{t('examType') || 'Exam Type'}</label>
@@ -129,12 +130,16 @@ export default function SendCampaignClient({ locale }: { locale: string }) {
                     </div>
                     <div className="sm:col-span-2">
                         <label className="mb-2 block text-sm font-medium text-slate-700">{t('status') || 'Status'}</label>
-                        <select value={status} onChange={(event) => setStatus(event.target.value)} className="input w-full">
-                            <option value="">{t('allStatuses') || 'All statuses'}</option>
-                            {statusOptions.map((item) => (
-                                <option key={item} value={item}>{item}</option>
-                            ))}
-                        </select>
+                        <FormSelect
+                            value={status}
+                            onChange={setStatus}
+                            placeholder={t('allStatuses') || 'All statuses'}
+                            ariaLabel={t('status') || 'Status'}
+                            options={[
+                                { value: '', label: t('allStatuses') || 'All statuses' },
+                                ...statusOptions.map((item) => ({ value: item, label: item })),
+                            ]}
+                        />
                     </div>
                 </div>
 

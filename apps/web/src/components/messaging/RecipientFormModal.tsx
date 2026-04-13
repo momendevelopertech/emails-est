@@ -1,3 +1,5 @@
+import FormSelect from '@/components/FormSelect';
+
 type RecipientExcelFormState = {
     room_est1: string;
     name: string;
@@ -91,15 +93,18 @@ export default function RecipientFormModal({
                         </div>
                     ))}
                     <div>
-                        <select
+                        <FormSelect
                             value={form.sheet}
-                            onChange={(event) => onChange('sheet', event.target.value as RecipientExcelFormState['sheet'])}
-                            className={`input w-full ${errors.sheet ? 'border-rose-300 focus:border-rose-400' : ''}`}
-                        >
-                            <option value="">Sheet</option>
-                            <option value="EST1">est1</option>
-                            <option value="EST2">est2</option>
-                        </select>
+                            onChange={(nextValue) => onChange('sheet', nextValue as RecipientExcelFormState['sheet'])}
+                            placeholder={fieldLabelMap.sheet}
+                            ariaLabel={fieldLabelMap.sheet}
+                            invalid={Boolean(errors.sheet)}
+                            options={[
+                                { value: '', label: 'No selection' },
+                                { value: 'EST1', label: 'EST1' },
+                                { value: 'EST2', label: 'EST2' },
+                            ]}
+                        />
                         {errors.sheet && <p className="mt-1 text-xs text-rose-600">{errors.sheet}</p>}
                     </div>
                     <div className="md:col-span-2">

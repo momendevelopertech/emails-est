@@ -5,6 +5,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
+import FormSelect from '@/components/FormSelect';
 
 const templateTypes = [
     { value: 'BOTH', label: 'Both Email & WhatsApp' },
@@ -114,15 +115,12 @@ export default function TemplatesClient({ locale }: { locale: string }) {
                         </div>
                         <div>
                             <label className="mb-2 block text-sm font-medium text-slate-700">{t('templateType') || 'Type'}</label>
-                            <select
+                            <FormSelect
                                 value={form.type}
-                                onChange={(event) => setForm((state) => ({ ...state, type: event.target.value }))}
-                                className="input w-full"
-                            >
-                                {templateTypes.map((option) => (
-                                    <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
-                            </select>
+                                onChange={(nextValue) => setForm((state) => ({ ...state, type: nextValue }))}
+                                options={templateTypes}
+                                ariaLabel={t('templateType') || 'Type'}
+                            />
                         </div>
                         <div>
                             <label className="mb-2 block text-sm font-medium text-slate-700">{t('templateSubject') || 'Subject'}</label>

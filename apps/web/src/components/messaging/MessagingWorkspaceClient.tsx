@@ -25,6 +25,7 @@ import { useRequireAuth } from '@/lib/use-auth';
 import { getImportErrorMessage } from './upload-utils';
 import RecipientFormModal, { RecipientExcelFormState, RecipientFormErrors } from './RecipientFormModal';
 import ConfirmDialog from '../ConfirmDialog';
+import FormSelect from '../FormSelect';
 
 type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
 type TemplateType = 'BOTH' | 'EMAIL' | 'WHATSAPP';
@@ -795,6 +796,36 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const filterOptions = recipientFilterOptionsQuery.data ?? { roles: [], types: [], governorates: [], sheets: [] };
     const availableSheets = filterOptions.sheets;
+    const clearableOption = { value: '', label: isArabic ? 'بدون تحديد' : 'No selection' };
+    const cycleSelectOptions = [
+        { value: ALL_CYCLES_VALUE, label: isArabic ? 'كل الدورات' : 'All cycles' },
+        ...cycles.map((cycle) => ({ value: cycle.id, label: cycle.name })),
+    ];
+    const roleFilterOptions = [
+        clearableOption,
+        ...filterOptions.roles.map((role) => ({ value: role, label: role })),
+    ];
+    const typeFilterOptions = [
+        clearableOption,
+        ...filterOptions.types.map((type) => ({ value: type, label: type })),
+    ];
+    const governorateFilterOptions = [
+        clearableOption,
+        ...filterOptions.governorates.map((governorate) => ({ value: governorate, label: governorate })),
+    ];
+    const statusFilterOptions = [
+        clearableOption,
+        ...Object.entries(copy.statusLabels).map(([statusValue, label]) => ({ value: statusValue, label })),
+    ];
+    const pageSizeOptions = PAGE_SIZE_OPTIONS.map((option) => ({ value: String(option), label: String(option) }));
+    const templateTypeOptions = Object.entries(copy.templateTypeLabels).map(([templateValue, label]) => ({
+        value: templateValue,
+        label,
+    }));
+    const campaignTemplateOptions = (templatesQuery.data ?? []).map((template) => ({
+        value: template.id,
+        label: template.name,
+    }));
 
     const allVisibleSelected = recipients.length > 0 && recipients.every((recipient) => selectedRecipientIds.includes(recipient.id));
 
@@ -1189,20 +1220,17 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                                     {isArabic ? 'الدورة النشطة' : 'Active cycle'}
                                 </div>
-                                <select
+                                <FormSelect
                                     value={selectedCycleId}
-                                    onChange={(event) => {
+                                    onChange={(nextValue) => {
                                         setPage(1);
                                         setSelectedRecipientIds([]);
-                                        setSelectedCycleId(event.target.value);
+                                        setSelectedCycleId(nextValue);
                                     }}
-                                    className="input mt-3 w-full"
-                                >
-                                    <option value={ALL_CYCLES_VALUE}>{isArabic ? 'كل الدورات' : 'All cycles'}</option>
-                                    {cycles.map((cycle) => (
-                                        <option key={cycle.id} value={cycle.id}>{cycle.name}</option>
-                                    ))}
-                                </select>
+                                    options={cycleSelectOptions}
+                                    ariaLabel={isArabic ? 'الدورة النشطة' : 'Active cycle'}
+                                    className="mt-3"
+                                />
                                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
                                     <div className="rounded-[1.15rem] border border-white/70 bg-white/80 px-3 py-2 text-xs text-slate-600">
                                         <div className="font-semibold text-slate-900">{isArabic ? 'المستلمين' : 'Recipients'}</div>
@@ -1256,30 +1284,35 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     ))}
                                     </div>
 
-                                    <select value={filters.role} onChange={(event) => updateFilter('role', event.target.value)} className="input w-full">
-                                        <option value="">{copy.role}</option>
-                                        {filterOptions.roles.map((role) => (
-                                            <option key={role} value={role}>{role}</option>
-                                        ))}
-                                    </select>
-                                    <select value={filters.type} onChange={(event) => updateFilter('type', event.target.value)} className="input w-full">
-                                        <option value="">{copy.typeLabel}</option>
-                                        {filterOptions.types.map((type) => (
-                                            <option key={type} value={type}>{type}</option>
-                                        ))}
-                                    </select>
-                                    <select value={filters.governorate} onChange={(event) => updateFilter('governorate', event.target.value)} className="input w-full">
-                                        <option value="">{copy.governorate}</option>
-                                        {filterOptions.governorates.map((governorate) => (
-                                            <option key={governorate} value={governorate}>{governorate}</option>
-                                        ))}
-                                    </select>
-                                    <select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)} className="input w-full sm:col-span-2 2xl:col-span-1">
-                                        <option value="">{copy.status}</option>
-                                        {Object.entries(copy.statusLabels).map(([value, label]) => (
-                                            <option key={value} value={value}>{label}</option>
-                                        ))}
-                                    </select>
+                                    <FormSelect
+                                        value={filters.role}
+                                        onChange={(nextValue) => updateFilter('role', nextValue)}
+                                        options={roleFilterOptions}
+                                        placeholder={copy.role}
+                                        ariaLabel={copy.role}
+                                    />
+                                    <FormSelect
+                                        value={filters.type}
+                                        onChange={(nextValue) => updateFilter('type', nextValue)}
+                                        options={typeFilterOptions}
+                                        placeholder={copy.typeLabel}
+                                        ariaLabel={copy.typeLabel}
+                                    />
+                                    <FormSelect
+                                        value={filters.governorate}
+                                        onChange={(nextValue) => updateFilter('governorate', nextValue)}
+                                        options={governorateFilterOptions}
+                                        placeholder={copy.governorate}
+                                        ariaLabel={copy.governorate}
+                                    />
+                                    <FormSelect
+                                        value={filters.status}
+                                        onChange={(nextValue) => updateFilter('status', nextValue)}
+                                        options={statusFilterOptions}
+                                        placeholder={copy.status}
+                                        ariaLabel={copy.status}
+                                        className="sm:col-span-2 2xl:col-span-1"
+                                    />
                                     <button type="button" className="btn-outline w-full justify-center" onClick={clearFilters}>
                                         <Filter size={16} />
                                         <span>{copy.clearFilters}</span>
@@ -1322,18 +1355,15 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
                                     <div className="min-w-[220px]">
                                         <label className="mb-2 block text-sm font-medium text-slate-700">{copy.recordsPerPage}</label>
-                                        <select
-                                            value={pageSize}
-                                            onChange={(event) => {
+                                        <FormSelect
+                                            value={String(pageSize)}
+                                            onChange={(nextValue) => {
                                                 setPage(1);
-                                                setPageSize(parseInt(event.target.value, 10));
+                                                setPageSize(parseInt(nextValue, 10));
                                             }}
-                                            className="input w-full"
-                                        >
-                                            {PAGE_SIZE_OPTIONS.map((option) => (
-                                                <option key={option} value={option}>{option}</option>
-                                            ))}
-                                        </select>
+                                            options={pageSizeOptions}
+                                            ariaLabel={copy.recordsPerPage}
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -1582,15 +1612,12 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             className="input w-full"
                                             placeholder={copy.templateName}
                                         />
-                                        <select
+                                        <FormSelect
                                             value={templateForm.type}
-                                            onChange={(event) => setTemplateForm((current) => ({ ...current, type: event.target.value as TemplateType }))}
-                                            className="input w-full"
-                                        >
-                                            {Object.entries(copy.templateTypeLabels).map(([value, label]) => (
-                                                <option key={value} value={value}>{label}</option>
-                                            ))}
-                                        </select>
+                                            onChange={(nextValue) => setTemplateForm((current) => ({ ...current, type: nextValue as TemplateType }))}
+                                            options={templateTypeOptions}
+                                            ariaLabel={copy.templateType}
+                                        />
                                         <input
                                             value={templateForm.subject}
                                             onChange={(event) => setTemplateForm((current) => ({ ...current, subject: event.target.value }))}
@@ -1735,15 +1762,12 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.selectedTemplate}</div>
                             {currentTemplate ? (
                                 <div className="mt-4 space-y-4">
-                                    <select
+                                    <FormSelect
                                         value={campaignTemplateId}
-                                        onChange={(event) => setCampaignTemplateId(event.target.value)}
-                                        className="input w-full"
-                                    >
-                                        {templatesQuery.data?.map((template) => (
-                                            <option key={template.id} value={template.id}>{template.name}</option>
-                                        ))}
-                                    </select>
+                                        onChange={setCampaignTemplateId}
+                                        options={campaignTemplateOptions}
+                                        ariaLabel={copy.selectedTemplate}
+                                    />
                                     <div className="rounded-[1.25rem] border border-slate-200 bg-white p-4">
                                         <div className="flex flex-wrap items-center gap-2">
                                             <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${CHANNEL_STYLES[currentTemplate.type]}`}>
