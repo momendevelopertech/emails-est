@@ -19,6 +19,10 @@ import {
     normalizeRecipientImport,
     RECIPIENT_TEXT_FILTER_FIELDS,
 } from './recipient-import';
+import {
+    EXAM_ASSIGNMENT_TEMPLATE_PRESETS,
+    isRichHtmlEmailTemplate,
+} from './exam-assignment-template-presets';
 
 type SendResult = { recipientId: string; status: RecipientStatus; error?: string };
 
@@ -378,6 +382,7 @@ export class MessagingService {
     }
 
     async getTemplates() {
+        await this.ensureExamAssignmentTemplates();
         return this.prisma.template.findMany({ orderBy: { created_at: 'desc' } });
     }
 
@@ -549,7 +554,7 @@ export class MessagingService {
         if (template.type !== TemplateType.WHATSAPP) {
             if (recipient.email) {
                 const subject = this.renderTemplate(template.subject, recipient);
-                const html = this.renderTemplate(template.body, recipient).replace(/\n/g, '<br />');
+                const html = this.renderEmailBody(template.body, recipient);
                 const emailResult = await this.emailService.sendEmail({
                     to: recipient.email,
                     subject,
@@ -563,7 +568,7 @@ export class MessagingService {
 
         if (template.type !== TemplateType.EMAIL) {
             if (recipient.phone) {
-                const message = this.renderTemplate(template.body, recipient);
+                const message = this.renderWhatsAppBody(template.body, recipient);
                 const whatsAppResult = await this.whatsAppService.sendWhatsApp(recipient.phone, message);
                 results.push({ ok: whatsAppResult.ok, error: whatsAppResult.ok ? undefined : whatsAppResult.error });
             } else {
@@ -594,11 +599,107 @@ export class MessagingService {
         return { recipientId: recipient.id, status, error: errorMessage || undefined };
     }
 
-    private renderTemplate(template: string, data: Record<string, any>) {
+    private renderTemplate(template: string, data: Record<string, any>, options?: { escapeHtmlValues?: boolean }) {
         return String(template || '').replace(/{{\s*([^}\s]+)\s*}}/g, (_, key) => {
             const value = data[key] ?? data[key.replace(/_/g, '')] ?? '';
-            return String(value ?? '');
+            const normalized = String(value ?? '');
+            return options?.escapeHtmlValues ? this.escapeHtml(normalized) : normalized;
         });
+    }
+
+    private renderEmailBody(templateBody: string, recipient: Record<string, any>) {
+        if (isRichHtmlEmailTemplate(templateBody)) {
+            return this.renderTemplate(templateBody, recipient, { escapeHtmlValues: true });
+        }
+
+        const plainText = this.renderTemplate(templateBody, recipient);
+        return this.escapeHtml(plainText).replace(/\n/g, '<br />');
+    }
+
+    private renderWhatsAppBody(templateBody: string, recipient: Record<string, any>) {
+        if (isRichHtmlEmailTemplate(templateBody)) {
+            const renderedHtml = this.renderTemplate(templateBody, recipient, { escapeHtmlValues: true });
+            return this.htmlToPlainText(renderedHtml);
+        }
+
+        return this.renderTemplate(templateBody, recipient);
+    }
+
+    private escapeHtml(value: string) {
+        return value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    private decodeHtmlEntities(value: string) {
+        return value
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/&amp;/gi, '&')
+            .replace(/&quot;/gi, '"')
+            .replace(/&#39;/gi, "'")
+            .replace(/&lt;/gi, '<')
+            .replace(/&gt;/gi, '>')
+            .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)));
+    }
+
+    private htmlToPlainText(value: string) {
+        return this.decodeHtmlEntities(
+            String(value || '')
+                .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+                .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+                .replace(/<(br|\/p|\/div|\/tr|\/table|\/h[1-6])\b[^>]*>/gi, '\n')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/\s+\n/g, '\n')
+                .replace(/\n{3,}/g, '\n\n')
+                .replace(/[ \t]{2,}/g, ' ')
+                .trim(),
+        );
+    }
+
+    private async ensureExamAssignmentTemplates() {
+        const existingTemplates = await this.prisma.template.findMany({
+            where: {
+                name: {
+                    in: EXAM_ASSIGNMENT_TEMPLATE_PRESETS.map((template) => template.name),
+                },
+            },
+            select: {
+                id: true,
+                name: true,
+                type: true,
+                subject: true,
+                body: true,
+            },
+        });
+
+        const existingByName = new Map(existingTemplates.map((template) => [template.name, template]));
+
+        await Promise.all(EXAM_ASSIGNMENT_TEMPLATE_PRESETS.map(async (preset) => {
+            const existing = existingByName.get(preset.name);
+
+            if (!existing) {
+                await this.prisma.template.create({
+                    data: preset,
+                });
+                return;
+            }
+
+            if (isRichHtmlEmailTemplate(existing.body)) {
+                return;
+            }
+
+            await this.prisma.template.update({
+                where: { id: existing.id },
+                data: {
+                    type: existing.type === TemplateType.WHATSAPP ? TemplateType.EMAIL : existing.type,
+                    subject: preset.subject,
+                    body: preset.body,
+                },
+            });
+        }));
     }
 
     private buildRecipientWhere(filter: RecipientFilterDto): Prisma.RecipientWhereInput {

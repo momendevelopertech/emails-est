@@ -17,7 +17,12 @@ describe('MessagingService', () => {
             findMany: jest.fn(),
             findUniqueOrThrow: jest.fn(),
         },
-        template: { findUnique: jest.fn() },
+        template: {
+            findUnique: jest.fn(),
+            findMany: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+        },
         log: { create: jest.fn(), findMany: jest.fn(), count: jest.fn() },
         $transaction: jest.fn(),
     };
@@ -163,6 +168,52 @@ describe('MessagingService', () => {
         await service.deleteRecipient('r1');
 
         expect(prisma.recipient.delete).toHaveBeenCalledWith({ where: { id: 'r1' } });
+    });
+
+    it('getTemplates auto-upgrades legacy EST assignment templates to rich HTML', async () => {
+        prisma.template.findMany
+            .mockResolvedValueOnce([
+                {
+                    id: 'legacy-est1',
+                    name: 'EST I Exam Assignment',
+                    type: TemplateType.EMAIL,
+                    subject: 'EST I assignment',
+                    body: 'Hello {{name}}, room {{room_est1}}',
+                },
+            ])
+            .mockResolvedValueOnce([
+                {
+                    id: 'legacy-est1',
+                    name: 'EST I Exam Assignment',
+                    type: TemplateType.EMAIL,
+                    subject: 'EST I Exam Assignment | {{name}}',
+                    body: '<table><tr><td>upgraded</td></tr></table>',
+                },
+            ]);
+        prisma.template.update.mockResolvedValue({});
+        prisma.template.create.mockResolvedValue({});
+
+        const templates = await service.getTemplates();
+
+        expect(prisma.template.update).toHaveBeenCalledWith({
+            where: { id: 'legacy-est1' },
+            data: expect.objectContaining({
+                subject: 'EST I Exam Assignment | {{name}}',
+                body: expect.stringContaining('EST_ASSIGNMENT_TEMPLATE_V1:EST I'),
+            }),
+        });
+        expect(prisma.template.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                name: 'EST II Exam Assignment',
+                subject: 'EST II Exam Assignment | {{name}}',
+                body: expect.stringContaining('EST_ASSIGNMENT_TEMPLATE_V1:EST II'),
+            }),
+        });
+        expect(templates).toEqual([
+            expect.objectContaining({
+                name: 'EST I Exam Assignment',
+            }),
+        ]);
     });
 
     it('sendCampaign handles BOTH channel success inside a specific cycle', async () => {

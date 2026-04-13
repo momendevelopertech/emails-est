@@ -1,6 +1,6 @@
 'use client';
 
-import { MouseEvent, useEffect, useMemo, useState } from 'react';
+import { MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -21,6 +21,15 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api, { fetchCsrfToken } from '@/lib/api';
+import {
+    buildEmailPreviewDocument,
+    EXAM_ASSIGNMENT_TEMPLATE_PRESETS,
+    isHtmlTemplateBody,
+    renderTemplateTokens,
+    stripHtmlPreviewText,
+    TEMPLATE_EDITOR_VARIABLES,
+    TEMPLATE_PREVIEW_RECIPIENT,
+} from '@/lib/messaging-template-presets';
 import { useRequireAuth } from '@/lib/use-auth';
 import { getImportErrorMessage } from './upload-utils';
 import RecipientFormModal, { RecipientExcelFormState, RecipientFormErrors } from './RecipientFormModal';
@@ -30,6 +39,7 @@ import FormSelect from '../FormSelect';
 type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
 type TemplateType = 'BOTH' | 'EMAIL' | 'WHATSAPP';
 type SendScope = 'selected' | 'filtered' | 'all_pending' | 'failed';
+type TemplateEditorField = 'subject' | 'body';
 
 type Recipient = {
     id: string;
@@ -181,6 +191,13 @@ const EMPTY_FILTERS: RecipientFilters = {
     building: '',
     location: '',
     status: '',
+};
+
+const EMPTY_TEMPLATE_FORM = {
+    name: '',
+    type: 'BOTH' as TemplateType,
+    subject: '',
+    body: '',
 };
 
 const ALL_CYCLES_VALUE = '__all_cycles__';
@@ -393,15 +410,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [pageSize, setPageSize] = useState<number>(20);
     const [filters, setFilters] = useState<RecipientFilters>(EMPTY_FILTERS);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
-    const [templateForm, setTemplateForm] = useState({
-        name: '',
-        type: 'BOTH' as TemplateType,
-        subject: '',
-        body: '',
-    });
+    const [templateForm, setTemplateForm] = useState(EMPTY_TEMPLATE_FORM);
     const [templateSearch, setTemplateSearch] = useState('');
     const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
     const [isTemplateComposerOpen, setIsTemplateComposerOpen] = useState(false);
+    const [activeTemplateField, setActiveTemplateField] = useState<TemplateEditorField>('body');
     const [campaignTemplateId, setCampaignTemplateId] = useState('');
     const [sendScope, setSendScope] = useState<SendScope>('selected');
     const [logsExpanded, setLogsExpanded] = useState(false);
@@ -415,6 +428,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [editingRecipientCycleId, setEditingRecipientCycleId] = useState<string | null>(null);
     const [isRecipientFormOpen, setIsRecipientFormOpen] = useState(false);
     const [deleteConfirmState, setDeleteConfirmState] = useState<{ type: 'recipient'; recipientId: string } | { type: 'cycle'; cycleId: string } | null>(null);
+    const subjectInputRef = useRef<HTMLInputElement>(null);
+    const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
         const nextTab = searchParams.get('tab');
@@ -669,9 +684,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         },
         onSuccess(savedTemplate: Template) {
             toast.success(copy.templateSaved);
-            setTemplateForm({ name: '', type: 'BOTH', subject: '', body: '' });
+            setTemplateForm(EMPTY_TEMPLATE_FORM);
             setEditingTemplateId(null);
             setIsTemplateComposerOpen(false);
+            setActiveTemplateField('body');
             setCampaignTemplateId(savedTemplate?.id || campaignTemplateId);
             void queryClient.invalidateQueries({ queryKey: ['messaging-templates'] });
         },
@@ -689,7 +705,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             toast.success(copy.templateDeleted);
             setEditingTemplateId(null);
             setIsTemplateComposerOpen(false);
-            setTemplateForm({ name: '', type: 'BOTH', subject: '', body: '' });
+            setTemplateForm(EMPTY_TEMPLATE_FORM);
+            setActiveTemplateField('body');
             void queryClient.invalidateQueries({ queryKey: ['messaging-templates'] });
         },
     });
@@ -767,6 +784,25 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         ].some((value) => value.toLowerCase().includes(query));
     });
     const currentTemplate = templatesQuery.data?.find((template) => template.id === campaignTemplateId) || null;
+    const renderTemplateBodyPreview = (body: string) => {
+        if (isHtmlTemplateBody(body)) {
+            return renderTemplateTokens(body, TEMPLATE_PREVIEW_RECIPIENT, { escapeHtmlValues: true });
+        }
+
+        return renderTemplateTokens(body, TEMPLATE_PREVIEW_RECIPIENT);
+    };
+    const templateComposerBodyPreview = renderTemplateBodyPreview(templateForm.body);
+    const templateComposerSubjectPreview = renderTemplateTokens(templateForm.subject, TEMPLATE_PREVIEW_RECIPIENT);
+    const templateComposerPreviewDocument = useMemo(
+        () => buildEmailPreviewDocument(templateComposerBodyPreview),
+        [templateComposerBodyPreview],
+    );
+    const currentTemplateBodyPreview = currentTemplate ? renderTemplateBodyPreview(currentTemplate.body) : '';
+    const currentTemplateSubjectPreview = currentTemplate ? renderTemplateTokens(currentTemplate.subject, TEMPLATE_PREVIEW_RECIPIENT) : '';
+    const currentTemplatePreviewDocument = useMemo(
+        () => buildEmailPreviewDocument(currentTemplateBodyPreview),
+        [currentTemplateBodyPreview],
+    );
     const selectedVisibleRecipients = recipients.filter((recipient) => selectedRecipientIds.includes(recipient.id));
     const emailIdentityPreview = emailSettingsForm.sender_email
         ? `${emailSettingsForm.sender_name.trim() || t('senderNamePlaceholder')} <${emailSettingsForm.sender_email}>`
@@ -1015,20 +1051,69 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             subject: template.subject,
             body: template.body,
         });
+        setActiveTemplateField('body');
         setIsTemplateComposerOpen(true);
         updateTab('templates');
     };
 
     const openTemplateComposer = () => {
         setEditingTemplateId(null);
-        setTemplateForm({ name: '', type: 'BOTH', subject: '', body: '' });
+        setTemplateForm(EMPTY_TEMPLATE_FORM);
+        setActiveTemplateField('body');
         setIsTemplateComposerOpen(true);
     };
 
     const closeTemplateComposer = () => {
         setEditingTemplateId(null);
-        setTemplateForm({ name: '', type: 'BOTH', subject: '', body: '' });
+        setTemplateForm(EMPTY_TEMPLATE_FORM);
+        setActiveTemplateField('body');
         setIsTemplateComposerOpen(false);
+    };
+
+    const applyTemplatePreset = (presetId: string) => {
+        const preset = EXAM_ASSIGNMENT_TEMPLATE_PRESETS.find((item) => item.id === presetId);
+        if (!preset) {
+            return;
+        }
+
+        setTemplateForm({
+            name: preset.name,
+            type: preset.type,
+            subject: preset.subject,
+            body: preset.body,
+        });
+        setActiveTemplateField('body');
+    };
+
+    const insertTemplateVariable = (token: string) => {
+        const isSubjectField = activeTemplateField === 'subject';
+        const targetElement = isSubjectField ? subjectInputRef.current : bodyTextareaRef.current;
+        const fieldName = isSubjectField ? 'subject' : 'body';
+
+        if (!targetElement) {
+            setTemplateForm((current) => ({
+                ...current,
+                [fieldName]: `${current[fieldName]}${token}`,
+            }));
+            return;
+        }
+
+        const selectionStart = targetElement.selectionStart ?? targetElement.value.length;
+        const selectionEnd = targetElement.selectionEnd ?? targetElement.value.length;
+
+        setTemplateForm((current) => {
+            const currentValue = current[fieldName];
+            return {
+                ...current,
+                [fieldName]: `${currentValue.slice(0, selectionStart)}${token}${currentValue.slice(selectionEnd)}`,
+            };
+        });
+
+        const nextCursor = selectionStart + token.length;
+        window.requestAnimationFrame(() => {
+            targetElement.focus();
+            targetElement.setSelectionRange(nextCursor, nextCursor);
+        });
     };
 
     const saveTemplate = () => {
@@ -1606,6 +1691,66 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
                                 <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
                                     <div className="space-y-4">
+                                        <div className="template-hero rounded-[1.6rem] border border-slate-200 p-4 md:p-5">
+                                            <div className="flex flex-col gap-4">
+                                                <div>
+                                                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                        {isArabic ? 'قوالب جاهزة سريعة' : 'Quick luxury presets'}
+                                                    </div>
+                                                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                                                        {isArabic
+                                                            ? 'حمّل شكل EST I أو EST II الجاهز، ثم عدّل أي جزء في الـ HTML من نفس شاشة الإديت.'
+                                                            : 'Load the EST I or EST II luxury layout, then edit every part of the HTML directly from this editor.'}
+                                                    </p>
+                                                </div>
+                                                <div className="grid gap-3 md:grid-cols-2">
+                                                    {EXAM_ASSIGNMENT_TEMPLATE_PRESETS.map((preset) => (
+                                                        <button
+                                                            key={preset.id}
+                                                            type="button"
+                                                            onClick={() => applyTemplatePreset(preset.id)}
+                                                            className="rounded-[1.35rem] border border-slate-200 bg-white px-4 py-4 text-start transition hover:border-slate-300 hover:shadow-sm"
+                                                        >
+                                                            <div className="text-sm font-semibold text-slate-900">{preset.name}</div>
+                                                            <div className="mt-1 text-xs leading-5 text-slate-500">{preset.description}</div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
+                                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                                <div>
+                                                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                        {isArabic ? 'المتغيرات الجاهزة' : 'Template variables'}
+                                                    </div>
+                                                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                                                        {isArabic
+                                                            ? 'اضغط على أي متغير لإدراجه داخل العنوان أو الـ HTML حسب آخر حقل قمت بالكتابة فيه.'
+                                                            : 'Click any variable to insert it into the subject or HTML editor based on the last field you focused.'}
+                                                    </p>
+                                                </div>
+                                                <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                                                    {activeTemplateField === 'subject'
+                                                        ? (isArabic ? 'الإدراج الحالي: العنوان' : 'Inserting into: Subject')
+                                                        : (isArabic ? 'الإدراج الحالي: نص التيمبلت' : 'Inserting into: Body')}
+                                                </div>
+                                            </div>
+                                            <div className="mt-4 flex flex-wrap gap-2">
+                                                {TEMPLATE_EDITOR_VARIABLES.map((variable) => (
+                                                    <button
+                                                        key={variable.token}
+                                                        type="button"
+                                                        onClick={() => insertTemplateVariable(variable.token)}
+                                                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
+                                                    >
+                                                        {variable.label}: {variable.token}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
                                         <input
                                             value={templateForm.name}
                                             onChange={(event) => setTemplateForm((current) => ({ ...current, name: event.target.value }))}
@@ -1619,18 +1764,27 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             ariaLabel={copy.templateType}
                                         />
                                         <input
+                                            ref={subjectInputRef}
                                             value={templateForm.subject}
                                             onChange={(event) => setTemplateForm((current) => ({ ...current, subject: event.target.value }))}
+                                            onFocus={() => setActiveTemplateField('subject')}
                                             className="input w-full"
                                             placeholder={copy.templateSubject}
                                         />
                                         <textarea
-                                            rows={10}
+                                            ref={bodyTextareaRef}
+                                            rows={18}
                                             value={templateForm.body}
                                             onChange={(event) => setTemplateForm((current) => ({ ...current, body: event.target.value }))}
+                                            onFocus={() => setActiveTemplateField('body')}
                                             className="textarea w-full"
                                             placeholder={copy.templateBody}
                                         />
+                                        <div className="rounded-[1.35rem] border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm leading-6 text-cyan-900">
+                                            {isArabic
+                                                ? 'تقدر تكتب HTML كامل داخل نص التيمبلت. الإيميل هيتبعت بنفس التصميم، ولو القناة Email + WhatsApp فالواتساب هيستقبل نسخة نصية نظيفة تلقائيًا.'
+                                                : 'You can author full HTML inside the template body. Email will keep the rich layout, and if the template is Email + WhatsApp, WhatsApp will receive a clean text fallback automatically.'}
+                                        </div>
                                     </div>
 
                                     <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4 md:p-5">
@@ -1639,8 +1793,48 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${CHANNEL_STYLES[templateForm.type]}`}>
                                                 {copy.templateTypeLabels[templateForm.type]}
                                             </span>
-                                            <div className="text-base font-semibold text-slate-900">{templateForm.subject || copy.templateSubject}</div>
-                                            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">{templateForm.body || copy.templateBody}</p>
+                                            <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3">
+                                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                                    {isArabic ? 'العنوان بعد استبدال المتغيرات' : 'Rendered subject'}
+                                                </div>
+                                                <div className="mt-2 text-base font-semibold text-slate-900">
+                                                    {templateComposerSubjectPreview || copy.templateSubject}
+                                                </div>
+                                            </div>
+
+                                            {isHtmlTemplateBody(templateForm.body) && templateForm.type !== 'WHATSAPP' ? (
+                                                <div className="template-preview-shell rounded-[1.6rem] p-3">
+                                                    <div className="template-preview-email-shell overflow-hidden rounded-[1.35rem]">
+                                                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 text-xs text-slate-500">
+                                                            <span>{isArabic ? 'معاينة بريد حقيقية' : 'Rendered email preview'}</span>
+                                                            <span>{TEMPLATE_PREVIEW_RECIPIENT.email}</span>
+                                                        </div>
+                                                        <iframe
+                                                            title="Template email preview"
+                                                            className="h-[560px] w-full bg-white"
+                                                            sandbox=""
+                                                            srcDoc={templateComposerPreviewDocument}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
+                                                    <div className="whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                                                        {renderTemplateTokens(templateForm.body, TEMPLATE_PREVIEW_RECIPIENT) || copy.templateBody}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {templateForm.type !== 'EMAIL' ? (
+                                                <div className="rounded-[1.25rem] border border-emerald-200 bg-emerald-50 px-4 py-3">
+                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                                                        {isArabic ? 'نسخة واتساب النصية' : 'WhatsApp text fallback'}
+                                                    </div>
+                                                    <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-emerald-900">
+                                                        {stripHtmlPreviewText(templateComposerBodyPreview) || copy.templateBody}
+                                                    </div>
+                                                </div>
+                                            ) : null}
                                         </div>
                                     </div>
                                 </div>
@@ -1690,46 +1884,57 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                         </div>
                                     ))}
                                 </div>
-                            ) : filteredTemplates.length ? filteredTemplates.map((template) => (
-                                <div key={template.id} className="rounded-[1.5rem] border border-slate-200 p-5 transition hover:border-slate-300 hover:shadow-sm">
-                                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                                        <div className="space-y-2">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <h3 className="text-lg font-semibold text-slate-950">{template.name}</h3>
-                                                <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${CHANNEL_STYLES[template.type]}`}>
-                                                    {copy.templateTypeLabels[template.type]}
-                                                </span>
-                                            </div>
-                                            <p className="text-sm font-medium text-slate-700">{template.subject}</p>
-                                            <p className="whitespace-pre-wrap text-sm leading-6 text-slate-500">{template.body}</p>
-                                        </div>
+                            ) : filteredTemplates.length ? filteredTemplates.map((template) => {
+                                const renderedSubject = renderTemplateTokens(template.subject, TEMPLATE_PREVIEW_RECIPIENT);
+                                const renderedBody = renderTemplateBodyPreview(template.body);
+                                const summaryText = stripHtmlPreviewText(renderedBody);
 
-                                        <div className="flex flex-wrap gap-2">
-                                            <button type="button" className="btn-outline" onClick={() => beginEditTemplate(template)}>
-                                                {copy.edit}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="btn-secondary"
-                                                onClick={() => {
-                                                    setCampaignTemplateId(template.id);
-                                                    updateTab('campaign');
-                                                }}
-                                            >
-                                                {copy.useForCampaign}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="btn-danger"
-                                                onClick={() => deleteTemplateMutation.mutate(template.id)}
-                                                disabled={deleteTemplateMutation.isPending}
-                                            >
-                                                {copy.delete}
-                                            </button>
+                                return (
+                                    <div key={template.id} className="rounded-[1.5rem] border border-slate-200 p-5 transition hover:border-slate-300 hover:shadow-sm">
+                                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                            <div className="space-y-2">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <h3 className="text-lg font-semibold text-slate-950">{template.name}</h3>
+                                                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${CHANNEL_STYLES[template.type]}`}>
+                                                        {copy.templateTypeLabels[template.type]}
+                                                    </span>
+                                                    {isHtmlTemplateBody(template.body) && template.type !== 'WHATSAPP' ? (
+                                                        <span className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+                                                            {isArabic ? 'HTML فاخر' : 'Luxury HTML'}
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                                <p className="text-sm font-medium text-slate-700">{renderedSubject}</p>
+                                                <p className="text-sm leading-6 text-slate-500">{summaryText || copy.templateBody}</p>
+                                            </div>
+
+                                            <div className="flex flex-wrap gap-2">
+                                                <button type="button" className="btn-outline" onClick={() => beginEditTemplate(template)}>
+                                                    {copy.edit}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn-secondary"
+                                                    onClick={() => {
+                                                        setCampaignTemplateId(template.id);
+                                                        updateTab('campaign');
+                                                    }}
+                                                >
+                                                    {copy.useForCampaign}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn-danger"
+                                                    onClick={() => deleteTemplateMutation.mutate(template.id)}
+                                                    disabled={deleteTemplateMutation.isPending}
+                                                >
+                                                    {copy.delete}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            )) : (
+                                );
+                            }) : (
                                 <div className="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
                                     <div>{templateSearch.trim() ? copy.noTemplateMatches : copy.noTemplates}</div>
                                     {!templateSearch.trim() && (
@@ -1774,8 +1979,32 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 {copy.templateTypeLabels[currentTemplate.type]}
                                             </span>
                                         </div>
-                                        <div className="mt-3 text-base font-semibold text-slate-900">{currentTemplate.subject}</div>
-                                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{currentTemplate.body}</p>
+                                        <div className="mt-3 text-base font-semibold text-slate-900">{currentTemplateSubjectPreview}</div>
+                                        {isHtmlTemplateBody(currentTemplate.body) && currentTemplate.type !== 'WHATSAPP' ? (
+                                            <div className="mt-4 template-preview-shell rounded-[1.6rem] p-3">
+                                                <div className="template-preview-email-shell overflow-hidden rounded-[1.35rem]">
+                                                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 text-xs text-slate-500">
+                                                        <span>{isArabic ? 'معاينة الإيميل' : 'Email preview'}</span>
+                                                        <span>{TEMPLATE_PREVIEW_RECIPIENT.email}</span>
+                                                    </div>
+                                                    <iframe
+                                                        title="Campaign template email preview"
+                                                        className="h-[480px] w-full bg-white"
+                                                        sandbox=""
+                                                        srcDoc={currentTemplatePreviewDocument}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                                                {renderTemplateTokens(currentTemplate.body, TEMPLATE_PREVIEW_RECIPIENT)}
+                                            </p>
+                                        )}
+                                        {currentTemplate.type !== 'EMAIL' ? (
+                                            <div className="mt-4 rounded-[1.25rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+                                                {stripHtmlPreviewText(currentTemplateBodyPreview)}
+                                            </div>
+                                        ) : null}
                                     </div>
                                 </div>
                             ) : (
