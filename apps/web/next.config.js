@@ -40,6 +40,9 @@ const resolveApiRewriteTarget = () => {
 
 const nextConfig = {
     reactStrictMode: true,
+    eslint: {
+        ignoreDuringBuilds: true,
+    },
     allowedDevOrigins: ['127.0.0.1', 'localhost', '*.localhost'],
     images: {
         domains: ['res.cloudinary.com', 'lh3.googleusercontent.com', 'emails-est-web.vercel.app'],

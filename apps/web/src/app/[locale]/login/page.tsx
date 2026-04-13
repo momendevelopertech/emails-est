@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, KeyboardEvent, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMessages } from 'next-intl';
 import toast from 'react-hot-toast';
@@ -13,6 +13,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
     const authMessages = (messages.auth as Record<string, unknown> | undefined) ?? {};
     const router = useRouter();
     const { setUser, setBootstrapped } = useAuthStore();
+    const formRef = useRef<HTMLFormElement>(null);
     const [identifier, setIdentifier] = useState('superadmin@sphinx.com');
     const [password, setPassword] = useState('Admin@123456');
     const [pending, setPending] = useState(false);
@@ -25,8 +26,9 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
 
     const onSubmit = async (event: FormEvent) => {
         event.preventDefault();
+        const trimmedIdentifier = identifier.trim();
 
-        if (!identifier.trim() || !password.trim()) {
+        if (!trimmedIdentifier || !password.trim()) {
             toast.error(getMessage('loginPasswordRequired', 'Please enter your password.'));
             return;
         }
@@ -36,11 +38,11 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
 
         try {
             await fetchCsrfToken();
-            const response = await api.post('/auth/login', { identifier, password });
+            const response = await api.post('/auth/login', { identifier: trimmedIdentifier, password });
             setAccessToken(response.data?.accessToken || null);
             setUser(response.data?.user || null);
             setBootstrapped(true);
-            router.push(`/${params.locale}/messaging/upload`);
+            router.replace(`/${params.locale}/messaging/upload`);
         } catch (error) {
             const message = error instanceof AppApiError
                 ? error.message
@@ -54,6 +56,15 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
         }
     };
 
+    const handleFieldKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+        if (event.key !== 'Enter' || event.nativeEvent.isComposing || pending) {
+            return;
+        }
+
+        event.preventDefault();
+        formRef.current?.requestSubmit();
+    };
+
     const fieldClassName = [
         'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3',
         'text-sm text-slate-900 shadow-sm transition',
@@ -64,6 +75,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
     return (
         <main className="flex min-h-screen items-center justify-center bg-atmosphere px-4 py-8 sm:px-6">
             <form
+                ref={formRef}
                 onSubmit={onSubmit}
                 className="w-full max-w-md rounded-[1.75rem] border border-slate-200/80 bg-white/95 p-6 shadow-lg shadow-slate-900/5 sm:p-8"
             >
@@ -104,6 +116,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
                                 placeholder={getMessage('loginIdentifierPlaceholder', getMessage('email', 'Email or username'))}
                                 value={identifier}
                                 onChange={(event) => setIdentifier(event.target.value)}
+                                onKeyDown={handleFieldKeyDown}
                                 disabled={pending}
                             />
                         </label>
@@ -120,6 +133,7 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
                                 placeholder={getMessage('loginPasswordPlaceholder', getMessage('password', 'Password'))}
                                 value={password}
                                 onChange={(event) => setPassword(event.target.value)}
+                                onKeyDown={handleFieldKeyDown}
                                 disabled={pending}
                             />
                         </label>
