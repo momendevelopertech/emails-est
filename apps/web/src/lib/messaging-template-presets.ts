@@ -54,18 +54,10 @@ const buildDetailRow = (iconEntity: string, label: string, valueToken: string) =
     </tr>
 `;
 
-const buildExamAssignmentEmailBody = ({
+const buildExamAssignmentEmailBodyV1 = ({
     examLabel,
-    heroStart,
-    heroEnd,
-    badgeBackground,
-    panelBackground,
 }: {
     examLabel: string;
-    heroStart: string;
-    heroEnd: string;
-    badgeBackground: string;
-    panelBackground: string;
 }) => `
 <!-- EST_ASSIGNMENT_TEMPLATE_V1:${examLabel} -->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:0;padding:30px 0 42px;background:#edf2f8;font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#102033;">
@@ -76,63 +68,61 @@ const buildExamAssignmentEmailBody = ({
                     <td style="padding:0 14px;">
                         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:32px;overflow:hidden;background:#ffffff;box-shadow:0 24px 60px rgba(15,23,42,0.16);">
                             <tr>
-                                <td align="center" style="padding:36px 34px 28px;background:${heroStart};background:linear-gradient(135deg, ${heroStart} 0%, ${heroEnd} 100%);">
-                                    <div style="display:inline-block;padding:8px 16px;border-radius:999px;background:${badgeBackground};color:#ffffff;font-size:12px;line-height:1.2;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;">
-                                        ${examLabel} Exam Assignment
+                                <td align="center" style="padding:48px 34px 36px;background:linear-gradient(135deg, ${examLabel === 'EST I' ? '#0f766e' : '#7c2d12'} 0%, ${examLabel === 'EST I' ? '#1d4ed8' : '#a21caf'} 100%);">
+                                    <div style="display:inline-block;padding:10px 20px;border-radius:999px;background:rgba(255,255,255,0.2);color:#ffffff;font-size:13px;line-height:1.2;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;">
+                                        ${examLabel} - Classic Edition
                                     </div>
-                                    <div style="margin-top:18px;font-size:12px;line-height:1.6;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:rgba(255,255,255,0.72);">
-                                        SPHINX Assessment Operations
-                                    </div>
-                                    <div style="margin-top:18px;font-size:40px;line-height:1.1;font-weight:800;color:#ffffff;text-align:center;">
-                                        {{name}}
-                                    </div>
-                                    <p style="margin:16px auto 0;max-width:520px;font-size:16px;line-height:1.85;color:rgba(255,255,255,0.9);">
-                                        Your official ${examLabel} assignment is ready. Please review the room, venue, and arrival details carefully before exam day.
+                                    <div style="margin-top:20px;font-size:36px;line-height:1.1;font-weight:800;color:#ffffff;">{{name}}</div>
+                                    <p style="margin:16px auto 0;max-width:520px;font-size:14px;line-height:1.8;color:rgba(255,255,255,0.95);">
+                                        Your official ${examLabel} exam assignment is confirmed. Please review your room details and arrival time carefully.
                                     </p>
                                 </td>
                             </tr>
                             <tr>
-                                <td style="padding:26px 22px 10px;background:#ffffff;">
-                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
-                                        <tr>
-                                            ${buildMetricCard('Room', '{{room_est1}}', '#eef4ff')}
-                                            ${buildMetricCard('Role', '{{role}}', '#eefbf5')}
-                                            ${buildMetricCard('Type', '{{type}}', '#fff6e8')}
-                                        </tr>
-                                    </table>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="padding:0 22px 12px;background:#ffffff;">
-                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
-                                        ${buildDetailRow('&#127961;', 'Governorate', '{{governorate}}')}
-                                        ${buildDetailRow('&#127968;', 'Address', '{{address}}')}
-                                        ${buildDetailRow('&#127970;', 'Building', '{{building}}')}
-                                        ${buildDetailRow('&#128506;', 'Location', '{{location}}')}
-                                    </table>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="padding:0 22px 26px;background:#ffffff;">
-                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:24px;background:${panelBackground};">
-                                        <tr>
-                                            <td style="padding:20px 22px;">
-                                                <div style="font-size:12px;line-height:1.4;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#5a6a7d;">
-                                                    Arrival Note
-                                                </div>
-                                                <div style="margin-top:8px;font-size:14px;line-height:1.9;color:#1f3145;">
-                                                    Keep this message with you on exam day. If any location detail needs clarification, reply to this email and include your full name and assigned room.
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </table>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="padding:0 22px 28px;background:#ffffff;">
-                                    <div style="border-top:1px solid #e4e8ef;padding-top:18px;text-align:center;font-size:12px;line-height:1.8;color:#728093;">
-                                        This assignment was generated from the latest uploaded Excel roster for ${examLabel}.
+                                <td style="padding:32px 28px;">
+                                    <div style="margin-bottom:28px;">
+                                        <div style="font-size:12px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:16px;">Assignment Details</div>
+                                        <table width="100%" style="width:100%;">
+                                            <tr>
+                                                <td style="padding:14px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:12px;background:#f8fafc;">
+                                                    <div style="font-size:11px;font-weight:600;color:#718096;text-transform:uppercase;">Room</div>
+                                                    <div style="font-size:16px;font-weight:700;color:#1a202c;margin-top:4px;">{{room_est1}}</div>
+                                                </td>
+                                                <td style="padding:0 8px;"></td>
+                                                <td style="padding:14px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:12px;background:#f8fafc;">
+                                                    <div style="font-size:11px;font-weight:600;color:#718096;text-transform:uppercase;">Role</div>
+                                                    <div style="font-size:16px;font-weight:700;color:#1a202c;margin-top:4px;">{{role}}</div>
+                                                </td>
+                                            </tr>
+                                        </table>
                                     </div>
+                                    <div>
+                                        <div style="font-size:12px;font-weight:700;color:#718096;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:16px;">Location & Venue</div>
+                                        <table width="100%" style="width:100%;">
+                                            <tr style="border-bottom:1px solid #e2e8f0;">
+                                                <td style="padding:12px 0;"><strong style="font-size:13px;color:#1a202c;">Center:</strong></td>
+                                                <td style="padding:12px 0;text-align:right;color:#475569;">{{building}}</td>
+                                            </tr>
+                                            <tr style="border-bottom:1px solid #e2e8f0;">
+                                                <td style="padding:12px 0;"><strong style="font-size:13px;color:#1a202c;">Address:</strong></td>
+                                                <td style="padding:12px 0;text-align:right;color:#475569;">{{address}}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding:12px 0;"><strong style="font-size:13px;color:#1a202c;">Location:</strong></td>
+                                                <td style="padding:12px 0;text-align:right;color:#475569;">{{location}}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:20px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;text-align:center;font-size:12px;color:#475569;">
+                                    Arrive 30 minutes early. Bring valid ID. Keep this message for reference.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:16px 28px;text-align:center;font-size:11px;color:#718096;">
+                                    Generated from Excel roster | EST Team
                                 </td>
                             </tr>
                         </table>
@@ -156,17 +146,14 @@ const buildExamAssignmentEmailBodyV2 = ({
     <tr>
         <td align="center" style="padding:20px 0;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:640px;margin:0 auto;">
-                <!-- Header with Logo -->
                 <tr>
                     <td align="center" style="padding:24px 20px 16px;">
                         <img src="${logoUrl}" alt="EST Logo" style="width:120px;height:auto;display:block;margin:0 auto;" />
                     </td>
                 </tr>
-                <!-- Main Content Card -->
                 <tr>
                     <td style="padding:0 16px 24px;">
                         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:16px;background:#ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
-                            <!-- Greeting Section -->
                             <tr>
                                 <td style="padding:32px 28px 24px;border-bottom:2px solid #f0f2f5;">
                                     <div style="font-size:18px;line-height:1.5;font-weight:600;color:#1a202c;">
@@ -177,7 +164,6 @@ const buildExamAssignmentEmailBodyV2 = ({
                                     </p>
                                 </td>
                             </tr>
-                            <!-- Key Details Section -->
                             <tr>
                                 <td style="padding:24px 28px;">
                                     <div style="margin-bottom:20px;">
@@ -215,7 +201,6 @@ const buildExamAssignmentEmailBodyV2 = ({
                                     </div>
                                 </td>
                             </tr>
-                            <!-- Location Section -->
                             <tr>
                                 <td style="padding:24px 28px;border-top:1px solid #f0f2f5;border-bottom:1px solid #f0f2f5;">
                                     <div style="font-size:13px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:#718096;margin-bottom:16px;">Location Information</div>
@@ -244,25 +229,22 @@ const buildExamAssignmentEmailBodyV2 = ({
                                     </table>
                                 </td>
                             </tr>
-                            <!-- Important Notice -->
                             <tr>
                                 <td style="padding:24px 28px;">
                                     <div style="padding:16px;border-radius:12px;background:#fef3c7;border-left:4px solid #f59e0b;">
                                         <div style="font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;margin-bottom:8px;">⏰ Important</div>
                                         <div style="font-size:13px;line-height:1.6;color:#78350f;">
-                                            Please arrive at least 30 minutes before your scheduled exam time. Bring a valid ID and review all venue details carefully. Keep this message for reference on exam day.
+                                            Please arrive at least 30 minutes before your scheduled exam time. Bring a valid ID and review all venue details carefully.
                                         </div>
                                     </div>
                                 </td>
                             </tr>
-                            <!-- Footer -->
                             <tr>
                                 <td style="padding:24px 28px;border-top:1px solid #f0f2f5;text-align:center;">
                                     <div style="font-size:12px;line-height:1.6;color:#718096;">
                                         <div style="margin-bottom:8px;font-weight:600;color:#1a202c;">The EST Team</div>
-                                        <div>For any questions, please contact our support team.</div>
                                         <div style="margin-top:12px;font-size:11px;color:#cbd5e1;">
-                                            This assignment was generated from the latest uploaded roster for ${examLabel}.
+                                            Generated from the latest uploaded roster for ${examLabel}.
                                         </div>
                                     </div>
                                 </td>
@@ -271,6 +253,68 @@ const buildExamAssignmentEmailBodyV2 = ({
                     </td>
                 </tr>
             </table>
+        </td>
+    </tr>
+</table>
+`.trim();
+
+const buildExamAssignmentEmailBodyV3 = ({
+    examLabel,
+}: {
+    examLabel: string;
+}) => `
+<!-- EST_ASSIGNMENT_TEMPLATE_V3:${examLabel} -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:0;padding:20px;background:#ffffff;font-family:Arial,sans-serif;color:#333;">
+    <tr>
+        <td style="max-width:600px;margin:0 auto;">
+            <div style="margin-bottom:24px;">
+                <h2 style="margin:0;font-size:20px;color:#1a202c;font-weight:bold;">Exam Assignment - ${examLabel}</h2>
+            </div>
+            
+            <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#475569;">
+                Dear {{name}},<br/><br/>
+                Your assignment for the ${examLabel} exam has been confirmed. Below are your assignment details:
+            </p>
+            
+            <table width="100%" style="width:100%;border-collapse:collapse;margin:20px 0;">
+                <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+                    <td style="padding:10px;font-weight:bold;color:#1a202c;width:40%;">Test Center</td>
+                    <td style="padding:10px;color:#475569;">{{building}}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #e2e8f0;">
+                    <td style="padding:10px;font-weight:bold;color:#1a202c;">Room</td>
+                    <td style="padding:10px;color:#475569;">{{room_est1}}</td>
+                </tr>
+                <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+                    <td style="padding:10px;font-weight:bold;color:#1a202c;">Your Role</td>
+                    <td style="padding:10px;color:#475569;">{{role}}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #e2e8f0;">
+                    <td style="padding:10px;font-weight:bold;color:#1a202c;">Session Type</td>
+                    <td style="padding:10px;color:#475569;">{{type}}</td>
+                </tr>
+                <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+                    <td style="padding:10px;font-weight:bold;color:#1a202c;">Location</td>
+                    <td style="padding:10px;color:#475569;">{{location}}</td>
+                </tr>
+                <tr style="border-bottom:1px solid #e2e8f0;">
+                    <td style="padding:10px;font-weight:bold;color:#1a202c;">Address</td>
+                    <td style="padding:10px;color:#475569;">{{address}}</td>
+                </tr>
+                <tr style="background:#f8fafc;">
+                    <td style="padding:10px;font-weight:bold;color:#1a202c;">Governorate</td>
+                    <td style="padding:10px;color:#475569;">{{governorate}}</td>
+                </tr>
+            </table>
+            
+            <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:12px;margin:20px 0;font-size:13px;color:#856404;">
+                <strong>Important:</strong> Please arrive 30 minutes early. Bring a valid ID and review all details carefully.
+            </div>
+            
+            <p style="margin:20px 0 0;font-size:12px;color:#718096;border-top:1px solid #e2e8f0;padding-top:12px;">
+                Best regards,<br/>
+                The EST Team
+            </p>
         </td>
     </tr>
 </table>
@@ -305,27 +349,69 @@ export const TEMPLATE_PREVIEW_RECIPIENT: TemplatePreviewRecipient = {
 };
 
 export const EXAM_ASSIGNMENT_TEMPLATE_PRESETS: TemplatePresetDefinition[] = [
+    // EST I Templates
     {
-        id: 'est-i-assignment',
-        name: 'EST I Exam Assignment',
+        id: 'est-i-v1-classic',
+        name: 'EST I Exam Assignment - V1 Classic',
         type: 'EMAIL',
-        subject: 'EST I Exam Assignment | {{name}}',
+        subject: 'EST I Exam Assignment - V1 | {{name}}',
+        body: buildExamAssignmentEmailBodyV1({
+            examLabel: 'EST I',
+        }),
+        description: 'Classic gradient design with centered hero section for EST I assignments.',
+    },
+    {
+        id: 'est-i-v2-modern',
+        name: 'EST I Exam Assignment - V2 Modern',
+        type: 'EMAIL',
+        subject: 'EST I Exam Assignment - V2 | {{name}}',
         body: buildExamAssignmentEmailBodyV2({
             examLabel: 'EST I',
             logoUrl: 'https://emails-est-web.vercel.app/brand/est-i-logo.svg',
         }),
-        description: 'Modern professional layout for EST I assignment emails with EST I branding and improved visual hierarchy.',
+        description: 'Modern design with EST I logo and color-coded cards for EST I assignments.',
     },
     {
-        id: 'est-ii-assignment',
-        name: 'EST II Exam Assignment',
+        id: 'est-i-v3-minimal',
+        name: 'EST I Exam Assignment - V3 Minimal',
         type: 'EMAIL',
-        subject: 'EST II Exam Assignment | {{name}}',
+        subject: 'EST I Exam Assignment - V3 | {{name}}',
+        body: buildExamAssignmentEmailBodyV3({
+            examLabel: 'EST I',
+        }),
+        description: 'Minimal clean design with simple table layout for EST I assignments.',
+    },
+    // EST II Templates
+    {
+        id: 'est-ii-v1-classic',
+        name: 'EST II Exam Assignment - V1 Classic',
+        type: 'EMAIL',
+        subject: 'EST II Exam Assignment - V1 | {{name}}',
+        body: buildExamAssignmentEmailBodyV1({
+            examLabel: 'EST II',
+        }),
+        description: 'Classic gradient design with centered hero section for EST II assignments.',
+    },
+    {
+        id: 'est-ii-v2-modern',
+        name: 'EST II Exam Assignment - V2 Modern',
+        type: 'EMAIL',
+        subject: 'EST II Exam Assignment - V2 | {{name}}',
         body: buildExamAssignmentEmailBodyV2({
             examLabel: 'EST II',
             logoUrl: 'https://emails-est-web.vercel.app/brand/est-ii-logo.svg',
         }),
-        description: 'Modern professional layout for EST II assignment emails with EST II branding and improved visual hierarchy.',
+        description: 'Modern design with EST II logo and color-coded cards for EST II assignments.',
+    },
+    {
+        id: 'est-ii-v3-minimal',
+        name: 'EST II Exam Assignment - V3 Minimal',
+        type: 'EMAIL',
+        subject: 'EST II Exam Assignment - V3 | {{name}}',
+        body: buildExamAssignmentEmailBodyV3({
+            examLabel: 'EST II',
+        }),
+        description: 'Minimal clean design with simple table layout for EST II assignments.',
     },
 ];
 
