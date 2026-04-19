@@ -253,8 +253,15 @@ const CONFIRMATION_STYLES: Record<RecipientResponseState, string> = {
     declined: 'bg-rose-50 text-rose-800 border border-rose-200',
 };
 
-const RECIPIENT_EXTRA_DETAIL_FIELDS: Array<{ key: keyof Recipient; fallback: string }> = [
+const EMPTY_VALUE_LABEL = 'empty';
+
+const RECIPIENT_DETAIL_FIELDS: Array<{ key: keyof Recipient; fallback: string }> = [
+    { key: 'room_est1', fallback: 'ROOM EST' },
     { key: 'division', fallback: 'Division' },
+    { key: 'name', fallback: 'Full English name (at least 4 names)' },
+    { key: 'arabic_name', fallback: 'Arabic Name' },
+    { key: 'email', fallback: 'Email' },
+    { key: 'phone', fallback: 'Mobile number' },
     { key: 'employer', fallback: 'Employer' },
     { key: 'kind_of_school', fallback: 'Kind of school' },
     { key: 'title', fallback: 'Title' },
@@ -270,6 +277,9 @@ const RECIPIENT_EXTRA_DETAIL_FIELDS: Array<{ key: keyof Recipient; fallback: str
     { key: 'bank_branch_name', fallback: 'Bank branch' },
     { key: 'account_number', fallback: 'Account number' },
     { key: 'iban_number', fallback: 'IBAN' },
+    { key: 'role', fallback: 'Role' },
+    { key: 'type', fallback: 'Type' },
+    { key: 'governorate', fallback: 'Governorate' },
     { key: 'address', fallback: 'Address' },
     { key: 'building', fallback: 'Building' },
     { key: 'location', fallback: 'Location' },
@@ -520,7 +530,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [cycleSelectionReady, setCycleSelectionReady] = useState(false);
     const [selectedSheet, setSelectedSheet] = useState<'LEGACY' | 'EST1' | 'EST2' | ''>('');
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState<number>(20);
+    const [pageSize, setPageSize] = useState<number>(1500);
     const [filters, setFilters] = useState<RecipientFilters>(EMPTY_FILTERS);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
     const [templateForm, setTemplateForm] = useState(EMPTY_TEMPLATE_FORM);
@@ -1659,13 +1669,15 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 </tr>
                                             ) : recipients.map((recipient) => {
                                                 const responseState = getRecipientResponseState(recipient);
-                                                const extraDetails = RECIPIENT_EXTRA_DETAIL_FIELDS
-                                                    .map(({ key, fallback }) => ({
-                                                        key,
-                                                        label: fallback,
-                                                        value: recipient[key],
-                                                    }))
-                                                    .filter((item) => Boolean(item.value));
+                                                const detailItems = RECIPIENT_DETAIL_FIELDS.map(({ key, fallback }) => ({
+                                                    key,
+                                                    label: fallback,
+                                                    value: key === 'room_est1'
+                                                        ? (recipient.room_est1 || recipient.room)
+                                                        : key === 'preferred_test_center'
+                                                            ? (recipient.preferred_test_center || recipient.test_center)
+                                                            : recipient[key],
+                                                }));
                                                 const detailsExpanded = expandedRecipientDetailsId === recipient.id;
 
                                                 return (
@@ -1684,56 +1696,53 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                         </td>
                                                         <td className="px-4 py-4 align-top">
                                                             <div className="min-w-[220px]">
-                                                                <div className="font-semibold text-slate-900">{recipient.name || '-'}</div>
+                                                                <div className="font-semibold text-slate-900">{recipient.name || EMPTY_VALUE_LABEL}</div>
                                                                 {recipient.arabic_name ? (
                                                                     <div className="mt-1 text-sm text-slate-600">{recipient.arabic_name}</div>
-                                                                ) : null}
-                                                                <div className="mt-2 text-xs text-slate-500">
-                                                                    {recipient.division || recipient.cycle?.name || recipient.id}
-                                                                </div>
+                                                                ) : (
+                                                                    <div className="mt-1 text-sm text-slate-400">{EMPTY_VALUE_LABEL}</div>
+                                                                )}
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-4 align-top">
                                                             <div className="min-w-[220px] space-y-2 text-sm text-slate-700">
                                                                 <div className="flex items-start gap-2">
                                                                     <Mail size={14} className="mt-0.5 shrink-0 text-slate-400" />
-                                                                    <span dir="ltr" className="break-all">{recipient.email || '-'}</span>
+                                                                    <span dir="ltr" className="break-all">{recipient.email || EMPTY_VALUE_LABEL}</span>
                                                                 </div>
                                                                 <div className="flex items-start gap-2">
                                                                     <Phone size={14} className="mt-0.5 shrink-0 text-slate-400" />
-                                                                    <span dir="ltr">{recipient.phone || '-'}</span>
+                                                                    <span dir="ltr">{recipient.phone || EMPTY_VALUE_LABEL}</span>
                                                                 </div>
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-4 align-top">
                                                             <div className="min-w-[280px] space-y-1 text-xs text-slate-600">
-                                                                <div><strong>{copy.roomEst1}:</strong> {recipient.room_est1 || recipient.room || '-'}</div>
-                                                                <div><strong>{copy.role}:</strong> {recipient.role || '-'}</div>
-                                                                <div><strong>{copy.typeLabel}:</strong> {recipient.type || '-'}</div>
-                                                                <div><strong>{copy.governorate}:</strong> {recipient.governorate || '-'}</div>
-                                                                {extraDetails.length > 0 ? (
-                                                                    <div className="pt-2">
-                                                                        <button
-                                                                            type="button"
-                                                                            className="text-xs font-semibold text-cyan-700 hover:text-cyan-800"
-                                                                            onClick={(event) => {
-                                                                                stopRowToggle(event);
-                                                                                setExpandedRecipientDetailsId((current) => current === recipient.id ? null : recipient.id);
-                                                                            }}
-                                                                        >
-                                                                            {detailsExpanded ? copy.detailsHideMore : copy.detailsSeeMore}
-                                                                        </button>
-                                                                        {detailsExpanded ? (
-                                                                            <div className="mt-3 space-y-1 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-                                                                                {extraDetails.map((item) => (
-                                                                                    <div key={String(item.key)}>
-                                                                                        <strong>{item.label}:</strong> {String(item.value)}
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        ) : null}
-                                                                    </div>
-                                                                ) : null}
+                                                                <div><strong>{copy.roomEst1}:</strong> {recipient.room_est1 || recipient.room || EMPTY_VALUE_LABEL}</div>
+                                                                <div><strong>{copy.role}:</strong> {recipient.role || EMPTY_VALUE_LABEL}</div>
+                                                                <div><strong>{copy.typeLabel}:</strong> {recipient.type || EMPTY_VALUE_LABEL}</div>
+                                                                <div><strong>{copy.governorate}:</strong> {recipient.governorate || EMPTY_VALUE_LABEL}</div>
+                                                                <div className="pt-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        className="text-xs font-semibold text-cyan-700 hover:text-cyan-800"
+                                                                        onClick={(event) => {
+                                                                            stopRowToggle(event);
+                                                                            setExpandedRecipientDetailsId((current) => current === recipient.id ? null : recipient.id);
+                                                                        }}
+                                                                    >
+                                                                        {detailsExpanded ? copy.detailsHideMore : copy.detailsSeeMore}
+                                                                    </button>
+                                                                    {detailsExpanded ? (
+                                                                        <div className="mt-3 space-y-1 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                                                                            {detailItems.map((item) => (
+                                                                                <div key={String(item.key)}>
+                                                                                    <strong>{item.label}:</strong> {item.value ? String(item.value) : EMPTY_VALUE_LABEL}
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : null}
+                                                                </div>
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-4 align-top">
@@ -1754,11 +1763,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                         </td>
                                                         <td className="px-4 py-4 align-top text-slate-700">{recipient.attempts_count ?? 0}</td>
                                                         <td className="px-4 py-4 align-top text-slate-700">
-                                                            {recipient.last_attempt_at ? new Date(recipient.last_attempt_at).toLocaleString() : '-'}
+                                                            {recipient.last_attempt_at ? new Date(recipient.last_attempt_at).toLocaleString() : EMPTY_VALUE_LABEL}
                                                         </td>
                                                         <td className="max-w-[220px] px-4 py-4 align-top text-xs text-rose-700">
-                                                            <div className="truncate" title={recipient.error_message || '-'}>
-                                                                {recipient.error_message || '-'}
+                                                            <div className="truncate" title={recipient.error_message || EMPTY_VALUE_LABEL}>
+                                                                {recipient.error_message || EMPTY_VALUE_LABEL}
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-4 align-top">

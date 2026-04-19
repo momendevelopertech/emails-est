@@ -209,22 +209,6 @@ function buildSheetRows(rows: unknown[][], sheet: ExcelSheetName, isArabic: bool
     }
 
     const rawHeaders = rows[0].map((value) => String(value || ''));
-    const headerIndexes = rawHeaders.reduce((acc, header, index) => {
-        const field = resolveHeaderField(header);
-        if (field && acc[field] === undefined) {
-            acc[field] = index;
-        }
-        return acc;
-    }, {} as Partial<Record<RecipientExcelField, number>>);
-
-    const requiredFields: RecipientExcelField[] = ['room_est1', 'name', 'email'];
-    const missing = requiredFields.filter((field) => headerIndexes[field] === undefined);
-    if (missing.length) {
-        const message = isArabic
-            ? `الأعمدة الأساسية الناقصة في شيت ${sheet}: ${missing.join(', ')}`
-            : `Missing required headers in ${sheet}: ${missing.join(', ')}`;
-        throw new Error(message);
-    }
 
     return rows
         .slice(1)

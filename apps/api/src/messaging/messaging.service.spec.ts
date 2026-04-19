@@ -35,7 +35,7 @@ describe('MessagingService', () => {
         prisma.$transaction.mockResolvedValue(undefined);
     });
 
-    it('importRecipients creates a new cycle and skips invalid and duplicate rows', async () => {
+    it('importRecipients keeps partial rows and skips only duplicates inside the same upload', async () => {
         prisma.recipientCycle.create.mockResolvedValue({
             id: 'cycle-1',
             name: 'April Cycle',
@@ -46,7 +46,7 @@ describe('MessagingService', () => {
             name: 'April Cycle',
             slug: 'april-cycle-20260412090000',
         });
-        prisma.recipient.createMany.mockResolvedValue({ count: 2 });
+        prisma.recipient.createMany.mockResolvedValue({ count: 3 });
 
         const res = await service.importRecipients({
             source_file_name: 'updated_emails_cleaned.xlsx',
@@ -63,10 +63,11 @@ describe('MessagingService', () => {
         const createdRecipients = prisma.recipient.createMany.mock.calls[0][0].data;
         expect(createdRecipients).toEqual(expect.arrayContaining([
             expect.objectContaining({ cycleId: createdCycleId, name: 'A', sheet: RecipientSheet.EST1 }),
+            expect.objectContaining({ cycleId: createdCycleId, name: '', email: 'b@x.com', room_est1: '102', sheet: RecipientSheet.EST2 }),
             expect.objectContaining({ cycleId: createdCycleId, name: 'C', sheet: RecipientSheet.EST2 }),
         ]));
-        expect(res.imported).toBe(2);
-        expect(res.skipped).toBe(2);
+        expect(res.imported).toBe(3);
+        expect(res.skipped).toBe(1);
         expect(res.cycle).toEqual(expect.objectContaining({ id: 'cycle-1' }));
     });
 

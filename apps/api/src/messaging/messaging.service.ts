@@ -301,16 +301,6 @@ export class MessagingService {
             const normalized = normalizeRecipientImport(recipient);
             const reasons: string[] = [];
 
-            if (!normalized.name) {
-                reasons.push('Missing full English name');
-            }
-
-            if (!normalized.email) {
-                reasons.push('Missing email address');
-            } else if (!isValidEmail(normalized.email)) {
-                reasons.push('Invalid email address');
-            }
-
             const duplicateKey = buildRecipientDuplicateKey(normalized);
             if (!reasons.length && seenRows.has(duplicateKey)) {
                 reasons.push('Duplicate row inside the same cycle upload');
