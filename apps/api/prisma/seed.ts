@@ -166,16 +166,13 @@ async function seedEmailSettings(client: PrismaClient) {
 }
 
 export async function seedMessagingData(client: PrismaClient) {
+  // Delete all existing templates to ensure clean state
+  await client.template.deleteMany({});
+
+  // Create only the 4 required templates
   for (const template of SEEDED_TEMPLATE_DEFINITIONS) {
-    await client.template.upsert({
-      where: { name: template.name },
-      update: {
-        type: template.type,
-        subject: template.subject,
-        body: template.body,
-        include_confirmation_button: template.include_confirmation_button,
-      },
-      create: template,
+    await client.template.create({
+      data: template,
     });
   }
 

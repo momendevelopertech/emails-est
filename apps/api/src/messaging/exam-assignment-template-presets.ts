@@ -5,6 +5,7 @@ type TemplateRecord = {
     type: TemplateType;
     subject: string;
     body: string;
+    include_confirmation_button?: boolean;
 };
 
 // V1: Classic Design with Gradient Hero
@@ -277,57 +278,45 @@ const buildExamAssignmentEmailBodyV3 = ({
 `.trim();
 
 export const EXAM_ASSIGNMENT_TEMPLATE_PRESETS: TemplateRecord[] = [
-    // EST I Templates
-    {
-        name: 'EST I Exam Assignment - V1 Classic',
-        type: TemplateType.EMAIL,
-        subject: 'EST I Exam Assignment - V1 | {{name}}',
-        body: buildExamAssignmentEmailBodyV1({
-            examLabel: 'EST I',
-        }),
-    },
     {
         name: 'EST I Exam Assignment - V2 Modern',
-        type: TemplateType.EMAIL,
+        type: TemplateType.BOTH,
         subject: 'EST I Exam Assignment - V2 | {{name}}',
         body: buildExamAssignmentEmailBodyV2({
             examLabel: 'EST I',
             logoUrl: 'https://emails-est-web.vercel.app/brand/est-i-logo.svg',
         }),
-    },
-    {
-        name: 'EST I Exam Assignment - V3 Minimal',
-        type: TemplateType.EMAIL,
-        subject: 'EST I Exam Assignment - V3 | {{name}}',
-        body: buildExamAssignmentEmailBodyV3({
-            examLabel: 'EST I',
-        }),
-    },
-    // EST II Templates
-    {
-        name: 'EST II Exam Assignment - V1 Classic',
-        type: TemplateType.EMAIL,
-        subject: 'EST II Exam Assignment - V1 | {{name}}',
-        body: buildExamAssignmentEmailBodyV1({
-            examLabel: 'EST II',
-        }),
+        include_confirmation_button: false,
     },
     {
         name: 'EST II Exam Assignment - V2 Modern',
-        type: TemplateType.EMAIL,
+        type: TemplateType.BOTH,
         subject: 'EST II Exam Assignment - V2 | {{name}}',
         body: buildExamAssignmentEmailBodyV2({
             examLabel: 'EST II',
             logoUrl: 'https://emails-est-web.vercel.app/brand/est-ii-logo.svg',
         }),
+        include_confirmation_button: false,
     },
     {
-        name: 'EST II Exam Assignment - V3 Minimal',
-        type: TemplateType.EMAIL,
-        subject: 'EST II Exam Assignment - V3 | {{name}}',
-        body: buildExamAssignmentEmailBodyV3({
+        name: 'EST I Exam Assignment - V2 Modern (With Confirmation)',
+        type: TemplateType.BOTH,
+        subject: 'EST I Exam Assignment - V2 | {{name}} (Action Required)',
+        body: buildExamAssignmentEmailBodyV2({
+            examLabel: 'EST I',
+            logoUrl: 'https://emails-est-web.vercel.app/brand/est-i-logo.svg',
+        }) + '\n\n<!-- Confirmation Link -->\n<p style="text-align:center;margin:24px 0;"><a href="{{confirm_url}}" style="display:inline-block;padding:12px 28px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Confirm Attendance</a></p>\n\n<p style="text-align:center;font-size:12px;color:#718096;"><a href="{{confirm_url}}" style="color:#718096;">Or click here to confirm</a></p>',
+        include_confirmation_button: true,
+    },
+    {
+        name: 'EST II Exam Assignment - V2 Modern (With Confirmation)',
+        type: TemplateType.BOTH,
+        subject: 'EST II Exam Assignment - V2 | {{name}} (Action Required)',
+        body: buildExamAssignmentEmailBodyV2({
             examLabel: 'EST II',
-        }),
+            logoUrl: 'https://emails-est-web.vercel.app/brand/est-ii-logo.svg',
+        }) + '\n\n<!-- Confirmation Link -->\n<p style="text-align:center;margin:24px 0;"><a href="{{confirm_url}}" style="display:inline-block;padding:12px 28px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Confirm Attendance</a></p>\n\n<p style="text-align:center;font-size:12px;color:#718096;"><a href="{{confirm_url}}" style="color:#718096;">Or click here to confirm</a></p>',
+        include_confirmation_button: true,
     },
 ];
 

@@ -741,7 +741,13 @@ export class MessagingService {
 
             if (!existing) {
                 await this.prisma.template.create({
-                    data: preset,
+                    data: {
+                        name: preset.name,
+                        type: preset.type,
+                        subject: preset.subject,
+                        body: preset.body,
+                        include_confirmation_button: preset.include_confirmation_button || false,
+                    },
                 });
                 return;
             }
@@ -756,6 +762,7 @@ export class MessagingService {
                     type: existing.type === TemplateType.WHATSAPP ? TemplateType.EMAIL : existing.type,
                     subject: preset.subject,
                     body: preset.body,
+                    include_confirmation_button: preset.include_confirmation_button || false,
                 },
             });
         }));
