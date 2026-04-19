@@ -1,6 +1,6 @@
 import { RecipientSheet } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsEnum, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Allow, ArrayMinSize, IsArray, IsEnum, IsOptional, IsString, ValidateNested } from 'class-validator';
 
 export class ImportedRecipientRowDto {
     @IsOptional()
@@ -78,6 +78,10 @@ export class ImportedRecipientRowDto {
     @IsOptional()
     @IsEnum(RecipientSheet)
     sheet?: RecipientSheet;
+
+    // Allow additional properties from Excel headers
+    @Allow()
+    [key: string]: unknown;
 }
 
 export class ImportRecipientsDto {
