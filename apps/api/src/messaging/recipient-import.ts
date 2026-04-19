@@ -69,7 +69,7 @@ export function normalizeRecipientImport(recipient: RecipientImportInput): Norma
     const location = normalizeImportValue(recipient.location) ?? normalizeImportValue(recipient.map_link);
 
     return {
-        cycleId: normalizeImportValue(recipient.cycleId),
+        cycleId: null,
         name: normalizeImportValue(recipient.name) ?? '',
         email: normalizeEmail(recipient.email),
         phone: normalizeImportValue(recipient.phone),
@@ -93,7 +93,7 @@ export function normalizeRecipientImport(recipient: RecipientImportInput): Norma
 }
 
 export function normalizeImportValue(value: unknown): string | null {
-    if (value === null || value === undefined) {
+    if (value === null || value === undefined || value === '') {
         return null;
     }
 

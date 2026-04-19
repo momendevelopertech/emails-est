@@ -360,10 +360,13 @@ export class MessagingService {
                 },
             }),
             this.prisma.recipient.createMany({
-                data: normalizedRecipients.map((recipient) => ({
-                    ...recipient,
-                    cycleId,
-                })),
+                data: normalizedRecipients.map((recipient) => {
+                    const { cycleId: _ignored, ...rest } = recipient;
+                    return {
+                        ...rest,
+                        cycleId,
+                    };
+                }),
             }),
         ]);
 
