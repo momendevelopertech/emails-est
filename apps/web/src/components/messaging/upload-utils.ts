@@ -154,7 +154,7 @@ function buildSheetRows(rows: unknown[][], sheet: ExcelSheetName, isArabic: bool
 
             for (const [header, index] of rawHeaders.entries()) {
                 const normalizedKey = normalizeHeader(header);
-                const value = String(values[index] ?? '').trim();
+                const value = String(values[index as number] ?? '').trim();
                 const field = resolveHeaderField(header);
 
                 if (field) {
