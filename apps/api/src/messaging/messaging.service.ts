@@ -254,6 +254,7 @@ export class MessagingService {
             data: {
                 ...normalized,
                 status: RecipientStatus.PENDING,
+                confirmation_token: randomUUID(),
             },
         });
     }
@@ -326,6 +327,7 @@ export class MessagingService {
             return [{
                 ...normalized,
                 status: RecipientStatus.PENDING,
+                confirmation_token: randomUUID(),
             }];
         });
 
@@ -378,6 +380,45 @@ export class MessagingService {
             skipped: skippedRows.length,
             cycle,
             skipped_rows: skippedRows,
+        };
+    }
+
+    async confirmRecipient(token: string) {
+        if (!token?.trim()) {
+            throw new BadRequestException('Confirmation token is required.');
+        }
+
+        const recipient = await this.prisma.recipient.findUnique({
+            where: { confirmation_token: token.trim() },
+            select: {
+                id: true,
+                confirmed_at: true,
+                name: true,
+                email: true,
+            },
+        });
+
+        if (!recipient) {
+            throw new BadRequestException('Invalid or expired confirmation link.');
+        }
+
+        if (recipient.confirmed_at) {
+            return {
+                confirmed: true,
+                message: 'This assignment has already been confirmed.',
+            };
+        }
+
+        await this.prisma.recipient.update({
+            where: { id: recipient.id },
+            data: {
+                confirmed_at: new Date(),
+            },
+        });
+
+        return {
+            confirmed: true,
+            message: 'Your assignment has been confirmed successfully.',
         };
     }
 
@@ -517,6 +558,19 @@ export class MessagingService {
         return this.prisma.recipient.findMany({ where });
     }
 
+    private buildFrontendUrl() {
+        return String(process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    }
+
+    private buildConfirmUrl(recipient: Record<string, any>) {
+        const token = recipient.confirmation_token;
+        if (!token) {
+            return '';
+        }
+
+        return `${this.buildFrontendUrl()}/messaging/confirm?token=${encodeURIComponent(String(token))}`;
+    }
+
     private async processRecipients(recipients: Array<{ id: string }>, template: { subject: string; body: string; type: TemplateType }) {
         if (!recipients.length) {
             return [] as SendResult[];
@@ -551,10 +605,15 @@ export class MessagingService {
 
         const results = [] as Array<{ ok: boolean; error?: string }>;
 
+        const recipientWithConfirmUrl = {
+            ...recipient,
+            confirm_url: this.buildConfirmUrl(recipient),
+        };
+
         if (template.type !== TemplateType.WHATSAPP) {
             if (recipient.email) {
-                const subject = this.renderTemplate(template.subject, recipient);
-                const html = this.renderEmailBody(template.body, recipient);
+                const subject = this.renderTemplate(template.subject, recipientWithConfirmUrl);
+                const html = this.renderEmailBody(template.body, recipientWithConfirmUrl);
                 const emailResult = await this.emailService.sendEmail({
                     to: recipient.email,
                     subject,

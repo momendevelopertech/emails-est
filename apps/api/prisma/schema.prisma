@@ -113,6 +113,8 @@ model Recipient {
   location        String?
   map_link        String?
   arrival_time    String?
+  confirmation_token String?      @unique
+  confirmed_at    DateTime?
   sheet           RecipientSheet  @default(LEGACY)
   status          RecipientStatus @default(PENDING)
   error_message   String?

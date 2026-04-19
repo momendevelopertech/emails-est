@@ -57,6 +57,7 @@ export type NormalizedRecipientImport = {
     location: string | null;
     map_link: string | null;
     arrival_time: string | null;
+    confirmation_token?: string | null;
     sheet: RecipientSheet;
 };
 

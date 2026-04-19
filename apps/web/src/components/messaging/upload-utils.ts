@@ -5,36 +5,56 @@ export type ExcelSheetName = typeof EXCEL_SHEET_NAMES[number];
 
 export const EXCEL_UPLOAD_HEADERS = [
     'ROOM',
+    'Division',
     'Full English name (at least 4 names)',
+    'Arabic Name',
     'Email',
+    'Employer (School/Organization name)',
+    'Kind of School',
+    'Title',
+    'Insurance number (الرقم التأمينى)',
+    'Institution tax number (الرقم الضريبي للمنشأة أو المدرسة)',
+    'National ID number',
+    'National ID picture',
+    'Personal Photo',
+    'Preferred proctoring city',
+    'Preferred test center',
+    'Full name (as per bank account)',
+    'Name of bank',
+    'branch name',
+    'Account number',
+    'IBAN number (please contact your bank to get it)',
     'Role',
     'Type',
     'Governorate',
     'Address',
-    'Building',
     'Location',
+    'bank divid',
+    'Additional Info 1',
+    'Additional Info 2',
 ] as const;
 
-export type ExcelRecipientRow = {
-    room_est1: string;
-    name: string;
-    email: string;
-    role: string;
-    type: string;
-    governorate: string;
-    address: string;
-    building: string;
-    location: string;
-    sheet: ExcelSheetName;
-};
+export type ExcelRecipientRow = Record<string, string> & { sheet: ExcelSheetName };
 
 export type RecipientImportRow = ExcelRecipientRow;
 
-type HeaderField = keyof Omit<ExcelRecipientRow, 'sheet'>;
+type HeaderField =
+    | 'room_est1'
+    | 'name'
+    | 'email'
+    | 'role'
+    | 'type'
+    | 'governorate'
+    | 'address'
+    | 'building'
+    | 'location';
 type DownloadKind = 'template' | 'sample';
 
 const HEADER_ALIASES: Array<{ field: HeaderField; aliases: string[] }> = [
-    { field: 'room_est1', aliases: ['room', 'roomest1', 'roomest2', 'est1room', 'est2room'] },
+    {
+        field: 'room_est1',
+        aliases: ['room', 'roomest1', 'roomest2', 'est1room', 'est2room', 'roomest'],
+    },
     {
         field: 'name',
         aliases: [
@@ -43,15 +63,27 @@ const HEADER_ALIASES: Array<{ field: HeaderField; aliases: string[] }> = [
             'englishname',
             'fullname',
             'name',
+            'fullnameasperbankaccount',
         ],
     },
-    { field: 'email', aliases: ['email', 'mail', 'emailaddress'] },
-    { field: 'role', aliases: ['role'] },
-    { field: 'type', aliases: ['type'] },
-    { field: 'governorate', aliases: ['governorate', 'governorates'] },
-    { field: 'address', aliases: ['address'] },
-    { field: 'building', aliases: ['building'] },
-    { field: 'location', aliases: ['location', 'map', 'maplink', 'googlemap'] },
+    { field: 'email', aliases: ['email', 'mail', 'emailaddress', 'emailaddress'] },
+    { field: 'role', aliases: ['role', 'title', 'jobtitle'] },
+    { field: 'type', aliases: ['type', 'kindofschool', 'schooltype', 'kindofschoolname'] },
+    { field: 'governorate', aliases: ['governorate', 'governorates', 'preferredproctoringcity', 'city'] },
+    { field: 'address', aliases: ['address', 'schooladdress', 'organizationaddress'] },
+    {
+        field: 'building',
+        aliases: [
+            'building',
+            'preferredtestcenter',
+            'testcenter',
+            'testcentername',
+            'faculty',
+            'employer',
+            'organizationname',
+        ],
+    },
+    { field: 'location', aliases: ['location', 'map', 'maplink', 'googlemap', 'locationonsite'] },
 ];
 
 const isArabicInput = (value?: string | boolean) => value === true || value === 'ar';
@@ -120,9 +152,18 @@ function buildSheetRows(rows: unknown[][], sheet: ExcelSheetName, isArabic: bool
             const values = Array.isArray(row) ? row : [];
             const item = createEmptyRow(sheet);
 
-            for (const field of requiredFields) {
-                const index = headerIndexes[field];
-                item[field] = String(index === undefined ? '' : values[index] ?? '').trim();
+            for (const [header, index] of rawHeaders.entries()) {
+                const normalizedKey = normalizeHeader(header);
+                const value = String(values[index] ?? '').trim();
+                const field = resolveHeaderField(header);
+
+                if (field) {
+                    item[field] = value;
+                }
+
+                if (normalizedKey && normalizedKey !== 'sheet') {
+                    item[normalizedKey] = value;
+                }
             }
 
             return item;
@@ -143,15 +184,34 @@ export function buildDownloadWorkbook(kind: DownloadKind) {
             headerRow,
             ...(kind === 'sample'
                 ? [[
-                    'AASTM-Abuqir',
+                    'A1',
+                    'North Region',
                     'Ahmed Ali Hassan Mahmoud',
+                    'أحمد علي حسن محمود',
                     'proctor@example.com',
-                    sheet === 'EST1' ? 'Head of EST' : 'Control room assistant',
-                    'IP',
-                    'Alexandria',
-                    'Arab Academy, Abu Qir, Alexandria',
-                    'Arab Academy Abu Qir Faculty of Pharmacy',
-                    'https://maps.app.goo.gl/example',
+                    'Al Amal School',
+                    'Private School',
+                    'Senior Supervisor',
+                    '123456789',
+                    '123456789',
+                    '12345678901234',
+                    'national-id.jpg',
+                    'photo.jpg',
+                    'Cairo',
+                    'Al-Azhar Secondary',
+                    'Ahmed Salah',
+                    'National Bank',
+                    'Downtown',
+                    '1234567890',
+                    'EG123456789012345678901234',
+                    'Lead Invigilator',
+                    'Written',
+                    'Cairo',
+                    '123 Tahrir Street',
+                    'Cairo Exam Center',
+                    'Bank Division',
+                    'Extra info 1',
+                    'Extra info 2',
                 ]]
                 : []),
         ];

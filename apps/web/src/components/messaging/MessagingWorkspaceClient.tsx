@@ -62,6 +62,7 @@ type Recipient = {
     location?: string | null;
     map_link?: string | null;
     arrival_time?: string | null;
+    confirmed_at?: string | null;
     sheet?: 'LEGACY' | 'EST1' | 'EST2';
     status: 'PENDING' | 'PROCESSING' | 'SENT' | 'FAILED';
     error_message?: string | null;
@@ -214,6 +215,11 @@ const CHANNEL_STYLES: Record<TemplateType, string> = {
     BOTH: 'bg-violet-50 text-violet-800 border border-violet-200',
     EMAIL: 'bg-cyan-50 text-cyan-800 border border-cyan-200',
     WHATSAPP: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+};
+
+const CONFIRMATION_STYLES: Record<'confirmed' | 'unconfirmed', string> = {
+    confirmed: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+    unconfirmed: 'bg-slate-100 text-slate-700 border border-slate-200',
 };
 
 const isWorkspaceTab = (value?: string | null): value is WorkspaceTab =>
@@ -374,6 +380,13 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             SENT: isArabic ? 'تم الإرسال' : 'Sent',
             FAILED: isArabic ? 'فشل' : 'Failed',
         },
+        confirmedLabels: {
+            confirmed: isArabic ? 'تم التأكيد' : 'Confirmed',
+            unconfirmed: isArabic ? 'لم يؤكد بعد' : 'Unconfirmed',
+        },
+        confirmed: isArabic ? 'تأكيد' : 'Confirmed',
+        unconfirmed: isArabic ? 'لم يؤكد بعد' : 'Unconfirmed',
+        confirmTitle: isArabic ? 'حالة التأكيد' : 'Confirmation',
         templateTypeLabels: {
             BOTH: isArabic ? 'إيميل + واتساب' : 'Email + WhatsApp',
             EMAIL: isArabic ? 'إيميل فقط' : 'Email only',
@@ -1465,6 +1478,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.contact}</th>
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.details}</th>
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.status}</th>
+                                                <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.confirmTitle}</th>
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.attempts}</th>
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.lastAttempt}</th>
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.errorLabel}</th>
@@ -1488,7 +1502,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 ))
                                             ) : recipients.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan={9} className="px-4 py-12 text-center text-slate-500">{copy.emptyRecipients}</td>
+                                                    <td colSpan={10} className="px-4 py-12 text-center text-slate-500">{copy.emptyRecipients}</td>
                                                 </tr>
                                             ) : recipients.map((recipient) => (
                                                 <tr
@@ -1528,9 +1542,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                         </div>
                                                     </td>
                                                     <td className="px-4 py-4 align-top">
-                                                        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[recipient.status]}`}>
+                                                        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${CONFIRMATION_STYLES[recipient.confirmed_at ? 'confirmed' : 'unconfirmed']}`}>
                                                             <span className="h-2.5 w-2.5 rounded-full bg-current opacity-80" />
-                                                            {copy.statusLabels[recipient.status]}
+                                                            {recipient.confirmed_at ? copy.confirmedLabels.confirmed : copy.confirmedLabels.unconfirmed}
                                                         </span>
                                                     </td>
                                                     <td className="px-4 py-4 align-top text-slate-700">{recipient.attempts_count ?? 0}</td>
@@ -2121,6 +2135,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             <tr>
                                                 <th className="px-4 py-3">{copy.name}</th>
                                                 <th className="px-4 py-3">{copy.status}</th>
+                                                <th className="px-4 py-3">{copy.confirmTitle}</th>
                                                 <th className="px-4 py-3">{copy.errorLabel}</th>
                                                 <th className="px-4 py-3">Time</th>
                                             </tr>
