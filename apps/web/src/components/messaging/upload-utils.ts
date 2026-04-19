@@ -152,9 +152,10 @@ function buildSheetRows(rows: unknown[][], sheet: ExcelSheetName, isArabic: bool
             const values = Array.isArray(row) ? row : [];
             const item = createEmptyRow(sheet);
 
-            for (const [header, index] of rawHeaders.entries()) {
+            for (let i = 0; i < rawHeaders.length; i++) {
+                const header = rawHeaders[i];
                 const normalizedKey = normalizeHeader(header);
-                const value = String(values[index as number] ?? '').trim();
+                const value = String(values[i] ?? '').trim();
                 const field = resolveHeaderField(header);
 
                 if (field) {
