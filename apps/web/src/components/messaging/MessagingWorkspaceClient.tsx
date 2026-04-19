@@ -12,6 +12,7 @@ import {
     Filter,
     LayoutPanelTop,
     Mail,
+    Phone,
     RefreshCcw,
     Search,
     SendHorizontal,
@@ -31,7 +32,7 @@ import {
     TEMPLATE_PREVIEW_RECIPIENT,
 } from '@/lib/messaging-template-presets';
 import { useRequireAuth } from '@/lib/use-auth';
-import { getImportErrorMessage } from './upload-utils';
+import { buildRecipientExcelRow, getImportErrorMessage } from './upload-utils';
 import RecipientFormModal, { RecipientExcelFormState, RecipientFormErrors } from './RecipientFormModal';
 import ConfirmDialog from '../ConfirmDialog';
 import FormSelect from '../FormSelect';
@@ -44,9 +45,26 @@ type TemplateEditorField = 'subject' | 'body';
 type Recipient = {
     id: string;
     cycleId?: string | null;
+    division?: string | null;
     name: string;
+    arabic_name?: string | null;
     email?: string | null;
     phone?: string | null;
+    employer?: string | null;
+    kind_of_school?: string | null;
+    title?: string | null;
+    insurance_number?: string | null;
+    institution_tax_number?: string | null;
+    national_id_number?: string | null;
+    national_id_picture?: string | null;
+    personal_photo?: string | null;
+    preferred_proctoring_city?: string | null;
+    preferred_test_center?: string | null;
+    bank_account_name?: string | null;
+    bank_name?: string | null;
+    bank_branch_name?: string | null;
+    account_number?: string | null;
+    iban_number?: string | null;
     exam_type?: string | null;
     role?: string | null;
     day?: string | null;
@@ -61,8 +79,12 @@ type Recipient = {
     building?: string | null;
     location?: string | null;
     map_link?: string | null;
+    bank_divid?: string | null;
+    additional_info_1?: string | null;
+    additional_info_2?: string | null;
     arrival_time?: string | null;
     confirmed_at?: string | null;
+    declined_at?: string | null;
     sheet?: 'LEGACY' | 'EST1' | 'EST2';
     status: 'PENDING' | 'PROCESSING' | 'SENT' | 'FAILED';
     error_message?: string | null;
@@ -154,31 +176,37 @@ type EmailSettingsRecord = {
 const EMPTY_RECIPIENTS: Recipient[] = [];
 const EMPTY_RECIPIENT_FORM: RecipientExcelFormState = {
     room_est1: '',
+    division: '',
     name: '',
+    arabic_name: '',
     email: '',
+    phone: '',
+    employer: '',
+    kind_of_school: '',
+    title: '',
+    insurance_number: '',
+    institution_tax_number: '',
+    national_id_number: '',
+    national_id_picture: '',
+    personal_photo: '',
+    preferred_proctoring_city: '',
+    preferred_test_center: '',
+    bank_account_name: '',
+    bank_name: '',
+    bank_branch_name: '',
+    account_number: '',
+    iban_number: '',
     role: '',
     type: '',
     governorate: '',
     address: '',
     building: '',
     location: '',
+    bank_divid: '',
+    additional_info_1: '',
+    additional_info_2: '',
     sheet: '',
 };
-
-const RECIPIENT_EXPORT_COLUMNS = ['ROOM', 'name', 'Email', 'Role', 'Type', 'Governorate', 'Address', 'Building', 'Location', 'Sheet'] as const;
-
-const mapRecipientToExcelRow = (recipient: Pick<Recipient, 'room_est1' | 'name' | 'email' | 'role' | 'type' | 'governorate' | 'address' | 'building' | 'location' | 'sheet'>) => ({
-    ROOM: recipient.room_est1 || '',
-    name: recipient.name || '',
-    Email: recipient.email || '',
-    Role: recipient.role || '',
-    Type: recipient.type || '',
-    Governorate: recipient.governorate || '',
-    Address: recipient.address || '',
-    Building: recipient.building || '',
-    Location: recipient.location || '',
-    Sheet: recipient.sheet || '',
-});
 const EMPTY_FILTERS: RecipientFilters = {
     cycleId: '',
     search: '',
@@ -196,7 +224,7 @@ const EMPTY_FILTERS: RecipientFilters = {
 
 const EMPTY_TEMPLATE_FORM = {
     name: '',
-    type: 'BOTH' as TemplateType,
+    type: 'EMAIL' as TemplateType,
     subject: '',
     body: '',
 };
@@ -217,13 +245,81 @@ const CHANNEL_STYLES: Record<TemplateType, string> = {
     WHATSAPP: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
 };
 
-const CONFIRMATION_STYLES: Record<'confirmed' | 'unconfirmed', string> = {
+type RecipientResponseState = 'pending' | 'confirmed' | 'declined';
+
+const CONFIRMATION_STYLES: Record<RecipientResponseState, string> = {
+    pending: 'bg-slate-100 text-slate-700 border border-slate-200',
     confirmed: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
-    unconfirmed: 'bg-slate-100 text-slate-700 border border-slate-200',
+    declined: 'bg-rose-50 text-rose-800 border border-rose-200',
 };
+
+const RECIPIENT_EXTRA_DETAIL_FIELDS: Array<{ key: keyof Recipient; fallback: string }> = [
+    { key: 'division', fallback: 'Division' },
+    { key: 'employer', fallback: 'Employer' },
+    { key: 'kind_of_school', fallback: 'Kind of school' },
+    { key: 'title', fallback: 'Title' },
+    { key: 'insurance_number', fallback: 'Insurance number' },
+    { key: 'institution_tax_number', fallback: 'Institution tax number' },
+    { key: 'national_id_number', fallback: 'National ID number' },
+    { key: 'national_id_picture', fallback: 'National ID picture' },
+    { key: 'personal_photo', fallback: 'Personal photo' },
+    { key: 'preferred_proctoring_city', fallback: 'Preferred proctoring city' },
+    { key: 'preferred_test_center', fallback: 'Preferred test center' },
+    { key: 'bank_account_name', fallback: 'Bank account name' },
+    { key: 'bank_name', fallback: 'Bank name' },
+    { key: 'bank_branch_name', fallback: 'Bank branch' },
+    { key: 'account_number', fallback: 'Account number' },
+    { key: 'iban_number', fallback: 'IBAN' },
+    { key: 'address', fallback: 'Address' },
+    { key: 'building', fallback: 'Building' },
+    { key: 'location', fallback: 'Location' },
+    { key: 'bank_divid', fallback: 'Bank divid' },
+    { key: 'additional_info_1', fallback: 'Additional info 1' },
+    { key: 'additional_info_2', fallback: 'Additional info 2' },
+];
 
 const isWorkspaceTab = (value?: string | null): value is WorkspaceTab =>
     value === 'recipients' || value === 'templates' || value === 'campaign' || value === 'settings';
+
+const getRecipientResponseState = (recipient: Pick<Recipient, 'confirmed_at' | 'declined_at'>): RecipientResponseState => {
+    if (recipient.declined_at) return 'declined';
+    if (recipient.confirmed_at) return 'confirmed';
+    return 'pending';
+};
+
+const trimRecipientFormValues = (form: RecipientExcelFormState): RecipientExcelFormState => ({
+    room_est1: form.room_est1.trim(),
+    division: form.division.trim(),
+    name: form.name.trim(),
+    arabic_name: form.arabic_name.trim(),
+    email: form.email.trim(),
+    phone: form.phone.trim(),
+    employer: form.employer.trim(),
+    kind_of_school: form.kind_of_school.trim(),
+    title: form.title.trim(),
+    insurance_number: form.insurance_number.trim(),
+    institution_tax_number: form.institution_tax_number.trim(),
+    national_id_number: form.national_id_number.trim(),
+    national_id_picture: form.national_id_picture.trim(),
+    personal_photo: form.personal_photo.trim(),
+    preferred_proctoring_city: form.preferred_proctoring_city.trim(),
+    preferred_test_center: form.preferred_test_center.trim(),
+    bank_account_name: form.bank_account_name.trim(),
+    bank_name: form.bank_name.trim(),
+    bank_branch_name: form.bank_branch_name.trim(),
+    account_number: form.account_number.trim(),
+    iban_number: form.iban_number.trim(),
+    role: form.role.trim(),
+    type: form.type.trim(),
+    governorate: form.governorate.trim(),
+    address: form.address.trim(),
+    building: form.building.trim(),
+    location: form.location.trim(),
+    bank_divid: form.bank_divid.trim(),
+    additional_info_1: form.additional_info_1.trim(),
+    additional_info_2: form.additional_info_2.trim(),
+    sheet: form.sheet.trim() as RecipientExcelFormState['sheet'],
+});
 
 export default function MessagingWorkspaceClient({ locale }: { locale: string }) {
     const isArabic = locale === 'ar';
@@ -292,8 +388,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         clearSelection: isArabic ? 'إلغاء التحديد' : 'Clear selection',
         goToSend: isArabic ? 'الانتقال إلى الإرسال' : 'Go to send',
         name: isArabic ? 'الاسم' : 'Name',
-        contact: isArabic ? 'الإيميل' : 'Email',
+        contact: isArabic ? 'التواصل' : 'Contact',
         details: isArabic ? 'التفاصيل' : 'Details',
+        detailsSeeMore: isArabic ? 'عرض باقي البيانات' : 'See more',
+        detailsHideMore: isArabic ? 'إخفاء البيانات' : 'Hide details',
         attempts: isArabic ? 'المحاولات' : 'Attempts',
         lastAttempt: isArabic ? 'آخر محاولة' : 'Last attempt',
         errorLabel: isArabic ? 'الخطأ' : 'Error',
@@ -382,11 +480,13 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         },
         confirmedLabels: {
             confirmed: isArabic ? 'تم التأكيد' : 'Confirmed',
-            unconfirmed: isArabic ? 'لم يؤكد بعد' : 'Unconfirmed',
+            declined: isArabic ? 'اعتذر' : 'Apologized',
+            pending: isArabic ? 'بانتظار الرد' : 'Pending response',
+            unconfirmed: isArabic ? 'بانتظار الرد' : 'Pending response',
         },
         confirmed: isArabic ? 'تأكيد' : 'Confirmed',
-        unconfirmed: isArabic ? 'لم يؤكد بعد' : 'Unconfirmed',
-        confirmTitle: isArabic ? 'حالة التأكيد' : 'Confirmation',
+        unconfirmed: isArabic ? 'بانتظار الرد' : 'Pending response',
+        confirmTitle: isArabic ? 'حالة الرد' : 'Response',
         templateTypeLabels: {
             BOTH: isArabic ? 'إيميل + واتساب' : 'Email + WhatsApp',
             EMAIL: isArabic ? 'إيميل فقط' : 'Email only',
@@ -440,6 +540,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [editingRecipientId, setEditingRecipientId] = useState<string | null>(null);
     const [editingRecipientCycleId, setEditingRecipientCycleId] = useState<string | null>(null);
     const [isRecipientFormOpen, setIsRecipientFormOpen] = useState(false);
+    const [expandedRecipientDetailsId, setExpandedRecipientDetailsId] = useState<string | null>(null);
     const [deleteConfirmState, setDeleteConfirmState] = useState<{ type: 'recipient'; recipientId: string } | { type: 'cycle'; cycleId: string } | null>(null);
     const subjectInputRef = useRef<HTMLInputElement>(null);
     const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -867,9 +968,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         ...Object.entries(copy.statusLabels).map(([statusValue, label]) => ({ value: statusValue, label })),
     ];
     const pageSizeOptions = PAGE_SIZE_OPTIONS.map((option) => ({ value: String(option), label: String(option) }));
-    const templateTypeOptions = Object.entries(copy.templateTypeLabels).map(([templateValue, label]) => ({
+    const templateTypeOptions = (['EMAIL', 'WHATSAPP', 'BOTH'] as TemplateType[]).map((templateValue) => ({
         value: templateValue,
-        label,
+        label: copy.templateTypeLabels[templateValue],
     }));
     const campaignTemplateOptions = (templatesQuery.data ?? []).map((template) => ({
         value: template.id,
@@ -925,14 +1026,35 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         setEditingRecipientCycleId(recipient.cycleId || null);
         setRecipientForm({
             room_est1: recipient.room_est1 || recipient.room || '',
+            division: recipient.division || '',
             name: recipient.name || '',
+            arabic_name: recipient.arabic_name || '',
             email: recipient.email || '',
+            phone: recipient.phone || '',
+            employer: recipient.employer || '',
+            kind_of_school: recipient.kind_of_school || '',
+            title: recipient.title || '',
+            insurance_number: recipient.insurance_number || '',
+            institution_tax_number: recipient.institution_tax_number || '',
+            national_id_number: recipient.national_id_number || '',
+            national_id_picture: recipient.national_id_picture || '',
+            personal_photo: recipient.personal_photo || '',
+            preferred_proctoring_city: recipient.preferred_proctoring_city || '',
+            preferred_test_center: recipient.preferred_test_center || '',
+            bank_account_name: recipient.bank_account_name || '',
+            bank_name: recipient.bank_name || '',
+            bank_branch_name: recipient.bank_branch_name || '',
+            account_number: recipient.account_number || '',
+            iban_number: recipient.iban_number || '',
             role: recipient.role || '',
             type: recipient.type || '',
             governorate: recipient.governorate || '',
             address: recipient.address || '',
             building: recipient.building || '',
             location: recipient.location || '',
+            bank_divid: recipient.bank_divid || '',
+            additional_info_1: recipient.additional_info_1 || '',
+            additional_info_2: recipient.additional_info_2 || '',
             sheet: recipient.sheet === 'EST1' || recipient.sheet === 'EST2' ? recipient.sheet : '',
         });
         setRecipientFormErrors({});
@@ -973,13 +1095,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             return;
         }
 
+        const trimmedValues = trimRecipientFormValues(recipientForm);
         saveRecipientMutation.mutate({
             recipientId: editingRecipientId,
             values: {
-                ...recipientForm,
-                name: recipientForm.name.trim(),
-                email: recipientForm.email.trim(),
-                room_est1: recipientForm.room_est1.trim(),
+                ...trimmedValues,
             },
         });
     };
@@ -1016,7 +1136,40 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                 allItems = allItems.concat(response.data?.items ?? []);
             }
 
-            const worksheet = XLSX.utils.json_to_sheet(allItems.map(mapRecipientToExcelRow), { header: [...RECIPIENT_EXPORT_COLUMNS] });
+            const worksheet = XLSX.utils.json_to_sheet(
+                allItems.map((recipient) => buildRecipientExcelRow({
+                    room_est1: recipient.room_est1 || recipient.room || '',
+                    division: recipient.division || '',
+                    name: recipient.name || '',
+                    arabic_name: recipient.arabic_name || '',
+                    email: recipient.email || '',
+                    phone: recipient.phone || '',
+                    employer: recipient.employer || '',
+                    kind_of_school: recipient.kind_of_school || '',
+                    title: recipient.title || '',
+                    insurance_number: recipient.insurance_number || '',
+                    institution_tax_number: recipient.institution_tax_number || '',
+                    national_id_number: recipient.national_id_number || '',
+                    national_id_picture: recipient.national_id_picture || '',
+                    personal_photo: recipient.personal_photo || '',
+                    preferred_proctoring_city: recipient.preferred_proctoring_city || '',
+                    preferred_test_center: recipient.preferred_test_center || '',
+                    bank_account_name: recipient.bank_account_name || '',
+                    bank_name: recipient.bank_name || '',
+                    bank_branch_name: recipient.bank_branch_name || '',
+                    account_number: recipient.account_number || '',
+                    iban_number: recipient.iban_number || '',
+                    role: recipient.role || '',
+                    type: recipient.type || '',
+                    governorate: recipient.governorate || '',
+                    address: recipient.address || '',
+                    building: recipient.building || '',
+                    location: recipient.location || '',
+                    bank_divid: recipient.bank_divid || '',
+                    additional_info_1: recipient.additional_info_1 || '',
+                    additional_info_2: recipient.additional_info_2 || '',
+                })),
+            );
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, 'Recipients');
             const fileName = selectedSheet ? `recipients_${selectedSheet.toLowerCase()}.xlsx` : 'recipients.xlsx';
@@ -1504,85 +1657,138 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 <tr>
                                                     <td colSpan={10} className="px-4 py-12 text-center text-slate-500">{copy.emptyRecipients}</td>
                                                 </tr>
-                                            ) : recipients.map((recipient) => (
-                                                <tr
-                                                    key={recipient.id}
-                                                    className="cursor-pointer transition hover:bg-slate-50/80"
-                                                    onClick={() => toggleRecipient(recipient.id)}
-                                                >
-                                                    <td className="px-4 py-4 align-top">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedRecipientIds.includes(recipient.id)}
-                                                            onChange={() => toggleRecipient(recipient.id)}
-                                                            onClick={stopRowToggle}
-                                                        />
-                                                    </td>
-                                                    <td className="px-4 py-4 align-top">
-                                                        <div className="font-semibold text-slate-900">{recipient.name || '-'}</div>
-                                                        <div className="mt-1 text-xs text-slate-500">
-                                                            {recipient.cycle?.name || recipient.id}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-4 align-top">
-                                                        <div className="flex items-center gap-2 text-slate-700">
-                                                            <Mail size={14} className="text-slate-400" />
-                                                            <span dir="ltr">{recipient.email || '-'}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-4 align-top">
-                                                        <div className="space-y-1 text-xs text-slate-600">
-                                                            <div><strong>{copy.roomEst1}:</strong> {recipient.room_est1 || '-'}</div>
-                                                            <div><strong>{copy.role}:</strong> {recipient.role || '-'}</div>
-                                                            <div><strong>{copy.typeLabel}:</strong> {recipient.type || '-'}</div>
-                                                            <div><strong>{copy.governorate}:</strong> {recipient.governorate || '-'}</div>
-                                                            <div><strong>{copy.address}:</strong> {recipient.address || '-'}</div>
-                                                            <div><strong>{copy.building}:</strong> {recipient.building || '-'}</div>
-                                                            <div><strong>{copy.location}:</strong> {recipient.location || '-'}</div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-4 align-top">
-                                                        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${CONFIRMATION_STYLES[recipient.confirmed_at ? 'confirmed' : 'unconfirmed']}`}>
-                                                            <span className="h-2.5 w-2.5 rounded-full bg-current opacity-80" />
-                                                            {recipient.confirmed_at ? copy.confirmedLabels.confirmed : copy.confirmedLabels.unconfirmed}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-4 align-top text-slate-700">{recipient.attempts_count ?? 0}</td>
-                                                    <td className="px-4 py-4 align-top text-slate-700">
-                                                        {recipient.last_attempt_at ? new Date(recipient.last_attempt_at).toLocaleString() : '-'}
-                                                    </td>
-                                                    <td className="max-w-[220px] px-4 py-4 align-top text-xs text-rose-700">
-                                                        <div className="truncate" title={recipient.error_message || '-'}>
-                                                            {recipient.error_message || '-'}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-4 align-top">
-                                                        <div className="flex flex-col gap-2">
-                                                            <button
-                                                                type="button"
-                                                                className="btn-outline"
-                                                                onClick={(event) => {
-                                                                    stopRowToggle(event);
-                                                                    openEditRecipientForm(recipient);
-                                                                }}
-                                                            >
-                                                                {copy.edit}
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                className="btn-outline border-rose-200 text-rose-700 hover:bg-rose-50"
-                                                                onClick={(event) => {
-                                                                    stopRowToggle(event);
-                                                                    deleteRecipient(recipient.id);
-                                                                }}
-                                                                disabled={deleteRecipientMutation.isPending}
-                                                            >
-                                                                {copy.delete}
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                            ) : recipients.map((recipient) => {
+                                                const responseState = getRecipientResponseState(recipient);
+                                                const extraDetails = RECIPIENT_EXTRA_DETAIL_FIELDS
+                                                    .map(({ key, fallback }) => ({
+                                                        key,
+                                                        label: fallback,
+                                                        value: recipient[key],
+                                                    }))
+                                                    .filter((item) => Boolean(item.value));
+                                                const detailsExpanded = expandedRecipientDetailsId === recipient.id;
+
+                                                return (
+                                                    <tr
+                                                        key={recipient.id}
+                                                        className="cursor-pointer transition hover:bg-slate-50/80"
+                                                        onClick={() => toggleRecipient(recipient.id)}
+                                                    >
+                                                        <td className="px-4 py-4 align-top">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={selectedRecipientIds.includes(recipient.id)}
+                                                                onChange={() => toggleRecipient(recipient.id)}
+                                                                onClick={stopRowToggle}
+                                                            />
+                                                        </td>
+                                                        <td className="px-4 py-4 align-top">
+                                                            <div className="min-w-[220px]">
+                                                                <div className="font-semibold text-slate-900">{recipient.name || '-'}</div>
+                                                                {recipient.arabic_name ? (
+                                                                    <div className="mt-1 text-sm text-slate-600">{recipient.arabic_name}</div>
+                                                                ) : null}
+                                                                <div className="mt-2 text-xs text-slate-500">
+                                                                    {recipient.division || recipient.cycle?.name || recipient.id}
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-4 align-top">
+                                                            <div className="min-w-[220px] space-y-2 text-sm text-slate-700">
+                                                                <div className="flex items-start gap-2">
+                                                                    <Mail size={14} className="mt-0.5 shrink-0 text-slate-400" />
+                                                                    <span dir="ltr" className="break-all">{recipient.email || '-'}</span>
+                                                                </div>
+                                                                <div className="flex items-start gap-2">
+                                                                    <Phone size={14} className="mt-0.5 shrink-0 text-slate-400" />
+                                                                    <span dir="ltr">{recipient.phone || '-'}</span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-4 align-top">
+                                                            <div className="min-w-[280px] space-y-1 text-xs text-slate-600">
+                                                                <div><strong>{copy.roomEst1}:</strong> {recipient.room_est1 || recipient.room || '-'}</div>
+                                                                <div><strong>{copy.role}:</strong> {recipient.role || '-'}</div>
+                                                                <div><strong>{copy.typeLabel}:</strong> {recipient.type || '-'}</div>
+                                                                <div><strong>{copy.governorate}:</strong> {recipient.governorate || '-'}</div>
+                                                                {extraDetails.length > 0 ? (
+                                                                    <div className="pt-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            className="text-xs font-semibold text-cyan-700 hover:text-cyan-800"
+                                                                            onClick={(event) => {
+                                                                                stopRowToggle(event);
+                                                                                setExpandedRecipientDetailsId((current) => current === recipient.id ? null : recipient.id);
+                                                                            }}
+                                                                        >
+                                                                            {detailsExpanded ? copy.detailsHideMore : copy.detailsSeeMore}
+                                                                        </button>
+                                                                        {detailsExpanded ? (
+                                                                            <div className="mt-3 space-y-1 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                                                                                {extraDetails.map((item) => (
+                                                                                    <div key={String(item.key)}>
+                                                                                        <strong>{item.label}:</strong> {String(item.value)}
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        ) : null}
+                                                                    </div>
+                                                                ) : null}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-4 align-top">
+                                                            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[recipient.status]}`}>
+                                                                <span className="h-2.5 w-2.5 rounded-full bg-current opacity-80" />
+                                                                {copy.statusLabels[recipient.status]}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-4 align-top">
+                                                            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${CONFIRMATION_STYLES[responseState]}`}>
+                                                                <span className="h-2.5 w-2.5 rounded-full bg-current opacity-80" />
+                                                                {responseState === 'confirmed'
+                                                                    ? copy.confirmedLabels.confirmed
+                                                                    : responseState === 'declined'
+                                                                        ? copy.confirmedLabels.declined
+                                                                        : copy.confirmedLabels.pending}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-4 align-top text-slate-700">{recipient.attempts_count ?? 0}</td>
+                                                        <td className="px-4 py-4 align-top text-slate-700">
+                                                            {recipient.last_attempt_at ? new Date(recipient.last_attempt_at).toLocaleString() : '-'}
+                                                        </td>
+                                                        <td className="max-w-[220px] px-4 py-4 align-top text-xs text-rose-700">
+                                                            <div className="truncate" title={recipient.error_message || '-'}>
+                                                                {recipient.error_message || '-'}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-4 align-top">
+                                                            <div className="flex flex-col gap-2">
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn-outline"
+                                                                    onClick={(event) => {
+                                                                        stopRowToggle(event);
+                                                                        openEditRecipientForm(recipient);
+                                                                    }}
+                                                                >
+                                                                    {copy.edit}
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn-outline border-rose-200 text-rose-700 hover:bg-rose-50"
+                                                                    onClick={(event) => {
+                                                                        stopRowToggle(event);
+                                                                        deleteRecipient(recipient.id);
+                                                                    }}
+                                                                    disabled={deleteRecipientMutation.isPending}
+                                                                >
+                                                                    {copy.delete}
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
@@ -2135,7 +2341,6 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             <tr>
                                                 <th className="px-4 py-3">{copy.name}</th>
                                                 <th className="px-4 py-3">{copy.status}</th>
-                                                <th className="px-4 py-3">{copy.confirmTitle}</th>
                                                 <th className="px-4 py-3">{copy.errorLabel}</th>
                                                 <th className="px-4 py-3">Time</th>
                                             </tr>

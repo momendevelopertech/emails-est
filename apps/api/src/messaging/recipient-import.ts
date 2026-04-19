@@ -3,21 +3,52 @@ import { RecipientSheet } from '@prisma/client';
 export const RECIPIENT_TEXT_FILTER_FIELDS = [
     'room',
     'room_est1',
+    'division',
     'name',
+    'arabic_name',
     'email',
+    'phone',
+    'employer',
+    'title',
     'role',
     'type',
     'governorate',
     'address',
     'building',
     'location',
+    'preferred_proctoring_city',
+    'preferred_test_center',
+    'bank_name',
+    'bank_branch_name',
+    'account_number',
+    'iban_number',
+    'additional_info_1',
+    'additional_info_2',
 ] as const;
 
 type RecipientImportInput = Partial<Record<
     | 'cycleId'
+    | 'division'
     | 'name'
+    | 'arabic_name'
     | 'email'
     | 'phone'
+    | 'mobile_number'
+    | 'employer'
+    | 'kind_of_school'
+    | 'title'
+    | 'insurance_number'
+    | 'institution_tax_number'
+    | 'national_id_number'
+    | 'national_id_picture'
+    | 'personal_photo'
+    | 'preferred_proctoring_city'
+    | 'preferred_test_center'
+    | 'bank_account_name'
+    | 'bank_name'
+    | 'bank_branch_name'
+    | 'account_number'
+    | 'iban_number'
     | 'exam_type'
     | 'role'
     | 'day'
@@ -32,6 +63,9 @@ type RecipientImportInput = Partial<Record<
     | 'building'
     | 'location'
     | 'map_link'
+    | 'bank_divid'
+    | 'additional_info_1'
+    | 'additional_info_2'
     | 'arrival_time'
     | 'sheet',
     unknown
@@ -39,9 +73,26 @@ type RecipientImportInput = Partial<Record<
 
 export type NormalizedRecipientImport = {
     cycleId: string | null;
+    division: string | null;
     name: string;
+    arabic_name: string | null;
     email: string | null;
     phone: string | null;
+    employer: string | null;
+    kind_of_school: string | null;
+    title: string | null;
+    insurance_number: string | null;
+    institution_tax_number: string | null;
+    national_id_number: string | null;
+    national_id_picture: string | null;
+    personal_photo: string | null;
+    preferred_proctoring_city: string | null;
+    preferred_test_center: string | null;
+    bank_account_name: string | null;
+    bank_name: string | null;
+    bank_branch_name: string | null;
+    account_number: string | null;
+    iban_number: string | null;
     exam_type: string | null;
     role: string | null;
     day: string | null;
@@ -56,6 +107,9 @@ export type NormalizedRecipientImport = {
     building: string | null;
     location: string | null;
     map_link: string | null;
+    bank_divid: string | null;
+    additional_info_1: string | null;
+    additional_info_2: string | null;
     arrival_time: string | null;
     confirmation_token?: string | null;
     sheet: RecipientSheet;
@@ -64,29 +118,57 @@ export type NormalizedRecipientImport = {
 const SIMPLE_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 export function normalizeRecipientImport(recipient: RecipientImportInput): NormalizedRecipientImport {
+    const cycleId = normalizeImportValue(recipient.cycleId);
     const roomValue = normalizeImportValue(recipient.room_est1) ?? normalizeImportValue(recipient.room);
-    const building = normalizeImportValue(recipient.building) ?? normalizeImportValue(recipient.test_center);
+    const phoneValue = normalizeImportValue(recipient.phone) ?? normalizeImportValue(recipient.mobile_number);
+    const employer = normalizeImportValue(recipient.employer) ?? normalizeImportValue(recipient.faculty);
+    const preferredProctoringCity = normalizeImportValue(recipient.preferred_proctoring_city);
+    const preferredTestCenter = normalizeImportValue(recipient.preferred_test_center) ?? normalizeImportValue(recipient.test_center);
+    const building = normalizeImportValue(recipient.building) ?? preferredTestCenter ?? employer;
     const location = normalizeImportValue(recipient.location) ?? normalizeImportValue(recipient.map_link);
+    const role = normalizeImportValue(recipient.role) ?? normalizeImportValue(recipient.title);
+    const type = normalizeImportValue(recipient.type) ?? normalizeImportValue(recipient.kind_of_school);
+    const governorate = normalizeImportValue(recipient.governorate) ?? preferredProctoringCity;
 
     return {
-        cycleId: null,
+        cycleId,
+        division: normalizeImportValue(recipient.division),
         name: normalizeImportValue(recipient.name) ?? '',
+        arabic_name: normalizeImportValue(recipient.arabic_name),
         email: normalizeEmail(recipient.email),
-        phone: normalizeImportValue(recipient.phone),
+        phone: phoneValue,
+        employer,
+        kind_of_school: normalizeImportValue(recipient.kind_of_school),
+        title: normalizeImportValue(recipient.title),
+        insurance_number: normalizeImportValue(recipient.insurance_number),
+        institution_tax_number: normalizeImportValue(recipient.institution_tax_number),
+        national_id_number: normalizeImportValue(recipient.national_id_number),
+        national_id_picture: normalizeImportValue(recipient.national_id_picture),
+        personal_photo: normalizeImportValue(recipient.personal_photo),
+        preferred_proctoring_city: preferredProctoringCity,
+        preferred_test_center: preferredTestCenter,
+        bank_account_name: normalizeImportValue(recipient.bank_account_name),
+        bank_name: normalizeImportValue(recipient.bank_name),
+        bank_branch_name: normalizeImportValue(recipient.bank_branch_name),
+        account_number: normalizeImportValue(recipient.account_number),
+        iban_number: normalizeImportValue(recipient.iban_number),
         exam_type: normalizeImportValue(recipient.exam_type),
-        role: normalizeImportValue(recipient.role),
+        role,
         day: normalizeImportValue(recipient.day),
         date: normalizeImportValue(recipient.date),
-        test_center: building,
-        faculty: normalizeImportValue(recipient.faculty),
+        test_center: preferredTestCenter ?? building,
+        faculty: employer,
         room: roomValue,
         room_est1: roomValue,
-        type: normalizeImportValue(recipient.type),
-        governorate: normalizeImportValue(recipient.governorate),
+        type,
+        governorate,
         address: normalizeImportValue(recipient.address),
         building,
         location,
         map_link: location,
+        bank_divid: normalizeImportValue(recipient.bank_divid),
+        additional_info_1: normalizeImportValue(recipient.additional_info_1),
+        additional_info_2: normalizeImportValue(recipient.additional_info_2),
         arrival_time: normalizeImportValue(recipient.arrival_time),
         sheet: normalizeRecipientSheet(recipient.sheet),
     };
@@ -129,6 +211,7 @@ export function buildRecipientDuplicateKey(recipient: NormalizedRecipientImport)
         recipient.sheet,
         recipient.name,
         recipient.email,
+        recipient.phone,
         recipient.role,
         recipient.type,
         recipient.governorate,

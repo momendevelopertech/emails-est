@@ -170,24 +170,25 @@ describe('MessagingService', () => {
         expect(prisma.recipient.delete).toHaveBeenCalledWith({ where: { id: 'r1' } });
     });
 
-    it('getTemplates auto-upgrades legacy EST assignment templates to rich HTML', async () => {
+    it('getTemplates seeds and refreshes managed EST assignment templates', async () => {
         prisma.template.findMany
             .mockResolvedValueOnce([
                 {
-                    id: 'legacy-est1',
-                    name: 'EST I Exam Assignment',
-                    type: TemplateType.EMAIL,
-                    subject: 'EST I assignment',
-                    body: 'Hello {{name}}, room {{room_est1}}',
+                    id: 'preset-est1',
+                    name: 'EST I Exam Assignment - V2 Modern',
+                    type: TemplateType.BOTH,
+                    subject: 'Old subject',
+                    body: '<table><tr><td>outdated</td></tr></table>',
+                    include_confirmation_button: false,
                 },
             ])
             .mockResolvedValueOnce([
                 {
-                    id: 'legacy-est1',
-                    name: 'EST I Exam Assignment',
+                    id: 'preset-est1',
+                    name: 'EST I Exam Assignment - V2 Modern',
                     type: TemplateType.EMAIL,
-                    subject: 'EST I Exam Assignment | {{name}}',
-                    body: '<table><tr><td>upgraded</td></tr></table>',
+                    subject: 'EST I Exam Assignment - V2 | {{name}}',
+                    body: '<table><tr><td>refreshed</td></tr></table>',
                 },
             ]);
         prisma.template.update.mockResolvedValue({});
@@ -196,22 +197,24 @@ describe('MessagingService', () => {
         const templates = await service.getTemplates();
 
         expect(prisma.template.update).toHaveBeenCalledWith({
-            where: { id: 'legacy-est1' },
+            where: { id: 'preset-est1' },
             data: expect.objectContaining({
-                subject: 'EST I Exam Assignment | {{name}}',
-                body: expect.stringContaining('EST_ASSIGNMENT_TEMPLATE_V1:EST I'),
+                type: TemplateType.EMAIL,
+                subject: 'EST I Exam Assignment - V2 | {{name}}',
+                body: expect.stringContaining('EST_ASSIGNMENT_TEMPLATE_V2:EST I'),
             }),
         });
         expect(prisma.template.create).toHaveBeenCalledWith({
             data: expect.objectContaining({
-                name: 'EST II Exam Assignment',
-                subject: 'EST II Exam Assignment | {{name}}',
-                body: expect.stringContaining('EST_ASSIGNMENT_TEMPLATE_V1:EST II'),
+                name: 'EST II Exam Assignment - V2 Modern',
+                type: TemplateType.EMAIL,
+                subject: 'EST II Exam Assignment - V2 | {{name}}',
+                body: expect.stringContaining('EST_ASSIGNMENT_TEMPLATE_V2:EST II'),
             }),
         });
         expect(templates).toEqual([
             expect.objectContaining({
-                name: 'EST I Exam Assignment',
+                name: 'EST I Exam Assignment - V2 Modern',
             }),
         ]);
     });

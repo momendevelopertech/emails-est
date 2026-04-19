@@ -97,8 +97,25 @@ model Recipient {
   id              String          @id @default(cuid())
   cycleId         String?
   name            String
+  division        String?
+  arabic_name     String?
   email           String?
   phone           String?
+  employer        String?
+  kind_of_school  String?
+  title           String?
+  insurance_number String?
+  institution_tax_number String?
+  national_id_number String?
+  national_id_picture String?
+  personal_photo  String?
+  preferred_proctoring_city String?
+  preferred_test_center String?
+  bank_account_name String?
+  bank_name       String?
+  bank_branch_name String?
+  account_number  String?
+  iban_number     String?
   exam_type       String?
   role            String?
   day             String?
@@ -113,9 +130,13 @@ model Recipient {
   building        String?
   location        String?
   map_link        String?
+  bank_divid      String?
+  additional_info_1 String?
+  additional_info_2 String?
   arrival_time    String?
   confirmation_token String?      @unique
   confirmed_at    DateTime?
+  declined_at     DateTime?
   sheet           RecipientSheet  @default(LEGACY)
   status          RecipientStatus @default(PENDING)
   error_message   String?

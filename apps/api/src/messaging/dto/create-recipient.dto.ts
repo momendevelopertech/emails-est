@@ -23,13 +23,24 @@ const normalizeOptionalEmail = (value: unknown) => {
 };
 
 export class CreateRecipientDto {
+    @Transform(({ value }) => normalizeOptionalString(value))
     @IsOptional()
     @IsString()
     cycleId?: string | null;
 
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    division?: string | null;
+
     @Transform(({ value }) => normalizeOptionalString(value) ?? '')
     @IsString()
     name: string;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    arabic_name?: string | null;
 
     @Transform(({ value }) => normalizeOptionalEmail(value))
     @IsOptional()
@@ -40,6 +51,81 @@ export class CreateRecipientDto {
     @IsOptional()
     @IsString()
     phone?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    employer?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    kind_of_school?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    title?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    insurance_number?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    institution_tax_number?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    national_id_number?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    national_id_picture?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    personal_photo?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    preferred_proctoring_city?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    preferred_test_center?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    bank_account_name?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    bank_name?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    bank_branch_name?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    account_number?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    iban_number?: string | null;
 
     @Transform(({ value }) => normalizeOptionalString(value))
     @IsOptional()
@@ -110,6 +196,21 @@ export class CreateRecipientDto {
     @IsOptional()
     @IsString()
     map_link?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    bank_divid?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    additional_info_1?: string | null;
+
+    @Transform(({ value }) => normalizeOptionalString(value))
+    @IsOptional()
+    @IsString()
+    additional_info_2?: string | null;
 
     @Transform(({ value }) => normalizeOptionalString(value))
     @IsOptional()

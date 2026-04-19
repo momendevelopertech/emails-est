@@ -4,11 +4,12 @@ export const EXCEL_SHEET_NAMES = ['EST1', 'EST2'] as const;
 export type ExcelSheetName = typeof EXCEL_SHEET_NAMES[number];
 
 export const EXCEL_UPLOAD_HEADERS = [
-    'ROOM',
+    'ROOM EST1',
     'Division',
     'Full English name (at least 4 names)',
     'Arabic Name',
     'Email',
+    'Mobile number',
     'Employer (School/Organization name)',
     'Kind of School',
     'Title',
@@ -28,62 +29,116 @@ export const EXCEL_UPLOAD_HEADERS = [
     'Type',
     'Governorate',
     'Address',
+    'Building',
     'Location',
     'bank divid',
     'Additional Info 1',
     'Additional Info 2',
 ] as const;
 
-export type ExcelRecipientRow = Record<string, string> & { sheet: ExcelSheetName };
+export const RECIPIENT_EXCEL_FIELDS = [
+    'room_est1',
+    'division',
+    'name',
+    'arabic_name',
+    'email',
+    'phone',
+    'employer',
+    'kind_of_school',
+    'title',
+    'insurance_number',
+    'institution_tax_number',
+    'national_id_number',
+    'national_id_picture',
+    'personal_photo',
+    'preferred_proctoring_city',
+    'preferred_test_center',
+    'bank_account_name',
+    'bank_name',
+    'bank_branch_name',
+    'account_number',
+    'iban_number',
+    'role',
+    'type',
+    'governorate',
+    'address',
+    'building',
+    'location',
+    'bank_divid',
+    'additional_info_1',
+    'additional_info_2',
+] as const;
 
+export type RecipientExcelField = typeof RECIPIENT_EXCEL_FIELDS[number];
+export type ExcelRecipientRow = Record<RecipientExcelField, string> & { sheet: ExcelSheetName };
 export type RecipientImportRow = ExcelRecipientRow;
 
-type HeaderField =
-    | 'room_est1'
-    | 'name'
-    | 'email'
-    | 'role'
-    | 'type'
-    | 'governorate'
-    | 'address'
-    | 'building'
-    | 'location';
 type DownloadKind = 'template' | 'sample';
 
-const HEADER_ALIASES: Array<{ field: HeaderField; aliases: string[] }> = [
-    {
-        field: 'room_est1',
-        aliases: ['room', 'roomest1', 'roomest2', 'est1room', 'est2room', 'roomest'],
-    },
-    {
-        field: 'name',
-        aliases: [
-            'fullenglishnameatleast4names',
-            'fullenglishname',
-            'englishname',
-            'fullname',
-            'name',
-            'fullnameasperbankaccount',
-        ],
-    },
-    { field: 'email', aliases: ['email', 'mail', 'emailaddress', 'emailaddress'] },
-    { field: 'role', aliases: ['role', 'title', 'jobtitle'] },
-    { field: 'type', aliases: ['type', 'kindofschool', 'schooltype', 'kindofschoolname'] },
-    { field: 'governorate', aliases: ['governorate', 'governorates', 'preferredproctoringcity', 'city'] },
-    { field: 'address', aliases: ['address', 'schooladdress', 'organizationaddress'] },
-    {
-        field: 'building',
-        aliases: [
-            'building',
-            'preferredtestcenter',
-            'testcenter',
-            'testcentername',
-            'faculty',
-            'employer',
-            'organizationname',
-        ],
-    },
-    { field: 'location', aliases: ['location', 'map', 'maplink', 'googlemap', 'locationonsite'] },
+const FIELD_TO_HEADER: Record<RecipientExcelField, string> = {
+    room_est1: EXCEL_UPLOAD_HEADERS[0],
+    division: EXCEL_UPLOAD_HEADERS[1],
+    name: EXCEL_UPLOAD_HEADERS[2],
+    arabic_name: EXCEL_UPLOAD_HEADERS[3],
+    email: EXCEL_UPLOAD_HEADERS[4],
+    phone: EXCEL_UPLOAD_HEADERS[5],
+    employer: EXCEL_UPLOAD_HEADERS[6],
+    kind_of_school: EXCEL_UPLOAD_HEADERS[7],
+    title: EXCEL_UPLOAD_HEADERS[8],
+    insurance_number: EXCEL_UPLOAD_HEADERS[9],
+    institution_tax_number: EXCEL_UPLOAD_HEADERS[10],
+    national_id_number: EXCEL_UPLOAD_HEADERS[11],
+    national_id_picture: EXCEL_UPLOAD_HEADERS[12],
+    personal_photo: EXCEL_UPLOAD_HEADERS[13],
+    preferred_proctoring_city: EXCEL_UPLOAD_HEADERS[14],
+    preferred_test_center: EXCEL_UPLOAD_HEADERS[15],
+    bank_account_name: EXCEL_UPLOAD_HEADERS[16],
+    bank_name: EXCEL_UPLOAD_HEADERS[17],
+    bank_branch_name: EXCEL_UPLOAD_HEADERS[18],
+    account_number: EXCEL_UPLOAD_HEADERS[19],
+    iban_number: EXCEL_UPLOAD_HEADERS[20],
+    role: EXCEL_UPLOAD_HEADERS[21],
+    type: EXCEL_UPLOAD_HEADERS[22],
+    governorate: EXCEL_UPLOAD_HEADERS[23],
+    address: EXCEL_UPLOAD_HEADERS[24],
+    building: EXCEL_UPLOAD_HEADERS[25],
+    location: EXCEL_UPLOAD_HEADERS[26],
+    bank_divid: EXCEL_UPLOAD_HEADERS[27],
+    additional_info_1: EXCEL_UPLOAD_HEADERS[28],
+    additional_info_2: EXCEL_UPLOAD_HEADERS[29],
+};
+
+const HEADER_ALIASES: Array<{ field: RecipientExcelField; aliases: string[] }> = [
+    { field: 'room_est1', aliases: ['roomest1', 'roomest2', 'room', 'roomest'] },
+    { field: 'division', aliases: ['division'] },
+    { field: 'name', aliases: ['fullenglishnameatleast4names', 'fullenglishname', 'englishname', 'fullname', 'name'] },
+    { field: 'arabic_name', aliases: ['arabicname', 'fullnameinarabic', 'nameinarabic'] },
+    { field: 'email', aliases: ['email', 'mail', 'emailaddress'] },
+    { field: 'phone', aliases: ['mobilenumber', 'mobile', 'phone', 'phonenumber', 'whatsappnumber'] },
+    { field: 'employer', aliases: ['employerschoolorganizationname', 'employer', 'schoolorganizationname', 'organizationname', 'schoolname'] },
+    { field: 'kind_of_school', aliases: ['kindofschool', 'schoolkind', 'schooltype'] },
+    { field: 'title', aliases: ['title', 'jobtitle'] },
+    { field: 'insurance_number', aliases: ['insurancenumber'] },
+    { field: 'institution_tax_number', aliases: ['institutiontaxnumber'] },
+    { field: 'national_id_number', aliases: ['nationalidnumber'] },
+    { field: 'national_id_picture', aliases: ['nationalidpicture'] },
+    { field: 'personal_photo', aliases: ['personalphoto'] },
+    { field: 'preferred_proctoring_city', aliases: ['preferredproctoringcity'] },
+    { field: 'preferred_test_center', aliases: ['preferredtestcenter', 'testcenter'] },
+    { field: 'bank_account_name', aliases: ['fullnameasperbankaccount', 'bankaccountname'] },
+    { field: 'bank_name', aliases: ['nameofbank', 'bankname'] },
+    { field: 'bank_branch_name', aliases: ['branchname', 'bankbranchname'] },
+    { field: 'account_number', aliases: ['accountnumber'] },
+    { field: 'iban_number', aliases: ['ibannumberpleasecontactyourbanktogetit', 'ibannumber'] },
+    { field: 'role', aliases: ['role'] },
+    { field: 'type', aliases: ['type'] },
+    { field: 'governorate', aliases: ['governorate', 'governorates'] },
+    { field: 'address', aliases: ['address', 'addressinarabic', 'addressinenglish'] },
+    { field: 'building', aliases: ['building'] },
+    { field: 'location', aliases: ['location', 'map', 'maplink', 'googlemaps', 'googlemap'] },
+    { field: 'bank_divid', aliases: ['bankdivid', 'bankdivision'] },
+    { field: 'additional_info_1', aliases: ['additionalinfo1'] },
+    { field: 'additional_info_2', aliases: ['additionalinfo2'] },
 ];
 
 const isArabicInput = (value?: string | boolean) => value === true || value === 'ar';
@@ -102,9 +157,11 @@ const detectSheetName = (value: string): ExcelSheetName | null => {
     return null;
 };
 
-const resolveHeaderField = (header: unknown): HeaderField | null => {
+const resolveHeaderField = (header: unknown): RecipientExcelField | null => {
     const normalized = normalizeHeader(header);
-    if (!normalized) return null;
+    if (!normalized || normalized.startsWith('unnamed')) {
+        return null;
+    }
 
     const match = HEADER_ALIASES.find((entry) => entry.aliases.some((alias) => normalized.includes(alias)));
     return match?.field ?? null;
@@ -112,25 +169,39 @@ const resolveHeaderField = (header: unknown): HeaderField | null => {
 
 const createEmptyRow = (sheet: ExcelSheetName): ExcelRecipientRow => ({
     room_est1: '',
+    division: '',
     name: '',
+    arabic_name: '',
     email: '',
     phone: '',
-    exam_type: '',
+    employer: '',
+    kind_of_school: '',
+    title: '',
+    insurance_number: '',
+    institution_tax_number: '',
+    national_id_number: '',
+    national_id_picture: '',
+    personal_photo: '',
+    preferred_proctoring_city: '',
+    preferred_test_center: '',
+    bank_account_name: '',
+    bank_name: '',
+    bank_branch_name: '',
+    account_number: '',
+    iban_number: '',
     role: '',
-    day: '',
-    date: '',
-    test_center: '',
-    faculty: '',
-    room: '',
     type: '',
     governorate: '',
     address: '',
     building: '',
     location: '',
-    map_link: '',
-    arrival_time: '',
+    bank_divid: '',
+    additional_info_1: '',
+    additional_info_2: '',
     sheet,
 });
+
+const hasRowValues = (item: ExcelRecipientRow) => RECIPIENT_EXCEL_FIELDS.some((field) => Boolean(item[field]));
 
 function buildSheetRows(rows: unknown[][], sheet: ExcelSheetName, isArabic: boolean) {
     if (rows.length < 2 || !Array.isArray(rows[0])) {
@@ -144,13 +215,13 @@ function buildSheetRows(rows: unknown[][], sheet: ExcelSheetName, isArabic: bool
             acc[field] = index;
         }
         return acc;
-    }, {} as Partial<Record<HeaderField, number>>);
+    }, {} as Partial<Record<RecipientExcelField, number>>);
 
-    const requiredFields: HeaderField[] = ['room_est1', 'name', 'email', 'role', 'type', 'governorate', 'address', 'building', 'location'];
+    const requiredFields: RecipientExcelField[] = ['room_est1', 'name', 'email'];
     const missing = requiredFields.filter((field) => headerIndexes[field] === undefined);
     if (missing.length) {
         const message = isArabic
-            ? `الأعمدة الناقصة في شيت ${sheet}: ${missing.join(', ')}`
+            ? `الأعمدة الأساسية الناقصة في شيت ${sheet}: ${missing.join(', ')}`
             : `Missing required headers in ${sheet}: ${missing.join(', ')}`;
         throw new Error(message);
     }
@@ -161,67 +232,72 @@ function buildSheetRows(rows: unknown[][], sheet: ExcelSheetName, isArabic: bool
             const values = Array.isArray(row) ? row : [];
             const item = createEmptyRow(sheet);
 
-            for (let i = 0; i < rawHeaders.length; i++) {
-                const header = rawHeaders[i];
-                const normalizedKey = normalizeHeader(header);
-                const value = String(values[i] ?? '').trim();
-                const field = resolveHeaderField(header);
-
-                if (field) {
-                    item[field] = value;
+            for (let i = 0; i < rawHeaders.length; i += 1) {
+                const field = resolveHeaderField(rawHeaders[i]);
+                if (!field) {
+                    continue;
                 }
 
-                if (normalizedKey && normalizedKey !== 'sheet') {
-                    item[normalizedKey] = value;
-                }
+                item[field] = String(values[i] ?? '').trim();
             }
 
             return item;
         })
-        .filter((item) => Object.entries(item).some(([key, value]) => key === 'sheet' ? false : Boolean(value)));
+        .filter(hasRowValues);
+}
+
+const getSheetHeaderRow = (sheet: ExcelSheetName) => [
+    sheet === 'EST2' ? 'ROOM EST2' : 'ROOM EST1',
+    ...EXCEL_UPLOAD_HEADERS.slice(1),
+];
+
+const mapRecipientToSheetRow = (recipient: Record<RecipientExcelField, string>) => RECIPIENT_EXCEL_FIELDS.map((field) => recipient[field] || '');
+
+export function buildRecipientExcelRow(recipient: Partial<Record<RecipientExcelField, string>>) {
+    return RECIPIENT_EXCEL_FIELDS.reduce((acc, field) => {
+        acc[FIELD_TO_HEADER[field]] = recipient[field] || '';
+        return acc;
+    }, {} as Record<string, string>);
 }
 
 export function buildDownloadWorkbook(kind: DownloadKind) {
     const workbook = XLSX.utils.book_new();
 
     for (const sheet of EXCEL_SHEET_NAMES) {
-        const headerRow = [
-            sheet === 'EST2' ? 'ROOM EST2' : 'ROOM',
-            ...EXCEL_UPLOAD_HEADERS.slice(1),
-        ];
-
         const rows: string[][] = [
-            headerRow,
+            getSheetHeaderRow(sheet),
             ...(kind === 'sample'
                 ? [[
-                    'A1',
-                    'North Region',
-                    'Ahmed Ali Hassan Mahmoud',
-                    'أحمد علي حسن محمود',
-                    'proctor@example.com',
-                    'Al Amal School',
-                    'Private School',
-                    'Senior Supervisor',
-                    '123456789',
-                    '123456789',
-                    '12345678901234',
-                    'national-id.jpg',
-                    'photo.jpg',
-                    'Cairo',
-                    'Al-Azhar Secondary',
-                    'Ahmed Salah',
-                    'National Bank',
-                    'Downtown',
-                    '1234567890',
-                    'EG123456789012345678901234',
-                    'Lead Invigilator',
-                    'Written',
-                    'Cairo',
-                    '123 Tahrir Street',
-                    'Cairo Exam Center',
-                    'Bank Division',
-                    'Extra info 1',
-                    'Extra info 2',
+                    'AASTM-Abuqir',
+                    'Sphinx Alex',
+                    'Mr. Osama El-Mahdy',
+                    'اسامة محمد زكى المهدى',
+                    'osama.elmahdy@york-press.com',
+                    '201223199310',
+                    'Sphinx Alex',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '26303210201093',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    'National Bank of Egypt (NBE)',
+                    '',
+                    '',
+                    '146',
+                    'Head of EST',
+                    'IP',
+                    'Alexandria',
+                    'الاكاديمية العربية شارع الأكاديمية البحرية طوسون خلف مساكن الضباط ابو قير',
+                    'Arab Academy Abu Qir Faculty of Pharmacy',
+                    'https://goo.gl/maps/cewVB2jrAMJy8Bxp6',
+                    'Internal Transfer',
+                    '',
+                    '146',
                 ]]
                 : []),
         ];
@@ -241,10 +317,10 @@ export function downloadWorkbook(kind: DownloadKind) {
 
 export function getUploadHint(locale?: string | boolean) {
     if (isArabicInput(locale)) {
-        return 'ارفع ملف EST الرسمي مباشرة. النظام يقرأ EST1 وEST2، يقبل اختلافات الهيدر الشائعة، ويحفظ كل رفع داخل دورة مستقلة جديدة.';
+        return 'ارفع ملف EST الرسمي مباشرة. النظام يقرأ EST1 وEST2، يحفظ كل أعمدة المراقب كما هي، وينشئ دورة مستقلة لكل عملية رفع.';
     }
 
-    return 'Upload the official EST workbook directly. EST1 and EST2 are parsed automatically, flexible headers are supported, and every upload is stored as a separate cycle.';
+    return 'Upload the official EST workbook directly. EST1 and EST2 are parsed automatically, all proctor profile columns are preserved, and every upload is stored as a separate cycle.';
 }
 
 export function getImportErrorMessage(error: any, fallback: string) {

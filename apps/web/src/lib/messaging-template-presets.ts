@@ -322,6 +322,7 @@ const buildExamAssignmentEmailBodyV3 = ({
 
 export const TEMPLATE_EDITOR_VARIABLES: TemplateEditorVariable[] = [
     { token: '{{name}}', label: 'Name' },
+    { token: '{{arabic_name}}', label: 'Arabic name' },
     { token: '{{room_est1}}', label: 'Room' },
     { token: '{{role}}', label: 'Role' },
     { token: '{{type}}', label: 'Type' },
@@ -332,10 +333,15 @@ export const TEMPLATE_EDITOR_VARIABLES: TemplateEditorVariable[] = [
     { token: '{{exam_type}}', label: 'Exam type' },
     { token: '{{sheet}}', label: 'Sheet' },
     { token: '{{email}}', label: 'Email' },
+    { token: '{{phone}}', label: 'Phone' },
+    { token: '{{confirm_url}}', label: 'Confirm URL' },
+    { token: '{{decline_url}}', label: 'Decline URL' },
+    { token: '{{response_url}}', label: 'Response page URL' },
 ];
 
 export const TEMPLATE_PREVIEW_RECIPIENT: TemplatePreviewRecipient = {
     name: 'Mohamed Hassan',
+    arabic_name: 'محمد حسن',
     room_est1: 'Hall A-214',
     role: 'Chief Invigilator',
     type: 'Speaking Committee',
@@ -346,6 +352,10 @@ export const TEMPLATE_PREVIEW_RECIPIENT: TemplatePreviewRecipient = {
     exam_type: 'EST Assignment',
     sheet: 'EST1',
     email: 'mohamed.hassan@example.com',
+    phone: '+201000000000',
+    confirm_url: 'https://emails-est-web.vercel.app/messaging/confirm?token=preview&action=confirm',
+    decline_url: 'https://emails-est-web.vercel.app/messaging/confirm?token=preview&action=decline',
+    response_url: 'https://emails-est-web.vercel.app/messaging/confirm?token=preview',
 };
 
 export const EXAM_ASSIGNMENT_TEMPLATE_PRESETS: TemplatePresetDefinition[] = [

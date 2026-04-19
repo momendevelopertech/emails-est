@@ -130,7 +130,12 @@ export async function configureApp(app: NestExpressApplication) {
 
         const shouldSkipCsrf =
             method === 'POST' &&
-            (requestPath === '/auth/refresh' || requestPath === '/auth/logout');
+            (
+                requestPath === '/auth/refresh' ||
+                requestPath === '/auth/logout' ||
+                requestPath === '/public/recipients/confirm' ||
+                requestPath === '/public/recipients/decline'
+            );
 
         if (shouldSkipCsrf) {
             return next();

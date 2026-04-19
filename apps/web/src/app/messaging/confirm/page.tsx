@@ -1,10 +1,10 @@
 import { Suspense } from 'react';
 import PublicRecipientResponseClient from '@/components/messaging/PublicRecipientResponseClient';
 
-export default function ConfirmRecipientPage({ params }: { params: { locale: string } }) {
+export default function PublicConfirmPage() {
     return (
         <Suspense fallback={null}>
-            <PublicRecipientResponseClient dashboardHref={`/${params.locale}/messaging?tab=recipients`} />
+            <PublicRecipientResponseClient />
         </Suspense>
     );
 }

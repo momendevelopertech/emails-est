@@ -25,6 +25,7 @@ import {
 } from './exam-assignment-template-presets';
 
 type SendResult = { recipientId: string; status: RecipientStatus; error?: string };
+type RecipientResponseStatus = 'PENDING' | 'CONFIRMED' | 'DECLINED';
 
 @Injectable()
 export class MessagingService {
@@ -396,6 +397,7 @@ export class MessagingService {
             select: {
                 id: true,
                 confirmed_at: true,
+                declined_at: true,
                 name: true,
                 email: true,
             },
@@ -405,9 +407,10 @@ export class MessagingService {
             throw new BadRequestException('Invalid or expired confirmation link.');
         }
 
-        if (recipient.confirmed_at) {
+        if (recipient.confirmed_at && !recipient.declined_at) {
             return {
                 confirmed: true,
+                status: 'CONFIRMED' as RecipientResponseStatus,
                 message: 'This assignment has already been confirmed.',
             };
         }
@@ -416,12 +419,92 @@ export class MessagingService {
             where: { id: recipient.id },
             data: {
                 confirmed_at: new Date(),
+                declined_at: null,
             },
         });
 
         return {
             confirmed: true,
+            status: 'CONFIRMED' as RecipientResponseStatus,
             message: 'Your assignment has been confirmed successfully.',
+        };
+    }
+
+    async declineRecipient(token: string) {
+        if (!token?.trim()) {
+            throw new BadRequestException('Confirmation token is required.');
+        }
+
+        const recipient = await this.prisma.recipient.findUnique({
+            where: { confirmation_token: token.trim() },
+            select: {
+                id: true,
+                confirmed_at: true,
+                declined_at: true,
+                name: true,
+                email: true,
+            },
+        });
+
+        if (!recipient) {
+            throw new BadRequestException('Invalid or expired confirmation link.');
+        }
+
+        if (recipient.declined_at && !recipient.confirmed_at) {
+            return {
+                declined: true,
+                status: 'DECLINED' as RecipientResponseStatus,
+                message: 'This assignment has already been declined.',
+            };
+        }
+
+        await this.prisma.recipient.update({
+            where: { id: recipient.id },
+            data: {
+                confirmed_at: null,
+                declined_at: new Date(),
+            },
+        });
+
+        return {
+            declined: true,
+            status: 'DECLINED' as RecipientResponseStatus,
+            message: 'Your apology has been recorded successfully.',
+        };
+    }
+
+    async getRecipientResponse(token: string) {
+        if (!token?.trim()) {
+            throw new BadRequestException('Confirmation token is required.');
+        }
+
+        const recipient = await this.prisma.recipient.findUnique({
+            where: { confirmation_token: token.trim() },
+            select: {
+                id: true,
+                name: true,
+                arabic_name: true,
+                email: true,
+                phone: true,
+                role: true,
+                type: true,
+                room_est1: true,
+                governorate: true,
+                building: true,
+                address: true,
+                location: true,
+                confirmed_at: true,
+                declined_at: true,
+            },
+        });
+
+        if (!recipient) {
+            throw new BadRequestException('Invalid or expired confirmation link.');
+        }
+
+        return {
+            status: this.resolveRecipientResponseStatus(recipient),
+            recipient,
         };
     }
 
@@ -565,13 +648,18 @@ export class MessagingService {
         return String(process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
     }
 
-    private buildConfirmUrl(recipient: Record<string, any>) {
+    private buildResponseUrl(recipient: Record<string, any>, action?: 'confirm' | 'decline') {
         const token = recipient.confirmation_token;
         if (!token) {
             return '';
         }
 
-        return `${this.buildFrontendUrl()}/messaging/confirm?token=${encodeURIComponent(String(token))}`;
+        const params = new URLSearchParams({ token: String(token) });
+        if (action) {
+            params.set('action', action);
+        }
+
+        return `${this.buildFrontendUrl()}/messaging/confirm?${params.toString()}`;
     }
 
     private async processRecipients(recipients: Array<{ id: string }>, template: { subject: string; body: string; type: TemplateType }) {
@@ -608,15 +696,17 @@ export class MessagingService {
 
         const results = [] as Array<{ ok: boolean; error?: string }>;
 
-        const recipientWithConfirmUrl = {
+        const recipientWithActionUrls = {
             ...recipient,
-            confirm_url: this.buildConfirmUrl(recipient),
+            confirm_url: this.buildResponseUrl(recipient, 'confirm'),
+            decline_url: this.buildResponseUrl(recipient, 'decline'),
+            response_url: this.buildResponseUrl(recipient),
         };
 
         if (template.type !== TemplateType.WHATSAPP) {
             if (recipient.email) {
-                const subject = this.renderTemplate(template.subject, recipientWithConfirmUrl);
-                const html = this.renderEmailBody(template.body, recipientWithConfirmUrl);
+                const subject = this.renderTemplate(template.subject, recipientWithActionUrls);
+                const html = this.renderEmailBody(template.body, recipientWithActionUrls);
                 const emailResult = await this.emailService.sendEmail({
                     to: recipient.email,
                     subject,
@@ -630,7 +720,7 @@ export class MessagingService {
 
         if (template.type !== TemplateType.EMAIL) {
             if (recipient.phone) {
-                const message = this.renderWhatsAppBody(template.body, recipient);
+                const message = this.renderWhatsAppBody(template.body, recipientWithActionUrls);
                 const whatsAppResult = await this.whatsAppService.sendWhatsApp(recipient.phone, message);
                 results.push({ ok: whatsAppResult.ok, error: whatsAppResult.ok ? undefined : whatsAppResult.error });
             } else {
@@ -734,6 +824,7 @@ export class MessagingService {
                 type: true,
                 subject: true,
                 body: true,
+                include_confirmation_button: true,
             },
         });
 
@@ -755,14 +846,19 @@ export class MessagingService {
                 return;
             }
 
-            if (isRichHtmlEmailTemplate(existing.body)) {
+            if (
+                existing.type === preset.type &&
+                existing.subject === preset.subject &&
+                existing.body === preset.body &&
+                existing.include_confirmation_button === (preset.include_confirmation_button || false)
+            ) {
                 return;
             }
 
             await this.prisma.template.update({
                 where: { id: existing.id },
                 data: {
-                    type: existing.type === TemplateType.WHATSAPP ? TemplateType.EMAIL : existing.type,
+                    type: preset.type,
                     subject: preset.subject,
                     body: preset.body,
                     include_confirmation_button: preset.include_confirmation_button || false,
@@ -786,6 +882,10 @@ export class MessagingService {
             'address',
             'building',
             'location',
+            'division',
+            'phone',
+            'employer',
+            'arabic_name',
         ];
 
         if (filter.cycleId) {
@@ -849,6 +949,18 @@ export class MessagingService {
     private getSendConcurrency() {
         const parsed = parseInt(process.env.MESSAGING_SEND_CONCURRENCY || '', 10);
         return Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, 50) : 10;
+    }
+
+    private resolveRecipientResponseStatus(recipient: { confirmed_at?: Date | null; declined_at?: Date | null }): RecipientResponseStatus {
+        if (recipient.declined_at) {
+            return 'DECLINED';
+        }
+
+        if (recipient.confirmed_at) {
+            return 'CONFIRMED';
+        }
+
+        return 'PENDING';
     }
 }
 

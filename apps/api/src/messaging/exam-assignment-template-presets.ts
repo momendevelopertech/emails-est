@@ -277,10 +277,15 @@ const buildExamAssignmentEmailBodyV3 = ({
 </table>
 `.trim();
 
+const buildResponseButtons = () => '\n\n<!-- Response Links -->\n<div style="text-align:center;margin:24px 0;">'
+    + '<a href="{{confirm_url}}" style="display:inline-block;margin:0 6px 12px;padding:12px 28px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Confirm Attendance</a>'
+    + '<a href="{{decline_url}}" style="display:inline-block;margin:0 6px 12px;padding:12px 28px;background:#dc2626;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Send Apology</a>'
+    + '</div>\n\n<p style="text-align:center;font-size:12px;color:#718096;"><a href="{{response_url}}" style="color:#718096;">Open the response page if the buttons above do not work.</a></p>';
+
 export const EXAM_ASSIGNMENT_TEMPLATE_PRESETS: TemplateRecord[] = [
     {
         name: 'EST I Exam Assignment - V2 Modern',
-        type: TemplateType.BOTH,
+        type: TemplateType.EMAIL,
         subject: 'EST I Exam Assignment - V2 | {{name}}',
         body: buildExamAssignmentEmailBodyV2({
             examLabel: 'EST I',
@@ -290,7 +295,7 @@ export const EXAM_ASSIGNMENT_TEMPLATE_PRESETS: TemplateRecord[] = [
     },
     {
         name: 'EST II Exam Assignment - V2 Modern',
-        type: TemplateType.BOTH,
+        type: TemplateType.EMAIL,
         subject: 'EST II Exam Assignment - V2 | {{name}}',
         body: buildExamAssignmentEmailBodyV2({
             examLabel: 'EST II',
@@ -300,22 +305,22 @@ export const EXAM_ASSIGNMENT_TEMPLATE_PRESETS: TemplateRecord[] = [
     },
     {
         name: 'EST I Exam Assignment - V2 Modern (With Confirmation)',
-        type: TemplateType.BOTH,
+        type: TemplateType.EMAIL,
         subject: 'EST I Exam Assignment - V2 | {{name}} (Action Required)',
         body: buildExamAssignmentEmailBodyV2({
             examLabel: 'EST I',
             logoUrl: 'https://emails-est-web.vercel.app/brand/est-i-logo.svg',
-        }) + '\n\n<!-- Confirmation Link -->\n<p style="text-align:center;margin:24px 0;"><a href="{{confirm_url}}" style="display:inline-block;padding:12px 28px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Confirm Attendance</a></p>\n\n<p style="text-align:center;font-size:12px;color:#718096;"><a href="{{confirm_url}}" style="color:#718096;">Or click here to confirm</a></p>',
+        }) + buildResponseButtons(),
         include_confirmation_button: true,
     },
     {
         name: 'EST II Exam Assignment - V2 Modern (With Confirmation)',
-        type: TemplateType.BOTH,
+        type: TemplateType.EMAIL,
         subject: 'EST II Exam Assignment - V2 | {{name}} (Action Required)',
         body: buildExamAssignmentEmailBodyV2({
             examLabel: 'EST II',
             logoUrl: 'https://emails-est-web.vercel.app/brand/est-ii-logo.svg',
-        }) + '\n\n<!-- Confirmation Link -->\n<p style="text-align:center;margin:24px 0;"><a href="{{confirm_url}}" style="display:inline-block;padding:12px 28px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Confirm Attendance</a></p>\n\n<p style="text-align:center;font-size:12px;color:#718096;"><a href="{{confirm_url}}" style="color:#718096;">Or click here to confirm</a></p>',
+        }) + buildResponseButtons(),
         include_confirmation_button: true,
     },
 ];

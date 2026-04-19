@@ -20,7 +20,15 @@ export class RecipientFilterDto {
 
     @IsOptional()
     @IsString()
+    arabic_name?: string;
+
+    @IsOptional()
+    @IsString()
     email?: string;
+
+    @IsOptional()
+    @IsString()
+    phone?: string;
 
     @IsOptional()
     @IsString()
@@ -29,6 +37,14 @@ export class RecipientFilterDto {
     @IsOptional()
     @IsString()
     role?: string;
+
+    @IsOptional()
+    @IsString()
+    division?: string;
+
+    @IsOptional()
+    @IsString()
+    employer?: string;
 
     @IsOptional()
     @IsString()
