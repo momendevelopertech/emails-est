@@ -7,22 +7,32 @@ const prisma = new PrismaClient();
 
 const SEEDED_TEMPLATE_DEFINITIONS = [
   {
-    name: 'Exam Reminder',
+    name: 'EST I Exam Assignment - V2 Modern',
     type: TemplateType.BOTH,
-    subject: 'EST1 assignment for {{name}}',
-    body: 'Hello {{name}}, your EST1 room is {{room_est1}} at {{building}} in {{governorate}}. Location: {{location}}',
+    subject: 'EST I Exam Assignment Notice - {{name}}',
+    body: 'Dear {{name}},\n\nYou have been assigned to the EST I exam.\n\nExam Details:\n- Room: {{room_est1}}\n- Location: {{building}}\n- Governorate: {{governorate}}\n- Address: {{address}}\n- Test Center: {{building}}\n\nPlease arrive 15 minutes before your scheduled time at {{location}}.\n\nBest regards,\nEST Examination Team',
+    include_confirmation_button: false,
   },
   {
-    name: 'Seed - Email Only',
-    type: TemplateType.EMAIL,
-    subject: 'EST1 briefing for {{name}}',
-    body: 'Hello {{name}}, your role is {{role}} at {{building}}. Room: {{room_est1}}. Address: {{address}}',
+    name: 'EST II Exam Assignment - V2 Modern',
+    type: TemplateType.BOTH,
+    subject: 'EST II Exam Assignment Notice - {{name}}',
+    body: 'Dear {{name}},\n\nYou have been assigned to the EST II exam.\n\nExam Details:\n- Room: {{room_est1}}\n- Location: {{building}}\n- Governorate: {{governorate}}\n- Address: {{address}}\n- Test Center: {{building}}\n\nPlease arrive 15 minutes before your scheduled time at {{location}}.\n\nBest regards,\nEST Examination Team',
+    include_confirmation_button: false,
   },
   {
-    name: 'Seed - WhatsApp Only',
-    type: TemplateType.WHATSAPP,
-    subject: 'WhatsApp briefing',
-    body: 'Hello {{name}}, you are assigned as {{role}} ({{type}}) in {{building}}. Room: {{room_est1}}',
+    name: 'EST I Exam Assignment - V2 Modern (With Confirmation)',
+    type: TemplateType.BOTH,
+    subject: 'EST I Exam Assignment Notice - {{name}} (Action Required)',
+    body: 'Dear {{name}},\n\nYou have been assigned to the EST I exam.\n\nExam Details:\n- Room: {{room_est1}}\n- Location: {{building}}\n- Governorate: {{governorate}}\n- Address: {{address}}\n- Test Center: {{building}}\n\nPlease arrive 15 minutes before your scheduled time at {{location}}.\n\nPlease confirm your attendance or decline by clicking the link below:\n{{confirm_url}}\n\nBest regards,\nEST Examination Team',
+    include_confirmation_button: true,
+  },
+  {
+    name: 'EST II Exam Assignment - V2 Modern (With Confirmation)',
+    type: TemplateType.BOTH,
+    subject: 'EST II Exam Assignment Notice - {{name}} (Action Required)',
+    body: 'Dear {{name}},\n\nYou have been assigned to the EST II exam.\n\nExam Details:\n- Room: {{room_est1}}\n- Location: {{building}}\n- Governorate: {{governorate}}\n- Address: {{address}}\n- Test Center: {{building}}\n\nPlease arrive 15 minutes before your scheduled time at {{location}}.\n\nPlease confirm your attendance or decline by clicking the link below:\n{{confirm_url}}\n\nBest regards,\nEST Examination Team',
+    include_confirmation_button: true,
   },
 ] as const;
 
@@ -163,6 +173,7 @@ export async function seedMessagingData(client: PrismaClient) {
         type: template.type,
         subject: template.subject,
         body: template.body,
+        include_confirmation_button: template.include_confirmation_button,
       },
       create: template,
     });

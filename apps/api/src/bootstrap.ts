@@ -150,7 +150,7 @@ export async function configureApp(app: NestExpressApplication) {
         new ValidationPipe({
             whitelist: true,
             transform: true,
-            forbidNonWhitelisted: true,
+            forbidNonWhitelisted: false,
             stopAtFirstError: true,
         }),
     );

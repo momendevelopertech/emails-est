@@ -70,12 +70,13 @@ model RefreshToken {
 }
 
 model Template {
-  id         String       @id @default(cuid())
-  name       String       @unique
-  type       TemplateType @default(BOTH)
-  subject    String
-  body       String
-  created_at DateTime     @default(now())
+  id                             String       @id @default(cuid())
+  name                           String       @unique
+  type                           TemplateType @default(BOTH)
+  subject                        String
+  body                           String
+  include_confirmation_button    Boolean      @default(false)
+  created_at                     DateTime     @default(now())
 }
 
 model RecipientCycle {
