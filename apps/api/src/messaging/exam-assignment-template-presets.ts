@@ -277,10 +277,11 @@ const buildExamAssignmentEmailBodyV3 = ({
 </table>
 `.trim();
 
-const buildResponseButtons = () => '\n\n<!-- Response Links -->\n<div style="text-align:center;margin:24px 0;">'
-    + '<a href="{{confirm_url}}" style="display:inline-block;margin:0 6px 12px;padding:12px 28px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Confirm Attendance</a>'
-    + '<a href="{{decline_url}}" style="display:inline-block;margin:0 6px 12px;padding:12px 28px;background:#dc2626;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Send Apology</a>'
-    + '</div>\n\n<p style="text-align:center;font-size:12px;color:#718096;"><a href="{{response_url}}" style="color:#718096;">Open the response page if the buttons above do not work.</a></p>';
+const buildResponseButtons = () => '\n\n<!-- Response Links -->\n<div style="margin:24px 0;padding:16px;border:1px solid #e2e8f0;border-radius:14px;background:#f8fafc;text-align:center;">'
+    + '<p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#1e293b;">Action required: choose one option</p>'
+    + '<a href="{{confirm_url}}" style="display:inline-block;margin:0 8px 10px;padding:14px 30px;background:#1d4ed8;color:#ffffff;text-decoration:none;border-radius:10px;font-size:14px;font-weight:700;letter-spacing:0.2px;box-shadow:0 3px 10px rgba(29,78,216,0.35);">✅ Confirm Attendance</a>'
+    + '<a href="{{decline_url}}" style="display:inline-block;margin:0 8px 10px;padding:14px 30px;background:#b91c1c;color:#ffffff;text-decoration:none;border-radius:10px;font-size:14px;font-weight:700;letter-spacing:0.2px;box-shadow:0 3px 10px rgba(185,28,28,0.35);">❌ Send Apology</a>'
+    + '</div>\n\n<p style="text-align:center;font-size:12px;color:#718096;"><a href="{{response_url}}" style="color:#475569;text-decoration:underline;">Open the response page if the buttons above do not work.</a></p>';
 
 export const EXAM_ASSIGNMENT_TEMPLATE_PRESETS: TemplateRecord[] = [
     {

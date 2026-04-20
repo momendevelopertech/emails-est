@@ -393,6 +393,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         pendingCount: isArabic ? 'معلق' : 'Pending',
         sentCount: isArabic ? 'مرسل' : 'Sent',
         respondedCount: isArabic ? 'تم الرد' : 'Responded',
+        apologizedCount: isArabic ? 'المعتذرون' : 'Apologies',
         failedCount: isArabic ? 'فشل' : 'Failed',
         selectAll: isArabic ? 'تحديد الكل في الصفحة' : 'Select page',
         deselectAll: isArabic ? 'إلغاء تحديد الكل' : 'Deselect all',
@@ -937,6 +938,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         pending: recipients.filter((recipient) => recipient.status === 'PENDING').length,
         sent: recipients.filter((recipient) => recipient.status === 'SENT').length,
         responded: recipients.filter((recipient) => getRecipientResponseState(recipient) !== 'pending').length,
+        apologized: recipients.filter((recipient) => getRecipientResponseState(recipient) === 'declined').length,
         failed: recipients.filter((recipient) => recipient.status === 'FAILED').length,
     }), [recipients]);
 
@@ -1437,6 +1439,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                         <div className={statClass}>
                             <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.respondedCount}</div>
                             <div className="mt-2 text-2xl font-semibold text-violet-700">{pageStats.responded}</div>
+                        </div>
+                        <div className={statClass}>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.apologizedCount}</div>
+                            <div className="mt-2 text-2xl font-semibold text-rose-700">{pageStats.apologized}</div>
                         </div>
                         <button
                             className="btn-outline shrink-0"
