@@ -1,0 +1,181 @@
+
+> @sphinx/api@1.0.0 test
+> jest --runInBand --testPathPattern=messaging.service.spec.ts
+
+[32m[Nest] 12304  - [39m04/20/2026, 9:12:59 AM [32m    LOG[39m [38;5;3m[MessagingService] [39m[32mImported 2 recipients into cycle April Cycle (cycle-1). Skipped 2 rows.[39m
+[32m[Nest] 12304  - [39m04/20/2026, 9:12:59 AM [32m    LOG[39m [38;5;3m[MessagingService] [39m[32mImported 1 recipients into cycle May Cycle (cycle-2). Skipped 0 rows.[39m
+[32m[Nest] 12304  - [39m04/20/2026, 9:12:59 AM [32m    LOG[39m [38;5;3m[MessagingService] [39m[32mProcessed 1 recipients with concurrency 10.[39m
+[32m[Nest] 12304  - [39m04/20/2026, 9:12:59 AM [32m    LOG[39m [38;5;3m[MessagingService] [39m[32mProcessed 1 recipients with concurrency 10.[39m
+FAIL src/messaging/messaging.service.spec.ts
+  MessagingService
+    √ importRecipients creates a new cycle and skips invalid and duplicate rows (6 ms)
+    √ importRecipients merges English and Arabic names when both are present
+    √ createRecipient normalizes EST-specific fields (1 ms)
+    √ updateRecipient keeps normalized alias fields in sync (1 ms)
+    √ createRecipient rejects missing required Excel fields (17 ms)
+    √ updateRecipient rejects invalid or missing required fields (1 ms)
+    √ deleteRecipient removes the selected row
+    × getTemplates auto-upgrades legacy EST assignment templates to rich HTML (6 ms)
+    √ sendCampaign handles BOTH channel success inside a specific cycle (1 ms)
+    √ retryRecipients retries only failed recipients in the selected cycle (2 ms)
+
+  ● MessagingService › getTemplates auto-upgrades legacy EST assignment templates to rich HTML
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    - Expected
+    + Received
+
+      Object {
+    -   "data": ObjectContaining {
+    -     "body": StringContaining "EST_ASSIGNMENT_TEMPLATE_V1:EST I",
+    +   "data": Object {
+    +     "body": "<!-- EST_ASSIGNMENT_TEMPLATE_V2:EST I -->
+    + <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;margin:0;padding:0;background:#f5f7fa;font-family:'Segoe UI','Helvetica Neue','Arial',sans-serif;color:#1a202c;\">
+    +     <tr>
+    +         <td align=\"center\" style=\"padding:20px 0;\">
+    +             <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;max-width:640px;margin:0 auto;\">
+    +                 <tr>
+    +                     <td align=\"center\" style=\"padding:24px 20px 16px;\">
+    +                         <img src=\"https://emails-est-web.vercel.app/brand/est-i-logo.svg\" alt=\"EST Logo\" style=\"width:120px;height:auto;display:block;margin:0 auto;\" />
+    +                     </td>
+    +                 </tr>
+    +                 <tr>
+    +                     <td style=\"padding:0 16px 24px;\">
+    +                         <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;border-radius:16px;background:#ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.1);\">
+    +                             <tr>
+    +                                 <td style=\"padding:32px 28px 24px;border-bottom:2px solid #f0f2f5;\">
+    +                                     <div style=\"font-size:18px;line-height:1.5;font-weight:600;color:#1a202c;\">
+    +                                         Dear {{name}},
+    +                                     </div>
+    +                                     <p style=\"margin:12px 0 0;font-size:15px;line-height:1.6;color:#475569;\">
+    +                                         We are pleased to confirm your assignment for the <strong>EST I Exam</strong>. Please find your assigned examination details below.
+    +                                     </p>
+    +                                 </td>
+    +                             </tr>
+    +                             <tr>
+    +                                 <td style=\"padding:24px 28px;\">
+    +                                     <div style=\"margin-bottom:20px;\">
+    +                                         <div style=\"font-size:13px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:#718096;margin-bottom:16px;\">Exam Assignment Details</div>
+    +                                         <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;\">
+    +                                             <tr>
+    +                                                 <td width=\"50%\" style=\"padding-right:12px;margin-bottom:16px;\">
+    +                                                     <div style=\"padding:14px;border-radius:12px;background:#f7fafc;border-left:4px solid #2563eb;\">
+    +                                                         <div style=\"font-size:12px;font-weight:600;text-transform:uppercase;color:#4b5563;margin-bottom:6px;\">Test Center</div>
+    +                                                         <div style=\"font-size:14px;font-weight:700;color:#1a202c;\">{{building}}</div>
+    +                                                     </div>
+    +                                                 </td>
+    +                                                 <td width=\"50%\" style=\"padding-left:12px;margin-bottom:16px;\">
+    +                                                     <div style=\"padding:14px;border-radius:12px;background:#f7fafc;border-left:4px solid #7c3aed;\">
+    +                                                         <div style=\"font-size:12px;font-weight:600;text-transform:uppercase;color:#4b5563;margin-bottom:6px;\">Room</div>
+    +                                                         <div style=\"font-size:14px;font-weight:700;color:#1a202c;\">{{room_est1}}</div>
+    +                                                     </div>
+    +                                                 </td>
+    +                                             </tr>
+    +                                             <tr>
+    +                                                 <td width=\"50%\" style=\"padding-right:12px;\">
+    +                                                     <div style=\"padding:14px;border-radius:12px;background:#f7fafc;border-left:4px solid #dc2626;\">
+    +                                                         <div style=\"font-size:12px;font-weight:600;text-transform:uppercase;color:#4b5563;margin-bottom:6px;\">Your Role</div>
+    +                                                         <div style=\"font-size:14px;font-weight:700;color:#1a202c;\">{{role}}</div>
+    +                                                     </div>
+    +                                                 </td>
+    +                                                 <td width=\"50%\" style=\"padding-left:12px;\">
+    +                                                     <div style=\"padding:14px;border-radius:12px;background:#f7fafc;border-left:4px solid #059669;\">
+    +                                                         <div style=\"font-size:12px;font-weight:600;text-transform:uppercase;color:#4b5563;margin-bottom:6px;\">Session Type</div>
+    +                                                         <div style=\"font-size:14px;font-weight:700;color:#1a202c;\">{{type}}</div>
+    +                                                     </div>
+    +                                                 </td>
+    +                                             </tr>
+    +                                         </table>
+    +                                     </div>
+    +                                 </td>
+    +                             </tr>
+    +                             <tr>
+    +                                 <td style=\"padding:24px 28px;border-top:1px solid #f0f2f5;border-bottom:1px solid #f0f2f5;\">
+    +                                     <div style=\"font-size:13px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;color:#718096;margin-bottom:16px;\">Location Information</div>
+    +                                     <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"width:100%;\">
+    +                                         <tr style=\"background:#fafbfc;border-radius:8px;\">
+    +                                             <td style=\"padding:12px 16px;width:28px;\">📍</td>
+    +                                             <td style=\"padding:12px 16px;\">
+    +                                                 <div style=\"font-size:12px;font-weight:600;color:#718096;\">Governorate</div>
+    +                                                 <div style=\"font-size:14px;font-weight:600;color:#1a202c;margin-top:2px;\">{{governorate}}</div>
+    +                                             </td>
+    +                                         </tr>
+    +                                         <tr>
+    +                                             <td style=\"padding:12px 16px;width:28px;\">🏢</td>
+    +                                             <td style=\"padding:12px 16px;\">
+    +                                                 <div style=\"font-size:12px;font-weight:600;color:#718096;\">Address</div>
+    +                                                 <div style=\"font-size:14px;font-weight:600;color:#1a202c;margin-top:2px;\">{{address}}</div>
+    +                                             </td>
+    +                                         </tr>
+    +                                         <tr style=\"background:#fafbfc;\">
+    +                                             <td style=\"padding:12px 16px;width:28px;\">🗺️</td>
+    +                                             <td style=\"padding:12px 16px;\">
+    +                                                 <div style=\"font-size:12px;font-weight:600;color:#718096;\">Location (On Site)</div>
+    +                                                 <div style=\"font-size:14px;font-weight:600;color:#1a202c;margin-top:2px;\">{{location}}</div>
+    +                                             </td>
+    +                                         </tr>
+    +                                     </table>
+    +                                 </td>
+    +                             </tr>
+    +                             <tr>
+    +                                 <td style=\"padding:24px 28px;\">
+    +                                     <div style=\"padding:16px;border-radius:12px;background:#fef3c7;border-left:4px solid #f59e0b;\">
+    +                                         <div style=\"font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;margin-bottom:8px;\">⏰ Important</div>
+    +                                         <div style=\"font-size:13px;line-height:1.6;color:#78350f;\">
+    +                                             Please arrive at least 30 minutes before your scheduled exam time. Bring a valid ID and review all venue details carefully.
+    +                                         </div>
+    +                                     </div>
+    +                                 </td>
+    +                             </tr>
+    +                             <tr>
+    +                                 <td style=\"padding:24px 28px;border-top:1px solid #f0f2f5;text-align:center;\">
+    +                                     <div style=\"font-size:12px;line-height:1.6;color:#718096;\">
+    +                                         <div style=\"margin-bottom:8px;font-weight:600;color:#1a202c;\">The EST Team</div>
+    +                                         <div style=\"margin-top:12px;font-size:11px;color:#cbd5e1;\">
+    +                                             Generated from the latest uploaded roster for EST I.
+    +                                         </div>
+    +                                     </div>
+    +                                 </td>
+    +                             </tr>
+    +                         </table>
+    +                     </td>
+    +                 </tr>
+    +             </table>
+    +         </td>
+    +     </tr>
+    + </table>",
+    +     "include_confirmation_button": false,
+          "subject": "EST I Exam Assignment - V2 | {{name}}",
+    +     "type": "EMAIL",
+        },
+        "where": Object {
+          "id": "legacy-est1",
+        },
+      },
+
+    Number of calls: 1
+
+    [0m [90m 229 |[39m         [36mconst[39m templates [33m=[39m [36mawait[39m service[33m.[39mgetTemplates()[33m;[39m
+     [90m 230 |[39m
+    [31m[1m>[22m[39m[90m 231 |[39m         expect(prisma[33m.[39mtemplate[33m.[39mupdate)[33m.[39mtoHaveBeenCalledWith({
+     [90m     |[39m                                        [31m[1m^[22m[39m
+     [90m 232 |[39m             where[33m:[39m { id[33m:[39m [32m'legacy-est1'[39m }[33m,[39m
+     [90m 233 |[39m             data[33m:[39m expect[33m.[39mobjectContaining({
+     [90m 234 |[39m                 subject[33m:[39m [32m'EST I Exam Assignment - V2 | {{name}}'[39m[33m,[39m[0m
+
+      at Object.<anonymous> (src/messaging/messaging.service.spec.ts:231:40)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 9 passed, 10 total
+Snapshots:   0 total
+Time:        2.875 s, estimated 6 s
+Ran all test suites matching /messaging.service.spec.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path f:\emails-est\apps\api
+npm error workspace @sphinx/api@1.0.0
+npm error location f:\emails-est\apps\api
+npm error command failed
+npm error command C:\Windows\system32\cmd.exe /d /s /c jest --runInBand --testPathPattern=messaging.service.spec.ts

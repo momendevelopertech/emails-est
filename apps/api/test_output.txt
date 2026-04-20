@@ -1,0 +1,52 @@
+
+> @sphinx/api@1.0.0 test
+> jest --runInBand --testPathPattern=messaging.service.spec.ts
+
+[32m[Nest] 68524  - [39m04/20/2026, 9:12:22 AM [32m    LOG[39m [38;5;3m[MessagingService] [39m[32mImported 2 recipients into cycle April Cycle (cycle-1). Skipped 2 rows.[39m
+[32m[Nest] 68524  - [39m04/20/2026, 9:12:22 AM [32m    LOG[39m [38;5;3m[MessagingService] [39m[32mImported 1 recipients into cycle May Cycle (cycle-2). Skipped 0 rows.[39m
+[32m[Nest] 68524  - [39m04/20/2026, 9:12:22 AM [32m    LOG[39m [38;5;3m[MessagingService] [39m[32mProcessed 1 recipients with concurrency 10.[39m
+[32m[Nest] 68524  - [39m04/20/2026, 9:12:22 AM [32m    LOG[39m [38;5;3m[MessagingService] [39m[32mProcessed 1 recipients with concurrency 10.[39m
+FAIL src/messaging/messaging.service.spec.ts
+  MessagingService
+    √ importRecipients creates a new cycle and skips invalid and duplicate rows (7 ms)
+    √ importRecipients merges English and Arabic names when both are present (1 ms)
+    √ createRecipient normalizes EST-specific fields (1 ms)
+    √ updateRecipient keeps normalized alias fields in sync
+    √ createRecipient rejects missing required Excel fields (19 ms)
+    √ updateRecipient rejects invalid or missing required fields
+    √ deleteRecipient removes the selected row (1 ms)
+    × getTemplates auto-upgrades legacy EST assignment templates to rich HTML (2 ms)
+    √ sendCampaign handles BOTH channel success inside a specific cycle (2 ms)
+    √ retryRecipients retries only failed recipients in the selected cycle (2 ms)
+
+  ● MessagingService › getTemplates auto-upgrades legacy EST assignment templates to rich HTML
+
+    expect(jest.fn()).toHaveBeenCalledWith(...expected)
+
+    Expected: {"data": ObjectContaining {"body": StringContaining "EST_ASSIGNMENT_TEMPLATE_V1:EST I", "subject": "EST I Exam Assignment | {{name}}"}, "where": {"id": "legacy-est1"}}
+
+    Number of calls: 0
+
+    [0m [90m 229 |[39m         [36mconst[39m templates [33m=[39m [36mawait[39m service[33m.[39mgetTemplates()[33m;[39m
+     [90m 230 |[39m
+    [31m[1m>[22m[39m[90m 231 |[39m         expect(prisma[33m.[39mtemplate[33m.[39mupdate)[33m.[39mtoHaveBeenCalledWith({
+     [90m     |[39m                                        [31m[1m^[22m[39m
+     [90m 232 |[39m             where[33m:[39m { id[33m:[39m [32m'legacy-est1'[39m }[33m,[39m
+     [90m 233 |[39m             data[33m:[39m expect[33m.[39mobjectContaining({
+     [90m 234 |[39m                 subject[33m:[39m [32m'EST I Exam Assignment | {{name}}'[39m[33m,[39m[0m
+
+      at Object.<anonymous> (src/messaging/messaging.service.spec.ts:231:40)
+
+Test Suites: 1 failed, 1 total
+Tests:       1 failed, 9 passed, 10 total
+Snapshots:   0 total
+Time:        3.101 s, estimated 16 s
+Ran all test suites matching /messaging.service.spec.ts/i.
+Force exiting Jest: Have you considered using `--detectOpenHandles` to detect async operations that kept running after all tests finished?
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path f:\emails-est\apps\api
+npm error workspace @sphinx/api@1.0.0
+npm error location f:\emails-est\apps\api
+npm error command failed
+npm error command C:\Windows\system32\cmd.exe /d /s /c jest --runInBand --testPathPattern=messaging.service.spec.ts
