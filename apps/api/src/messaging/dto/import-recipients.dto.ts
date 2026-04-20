@@ -21,6 +21,70 @@ export class ImportedRecipientRowDto {
 
     @IsOptional()
     @IsString()
+    division?: string | null;
+
+    @IsOptional()
+    @IsString()
+    employer?: string | null;
+
+    @IsOptional()
+    @IsString()
+    kind_of_school?: string | null;
+
+    @IsOptional()
+    @IsString()
+    title?: string | null;
+
+    @IsOptional()
+    @IsString()
+    insurance_number?: string | null;
+
+    @IsOptional()
+    @IsString()
+    institution_tax_number?: string | null;
+
+    @IsOptional()
+    @IsString()
+    national_id_number?: string | null;
+
+    @IsOptional()
+    @IsString()
+    national_id_picture?: string | null;
+
+    @IsOptional()
+    @IsString()
+    personal_photo?: string | null;
+
+    @IsOptional()
+    @IsString()
+    preferred_proctoring_city?: string | null;
+
+    @IsOptional()
+    @IsString()
+    preferred_test_center?: string | null;
+
+    @IsOptional()
+    @IsString()
+    bank_account_name?: string | null;
+
+    @IsOptional()
+    @IsString()
+    bank_name?: string | null;
+
+    @IsOptional()
+    @IsString()
+    bank_branch_name?: string | null;
+
+    @IsOptional()
+    @IsString()
+    account_number?: string | null;
+
+    @IsOptional()
+    @IsString()
+    iban_number?: string | null;
+
+    @IsOptional()
+    @IsString()
     exam_type?: string | null;
 
     @IsOptional()
@@ -74,6 +138,18 @@ export class ImportedRecipientRowDto {
     @IsOptional()
     @IsString()
     map_link?: string | null;
+
+    @IsOptional()
+    @IsString()
+    bank_divid?: string | null;
+
+    @IsOptional()
+    @IsString()
+    additional_info_1?: string | null;
+
+    @IsOptional()
+    @IsString()
+    additional_info_2?: string | null;
 
     @IsOptional()
     @IsString()

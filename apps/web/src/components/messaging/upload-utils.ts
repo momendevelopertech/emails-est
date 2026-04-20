@@ -111,7 +111,7 @@ const FIELD_TO_HEADER: Record<RecipientExcelField, string> = {
 const HEADER_ALIASES: Array<{ field: RecipientExcelField; aliases: string[] }> = [
     { field: 'room_est1', aliases: ['roomest1', 'roomest2', 'room', 'roomest'] },
     { field: 'division', aliases: ['division'] },
-    { field: 'name', aliases: ['fullenglishnameatleast4names', 'fullenglishname', 'englishname', 'fullname', 'name'] },
+    { field: 'name', aliases: ['fullenglishnameatleast4names', 'fullenglishname', 'englishname', 'name'] },
     { field: 'arabic_name', aliases: ['arabicname', 'fullnameinarabic', 'nameinarabic'] },
     { field: 'email', aliases: ['email', 'mail', 'emailaddress'] },
     { field: 'phone', aliases: ['mobilenumber', 'mobile', 'phone', 'phonenumber', 'whatsappnumber'] },
@@ -157,13 +157,21 @@ const detectSheetName = (value: string): ExcelSheetName | null => {
     return null;
 };
 
+const headerMatchesAlias = (normalized: string, alias: string) => {
+    if (normalized === alias) {
+        return true;
+    }
+
+    return alias.length > 4 && normalized.includes(alias);
+};
+
 const resolveHeaderField = (header: unknown): RecipientExcelField | null => {
     const normalized = normalizeHeader(header);
     if (!normalized || normalized.startsWith('unnamed')) {
         return null;
     }
 
-    const match = HEADER_ALIASES.find((entry) => entry.aliases.some((alias) => normalized.includes(alias)));
+    const match = HEADER_ALIASES.find((entry) => entry.aliases.some((alias) => headerMatchesAlias(normalized, alias)));
     return match?.field ?? null;
 };
 
