@@ -176,7 +176,7 @@ describe('MessagingService', () => {
             .mockResolvedValueOnce([
                 {
                     id: 'preset-est1',
-                    name: 'EST I Exam Assignment - V2 Modern',
+                    name: 'EST I Exam Assignment',
                     type: TemplateType.BOTH,
                     subject: 'Old subject',
                     body: '<table><tr><td>outdated</td></tr></table>',
@@ -186,9 +186,9 @@ describe('MessagingService', () => {
             .mockResolvedValueOnce([
                 {
                     id: 'preset-est1',
-                    name: 'EST I Exam Assignment - V2 Modern',
+                    name: 'EST I Exam Assignment',
                     type: TemplateType.EMAIL,
-                    subject: 'EST I Exam Assignment - V2 | {{name}}',
+                    subject: 'EST I Exam Assignment | {{name}}',
                     body: '<table><tr><td>refreshed</td></tr></table>',
                 },
             ]);
@@ -201,21 +201,21 @@ describe('MessagingService', () => {
             where: { id: 'preset-est1' },
             data: expect.objectContaining({
                 type: TemplateType.EMAIL,
-                subject: 'EST I Exam Assignment - V2 | {{name}}',
-                body: expect.stringContaining('EST_ASSIGNMENT_TEMPLATE_V2:EST I'),
+                subject: 'EST I Exam Assignment | {{name}}',
+                body: expect.stringContaining('EST_TEMPLATE_META:'),
             }),
         });
         expect(prisma.template.create).toHaveBeenCalledWith({
             data: expect.objectContaining({
-                name: 'EST II Exam Assignment - V2 Modern',
+                name: 'EST II Exam Assignment',
                 type: TemplateType.EMAIL,
-                subject: 'EST II Exam Assignment - V2 | {{name}}',
-                body: expect.stringContaining('EST_ASSIGNMENT_TEMPLATE_V2:EST II'),
+                subject: 'EST II Exam Assignment | {{name}}',
+                body: expect.stringContaining('EST_TEMPLATE_META:'),
             }),
         });
         expect(templates).toEqual([
             expect.objectContaining({
-                name: 'EST I Exam Assignment - V2 Modern',
+                name: 'EST I Exam Assignment',
             }),
         ]);
     });

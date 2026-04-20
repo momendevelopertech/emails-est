@@ -1,9 +1,19 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { WhatsAppService } from '../notifications/whatsapp.service';
 import { EmailService } from '../notifications/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSenderEmailAccountDto } from './dto/create-sender-email-account.dto';
+import { TestWhatsAppSettingsDto } from './dto/test-whatsapp-settings.dto';
 import { UpdateEmailSettingsDto } from './dto/update-email-settings.dto';
 import { UpdateSenderEmailAccountDto } from './dto/update-sender-email-account.dto';
+import { UpdateWhatsAppSettingsDto } from './dto/update-whatsapp-settings.dto';
+import {
+  buildGreenApiTestMessage,
+  DEFAULT_GREEN_API_SETTINGS,
+  DEFAULT_WHATSAPP_SETTINGS_ID,
+  GREEN_API_TEST_CHAT_ID,
+  GREEN_API_TEST_PHONE,
+} from './whatsapp-settings.constants';
 
 const EMAIL_SETTINGS_ID = 'default';
 
@@ -28,6 +38,7 @@ export class SettingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
+    private readonly whatsAppService: WhatsAppService,
   ) {}
 
   async getEmailSettings() {
@@ -113,6 +124,73 @@ export class SettingsService {
 
     this.emailService.clearMailFromCache();
     return this.getEmailSettings();
+  }
+
+  async getWhatsAppSettings() {
+    const record = await this.prisma.whatsAppSettings.findUnique({
+      where: { id: DEFAULT_WHATSAPP_SETTINGS_ID },
+    });
+
+    const data = record ?? {
+      id: DEFAULT_WHATSAPP_SETTINGS_ID,
+      ...DEFAULT_GREEN_API_SETTINGS,
+      updated_at: null,
+    };
+
+    return {
+      api_url: data.api_url,
+      media_url: data.media_url,
+      id_instance: data.id_instance,
+      api_token_instance: data.api_token_instance,
+      updated_at: data.updated_at,
+      using_default_values: !record,
+      test_phone: GREEN_API_TEST_PHONE,
+      test_chat_id: GREEN_API_TEST_CHAT_ID,
+    };
+  }
+
+  async updateWhatsAppSettings(dto: UpdateWhatsAppSettingsDto) {
+    const existing = await this.prisma.whatsAppSettings.findUnique({
+      where: { id: DEFAULT_WHATSAPP_SETTINGS_ID },
+    });
+
+    const api_url = dto.api_url?.trim() ?? existing?.api_url ?? DEFAULT_GREEN_API_SETTINGS.api_url;
+    const media_url = dto.media_url?.trim() ?? existing?.media_url ?? DEFAULT_GREEN_API_SETTINGS.media_url;
+    const id_instance = dto.id_instance?.trim() ?? existing?.id_instance ?? DEFAULT_GREEN_API_SETTINGS.id_instance;
+    const api_token_instance = dto.api_token_instance?.trim() ?? existing?.api_token_instance ?? DEFAULT_GREEN_API_SETTINGS.api_token_instance;
+
+    await this.prisma.whatsAppSettings.upsert({
+      where: { id: DEFAULT_WHATSAPP_SETTINGS_ID },
+      update: {
+        api_url,
+        media_url,
+        id_instance,
+        api_token_instance,
+      },
+      create: {
+        id: DEFAULT_WHATSAPP_SETTINGS_ID,
+        api_url,
+        media_url,
+        id_instance,
+        api_token_instance,
+      },
+    });
+
+    return this.getWhatsAppSettings();
+  }
+
+  async testWhatsAppSettings(dto: TestWhatsAppSettingsDto) {
+    const message = dto.message?.trim() || buildGreenApiTestMessage();
+    const delivery = await this.whatsAppService.sendWhatsApp(GREEN_API_TEST_PHONE, message);
+
+    return {
+      ok: delivery.ok,
+      phone: GREEN_API_TEST_PHONE,
+      chat_id: GREEN_API_TEST_CHAT_ID,
+      message,
+      delivery,
+      settings: await this.getWhatsAppSettings(),
+    };
   }
 
   async createSenderEmailAccount(dto: CreateSenderEmailAccountDto) {

@@ -1,20 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
+import { PrismaService } from '../prisma/prisma.service';
 import { normalizeEgyptMobilePhone } from '../shared/egypt-phone';
+import { DEFAULT_GREEN_API_SETTINGS, DEFAULT_WHATSAPP_SETTINGS_ID } from '../settings/whatsapp-settings.constants';
 
-type WhatsAppConfigCandidate = {
-    apiKey?: string | null;
-    baseUrl: string;
-    source: 'environment';
+type WhatsAppConfig = {
+    apiTokenInstance: string;
+    apiUrl: string;
+    idInstance: string;
+    mediaUrl: string;
+    source: 'database' | 'default';
 };
 
 export type WhatsAppDeliveryResult = {
     ok: boolean;
+    chatId?: string;
     phone: string;
     attempts: number;
-    source?: WhatsAppConfigCandidate['source'];
+    source?: WhatsAppConfig['source'];
     status?: number;
     error?: string;
+    response?: unknown;
 };
 
 const EGYPT_LOCAL_MOBILE = /^01\d{9}$/;
@@ -25,6 +31,7 @@ const DEFAULT_RETRY_ATTEMPTS = 3;
 export class WhatsAppService {
     private readonly logger = new Logger(WhatsAppService.name);
 
+    constructor(private readonly prisma: PrismaService) {}
 
     formatEgyptianNumber(phone?: string | null) {
         const normalized = normalizeEgyptMobilePhone(phone);
@@ -35,7 +42,7 @@ export class WhatsAppService {
     }
 
     async hasConfig() {
-        return (await this.getConfigCandidates()).length > 0;
+        return Boolean(await this.getConfig());
     }
 
     async sendWhatsApp(phone: string, message: string): Promise<WhatsAppDeliveryResult> {
@@ -58,68 +65,78 @@ export class WhatsAppService {
             return { ok: false, phone, attempts: 0, error: errorMessage };
         }
 
-        const configs = await this.getConfigCandidates();
-        if (!configs.length) {
-            this.logger.warn('Evolution API is not configured');
-            return { ok: false, phone: formattedPhone, attempts: 0, error: 'Evolution API is not configured' };
+        const config = await this.getConfig();
+        if (!config) {
+            this.logger.warn('Green API settings are incomplete');
+            return { ok: false, phone: formattedPhone, attempts: 0, error: 'Green API settings are incomplete' };
         }
 
+        const chatId = `${formattedPhone}@c.us`;
         let lastFailure: WhatsAppDeliveryResult = {
             ok: false,
+            chatId,
             phone: formattedPhone,
             attempts: 0,
             error: 'Unknown WhatsApp delivery failure',
         };
 
         for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt += 1) {
-            for (const config of configs) {
-                try {
-                    const response = await axios.post(
-                        `${config.baseUrl}/message/sendText`,
-                        {
-                            number: formattedPhone,
-                            text: message,
+            try {
+                const response = await axios.post(
+                    `${config.apiUrl}/waInstance${config.idInstance}/sendMessage/${config.apiTokenInstance}`,
+                    {
+                        chatId,
+                        message,
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
                         },
-                        {
-                            headers: this.buildHeaders(config.baseUrl, config.apiKey),
-                            timeout: this.getRequestTimeout(),
-                            validateStatus: () => true,
-                        },
-                    );
+                        timeout: this.getRequestTimeout(),
+                        validateStatus: () => true,
+                    },
+                );
 
-                    if (response.status >= 200 && response.status < 300) {
-                        this.logger.log(`WhatsApp sent to ${formattedPhone} using ${config.source} Evolution config`);
-                        return {
-                            ok: true,
-                            phone: formattedPhone,
-                            attempts: attempt,
-                            source: config.source,
-                            status: response.status,
-                        };
-                    }
+                this.logger.log(`Green API response for ${chatId}: ${JSON.stringify(response.data)}`);
 
-                    const errorMessage = this.extractErrorMessage(response.data, response.status);
-                    lastFailure = {
-                        ok: false,
+                if (response.status >= 200 && response.status < 300) {
+                    this.logger.log(`WhatsApp sent to ${formattedPhone} using ${config.source} Green API config`);
+                    return {
+                        ok: true,
+                        chatId,
                         phone: formattedPhone,
                         attempts: attempt,
                         source: config.source,
                         status: response.status,
-                        error: errorMessage,
+                        response: response.data,
                     };
-                    this.logger.warn(`WhatsApp send failed via ${config.source} (attempt ${attempt}/${DEFAULT_RETRY_ATTEMPTS}): ${errorMessage}`);
-                } catch (error: any) {
-                    const errorMessage = this.extractErrorMessage(error?.response?.data, error?.response?.status, error?.message);
-                    lastFailure = {
-                        ok: false,
-                        phone: formattedPhone,
-                        attempts: attempt,
-                        source: config.source,
-                        status: error?.response?.status,
-                        error: errorMessage,
-                    };
-                    this.logger.warn(`WhatsApp request error via ${config.source} (attempt ${attempt}/${DEFAULT_RETRY_ATTEMPTS}): ${errorMessage}`);
                 }
+
+                const errorMessage = this.extractErrorMessage(response.data, response.status);
+                lastFailure = {
+                    ok: false,
+                    chatId,
+                    phone: formattedPhone,
+                    attempts: attempt,
+                    source: config.source,
+                    status: response.status,
+                    error: errorMessage,
+                    response: response.data,
+                };
+                this.logger.warn(`WhatsApp send failed via ${config.source} Green API (attempt ${attempt}/${DEFAULT_RETRY_ATTEMPTS}): ${errorMessage}`);
+            } catch (error: any) {
+                const errorMessage = this.extractErrorMessage(error?.response?.data, error?.response?.status, error?.message);
+                lastFailure = {
+                    ok: false,
+                    chatId,
+                    phone: formattedPhone,
+                    attempts: attempt,
+                    source: config.source,
+                    status: error?.response?.status,
+                    error: errorMessage,
+                    response: error?.response?.data,
+                };
+                this.logger.warn(`WhatsApp request error via ${config.source} Green API (attempt ${attempt}/${DEFAULT_RETRY_ATTEMPTS}): ${errorMessage}`);
             }
 
             if (attempt < DEFAULT_RETRY_ATTEMPTS) {
@@ -134,66 +151,47 @@ export class WhatsAppService {
         return lastFailure;
     }
 
-    private async getConfigCandidates() {
-        const candidates: WhatsAppConfigCandidate[] = [];
-        const pushCandidate = (
-            baseUrl?: string | null,
-            apiKey?: string | null,
-            source: WhatsAppConfigCandidate['source'] = 'environment',
-        ) => {
-            const normalizedBaseUrl = this.normalizeBaseUrl(baseUrl);
-            if (!normalizedBaseUrl) return;
+    private async getConfig(): Promise<WhatsAppConfig | null> {
+        const record = await this.prisma.whatsAppSettings.findUnique({
+            where: { id: DEFAULT_WHATSAPP_SETTINGS_ID },
+        });
 
-            const normalizedApiKey = apiKey?.trim() || null;
-            if (candidates.some((item) => item.baseUrl === normalizedBaseUrl && (item.apiKey || '') === (normalizedApiKey || ''))) {
-                return;
+        const config = record
+            ? {
+                apiUrl: this.normalizeUrl(record.api_url),
+                mediaUrl: this.normalizeUrl(record.media_url),
+                idInstance: record.id_instance?.trim() || '',
+                apiTokenInstance: record.api_token_instance?.trim() || '',
+                source: 'database' as const,
             }
+            : {
+                apiUrl: this.normalizeUrl(DEFAULT_GREEN_API_SETTINGS.api_url),
+                mediaUrl: this.normalizeUrl(DEFAULT_GREEN_API_SETTINGS.media_url),
+                idInstance: DEFAULT_GREEN_API_SETTINGS.id_instance,
+                apiTokenInstance: DEFAULT_GREEN_API_SETTINGS.api_token_instance,
+                source: 'default' as const,
+            };
 
-            candidates.push({
-                apiKey: normalizedApiKey,
-                baseUrl: normalizedBaseUrl,
-                source,
-            });
-        };
+        if (!config.apiUrl || !config.mediaUrl || !config.idInstance || !config.apiTokenInstance) {
+            return null;
+        }
 
-        pushCandidate(process.env.EVOLUTION_API_BASE_URL, process.env.EVOLUTION_API_KEY, 'environment');
-
-
-
-        return candidates;
+        return config;
     }
 
-    private normalizeBaseUrl(baseUrl?: string | null) {
-        const normalized = (baseUrl || '').trim().replace(/\/+$/, '');
-        if (!normalized) return '';
-        if (/whapi/i.test(normalized)) return '';
-        return normalized;
+    private normalizeUrl(value?: string | null) {
+        return (value || '').trim().replace(/\/+$/, '');
     }
 
     private getRequestTimeout() {
-        const parsed = parseInt(process.env.EVOLUTION_API_TIMEOUT_MS || '', 10);
+        const parsed = parseInt(process.env.GREEN_API_TIMEOUT_MS || '', 10);
         return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
-    }
-
-    private buildHeaders(baseUrl: string, apiKey?: string | null) {
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
-
-        if (/\.ngrok(-free)?\.(app|dev)$/i.test(baseUrl)) {
-            headers['ngrok-skip-browser-warning'] = '1';
-        }
-
-        if (apiKey) {
-            headers.apikey = apiKey;
-        }
-
-        return headers;
     }
 
     private extractErrorMessage(payload: any, status?: number, fallback?: string) {
         const candidate = payload?.response?.message
             || payload?.message
+            || payload?.errorMessage
             || payload?.error
             || fallback
             || (status ? `WhatsApp send failed with status ${status}` : 'Unknown WhatsApp error');

@@ -3,6 +3,10 @@ import * as bcrypt from 'bcrypt';
 import { EST1_ALL_FIXTURE_ROWS } from './fixtures/est1-all.fixture';
 import { EXAM_ASSIGNMENT_TEMPLATE_PRESETS } from '../src/messaging/exam-assignment-template-presets';
 import { normalizeRecipientImport } from '../src/messaging/recipient-import';
+import {
+  DEFAULT_GREEN_API_SETTINGS,
+  DEFAULT_WHATSAPP_SETTINGS_ID,
+} from '../src/settings/whatsapp-settings.constants';
 
 const prisma = new PrismaClient();
 
@@ -140,6 +144,17 @@ async function seedEmailSettings(client: PrismaClient) {
   });
 }
 
+async function seedWhatsAppSettings(client: PrismaClient) {
+  await client.whatsAppSettings.upsert({
+    where: { id: DEFAULT_WHATSAPP_SETTINGS_ID },
+    update: {},
+    create: {
+      id: DEFAULT_WHATSAPP_SETTINGS_ID,
+      ...DEFAULT_GREEN_API_SETTINGS,
+    },
+  });
+}
+
 export async function seedMessagingData(client: PrismaClient) {
   // Delete all existing templates to ensure clean state
   await client.template.deleteMany({});
@@ -235,6 +250,7 @@ async function main() {
   });
 
   await seedEmailSettings(prisma);
+  await seedWhatsAppSettings(prisma);
   await seedMessagingData(prisma);
 }
 

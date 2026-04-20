@@ -195,6 +195,35 @@ type SenderEmailAccount = {
     is_active: boolean;
 };
 
+type WhatsAppSettingsRecord = {
+    api_url: string;
+    media_url: string;
+    id_instance: string;
+    api_token_instance: string;
+    updated_at: string | null;
+    using_default_values: boolean;
+    test_phone: string;
+    test_chat_id: string;
+};
+
+type WhatsAppTestResult = {
+    ok: boolean;
+    phone: string;
+    chat_id: string;
+    message: string;
+    settings: WhatsAppSettingsRecord;
+    delivery: {
+        ok: boolean;
+        chatId?: string;
+        phone: string;
+        attempts: number;
+        source?: 'database' | 'default';
+        status?: number;
+        error?: string;
+        response?: unknown;
+    };
+};
+
 const EMPTY_RECIPIENTS: Recipient[] = [];
 const EMPTY_RECIPIENT_FORM: RecipientExcelFormState = {
     room_est1: '',
@@ -262,6 +291,13 @@ const EMPTY_SENDER_ACCOUNT_FORM = {
     smtp_username: '',
     smtp_password: '',
     smtp_daily_limit: '',
+};
+
+const EMPTY_WHATSAPP_SETTINGS_FORM = {
+    api_url: '',
+    media_url: '',
+    id_instance: '',
+    api_token_instance: '',
 };
 
 const ALL_CYCLES_VALUE = '__all_cycles__';
@@ -586,6 +622,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         sender_email: '',
         active_sender_account_id: '',
     });
+    const [whatsAppSettingsForm, setWhatsAppSettingsForm] = useState(EMPTY_WHATSAPP_SETTINGS_FORM);
+    const [whatsAppTestResult, setWhatsAppTestResult] = useState<WhatsAppTestResult | null>(null);
     const [senderAccountForm, setSenderAccountForm] = useState(EMPTY_SENDER_ACCOUNT_FORM);
     const [editingSenderAccountId, setEditingSenderAccountId] = useState<string | null>(null);
     const [recipientForm, setRecipientForm] = useState<RecipientExcelFormState>(EMPTY_RECIPIENT_FORM);
@@ -726,6 +764,15 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         enabled: ready && isSuperAdmin,
     });
 
+    const whatsAppSettingsQuery = useQuery<WhatsAppSettingsRecord>({
+        queryKey: ['whatsapp-settings'],
+        queryFn: async () => {
+            const response = await api.get('/settings/whatsapp');
+            return response.data;
+        },
+        enabled: ready && isSuperAdmin,
+    });
+
     useEffect(() => {
         if (!campaignTemplateId && templatesQuery.data?.length) {
             setCampaignTemplateId(templatesQuery.data[0].id);
@@ -741,6 +788,17 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             });
         }
     }, [emailSettingsQuery.data]);
+
+    useEffect(() => {
+        if (whatsAppSettingsQuery.data) {
+            setWhatsAppSettingsForm({
+                api_url: whatsAppSettingsQuery.data.api_url,
+                media_url: whatsAppSettingsQuery.data.media_url,
+                id_instance: whatsAppSettingsQuery.data.id_instance,
+                api_token_instance: whatsAppSettingsQuery.data.api_token_instance,
+            });
+        }
+    }, [whatsAppSettingsQuery.data]);
 
     useEffect(() => {
         if (!guidedTemplateForm) {
@@ -777,6 +835,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             queryClient.invalidateQueries({ queryKey: ['messaging-templates'] }),
             queryClient.invalidateQueries({ queryKey: ['messaging-logs'] }),
             queryClient.invalidateQueries({ queryKey: ['email-settings'] }),
+            queryClient.invalidateQueries({ queryKey: ['whatsapp-settings'] }),
         ]);
     };
 
@@ -951,6 +1010,65 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         },
     });
 
+    const saveWhatsAppSettingsMutation = useMutation({
+        mutationFn: async () => {
+            await fetchCsrfToken();
+            const response = await api.patch('/settings/whatsapp', {
+                api_url: whatsAppSettingsForm.api_url.trim(),
+                media_url: whatsAppSettingsForm.media_url.trim(),
+                id_instance: whatsAppSettingsForm.id_instance.trim(),
+                api_token_instance: whatsAppSettingsForm.api_token_instance.trim(),
+            });
+            return response.data as WhatsAppSettingsRecord;
+        },
+        onSuccess(data) {
+            setWhatsAppSettingsForm({
+                api_url: data.api_url,
+                media_url: data.media_url,
+                id_instance: data.id_instance,
+                api_token_instance: data.api_token_instance,
+            });
+            void queryClient.invalidateQueries({ queryKey: ['whatsapp-settings'] });
+            toast.success(isArabic ? 'تم حفظ إعدادات واتساب.' : 'WhatsApp settings saved successfully.');
+        },
+        onError(error: any) {
+            toast.error(error?.message || (isArabic ? 'تعذر حفظ إعدادات واتساب حالياً.' : 'Unable to save WhatsApp settings right now.'));
+        },
+    });
+
+    const testWhatsAppMutation = useMutation({
+        mutationFn: async () => {
+            await fetchCsrfToken();
+            await api.patch('/settings/whatsapp', {
+                api_url: whatsAppSettingsForm.api_url.trim(),
+                media_url: whatsAppSettingsForm.media_url.trim(),
+                id_instance: whatsAppSettingsForm.id_instance.trim(),
+                api_token_instance: whatsAppSettingsForm.api_token_instance.trim(),
+            });
+            const response = await api.post('/settings/whatsapp/test', {});
+            return response.data as WhatsAppTestResult;
+        },
+        onSuccess(data) {
+            setWhatsAppSettingsForm({
+                api_url: data.settings.api_url,
+                media_url: data.settings.media_url,
+                id_instance: data.settings.id_instance,
+                api_token_instance: data.settings.api_token_instance,
+            });
+            setWhatsAppTestResult(data);
+            void queryClient.invalidateQueries({ queryKey: ['whatsapp-settings'] });
+            toast.success(
+                data.ok
+                    ? (isArabic ? `تم إرسال رسالة واتساب تجريبية إلى ${data.phone}.` : `Test WhatsApp message sent to ${data.phone}.`)
+                    : (isArabic ? `فشل اختبار واتساب: ${data.delivery.error || 'خطأ غير معروف'}` : `WhatsApp test failed: ${data.delivery.error || 'Unknown error'}`),
+            );
+        },
+        onError(error: any) {
+            setWhatsAppTestResult(null);
+            toast.error(error?.message || (isArabic ? 'تعذر تنفيذ اختبار واتساب.' : 'Unable to run the WhatsApp test.'));
+        },
+    });
+
     const saveSenderAccountMutation = useMutation({
         mutationFn: async () => {
             await fetchCsrfToken();
@@ -1062,6 +1180,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     );
     const selectedVisibleRecipients = recipients.filter((recipient) => selectedRecipientIds.includes(recipient.id));
     const senderAccounts = emailSettingsQuery.data?.sender_accounts ?? [];
+    const whatsAppProviderResponse = whatsAppTestResult?.delivery?.response
+        ? JSON.stringify(whatsAppTestResult.delivery.response, null, 2)
+        : '';
     const activeSenderAccount = senderAccounts.find((account) => account.id === emailSettingsForm.active_sender_account_id) || null;
     const emailIdentityPreview = emailSettingsForm.sender_email
         ? `${emailSettingsForm.sender_name.trim() || t('senderNamePlaceholder')} <${emailSettingsForm.sender_email}>`
@@ -1474,6 +1595,34 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             return;
         }
         saveEmailSettingsMutation.mutate();
+    };
+
+    const saveWhatsAppSettings = () => {
+        if (
+            !whatsAppSettingsForm.api_url.trim()
+            || !whatsAppSettingsForm.media_url.trim()
+            || !whatsAppSettingsForm.id_instance.trim()
+            || !whatsAppSettingsForm.api_token_instance.trim()
+        ) {
+            toast.error(isArabic ? 'يرجى إدخال جميع حقول إعدادات واتساب.' : 'Please complete all WhatsApp settings fields.');
+            return;
+        }
+
+        saveWhatsAppSettingsMutation.mutate();
+    };
+
+    const runWhatsAppTest = () => {
+        if (
+            !whatsAppSettingsForm.api_url.trim()
+            || !whatsAppSettingsForm.media_url.trim()
+            || !whatsAppSettingsForm.id_instance.trim()
+            || !whatsAppSettingsForm.api_token_instance.trim()
+        ) {
+            toast.error(isArabic ? 'يرجى إدخال جميع حقول إعدادات واتساب قبل الاختبار.' : 'Please complete all WhatsApp settings fields before testing.');
+            return;
+        }
+
+        testWhatsAppMutation.mutate();
     };
 
     const saveSenderAccount = () => {
@@ -2947,6 +3096,136 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     </div>
                                 </div>
                             </div>
+                            <div className="mt-6 rounded-[1.5rem] border border-emerald-200 bg-emerald-50/40 p-5">
+                                <div className="flex items-start gap-3">
+                                    <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
+                                        <Phone size={22} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-semibold text-slate-950">{isArabic ? 'إعدادات واتساب' : 'WhatsApp Settings'}</h2>
+                                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                                            {isArabic
+                                                ? 'اضبط بيانات Green API هنا. زر الاختبار سيحفظ القيم الحالية ثم يرسل رسالة تجريبية إلى +201145495393.'
+                                                : 'Configure Green API here. The test button saves the current values, then sends a test message to +201145495393.'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">apiUrl</label>
+                                        <input
+                                            value={whatsAppSettingsForm.api_url}
+                                            onChange={(event) => setWhatsAppSettingsForm((current) => ({ ...current, api_url: event.target.value }))}
+                                            className="input w-full"
+                                            placeholder="https://7107.api.greenapi.com"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">mediaUrl</label>
+                                        <input
+                                            value={whatsAppSettingsForm.media_url}
+                                            onChange={(event) => setWhatsAppSettingsForm((current) => ({ ...current, media_url: event.target.value }))}
+                                            className="input w-full"
+                                            placeholder="https://7107.api.greenapi.com"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">idInstance</label>
+                                        <input
+                                            value={whatsAppSettingsForm.id_instance}
+                                            onChange={(event) => setWhatsAppSettingsForm((current) => ({ ...current, id_instance: event.target.value }))}
+                                            className="input w-full"
+                                            placeholder="7107593651"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">apiTokenInstance</label>
+                                        <input
+                                            type="password"
+                                            value={whatsAppSettingsForm.api_token_instance}
+                                            onChange={(event) => setWhatsAppSettingsForm((current) => ({ ...current, api_token_instance: event.target.value }))}
+                                            className="input w-full"
+                                            placeholder="Green API token"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+                                    <div className="rounded-[1.25rem] border border-slate-200 bg-white p-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                            {isArabic ? 'وجهة الاختبار' : 'Test destination'}
+                                        </div>
+                                        <div className="mt-3 space-y-2 text-sm text-slate-700">
+                                            <div><span className="font-semibold text-slate-900">Phone:</span> {whatsAppSettingsQuery.data?.test_phone || '+201145495393'}</div>
+                                            <div><span className="font-semibold text-slate-900">chatId:</span> {whatsAppSettingsQuery.data?.test_chat_id || '201145495393@c.us'}</div>
+                                            <div><span className="font-semibold text-slate-900">{isArabic ? 'المصدر' : 'Source'}:</span> {whatsAppSettingsQuery.data?.using_default_values ? (isArabic ? 'القيم الافتراضية' : 'Default values') : (isArabic ? 'القيم المحفوظة' : 'Saved values')}</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="rounded-[1.25rem] border border-slate-200 bg-white p-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                            {isArabic ? 'آخر تحديث' : 'Last updated'}
+                                        </div>
+                                        <div className="mt-3 text-sm font-semibold text-slate-900">
+                                            {whatsAppSettingsQuery.data?.updated_at
+                                                ? new Date(whatsAppSettingsQuery.data.updated_at).toLocaleString()
+                                                : (isArabic ? 'لم يتم الحفظ بعد' : 'Not saved yet')}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 flex flex-wrap gap-3">
+                                    <button
+                                        type="button"
+                                        className="btn-primary"
+                                        onClick={saveWhatsAppSettings}
+                                        disabled={saveWhatsAppSettingsMutation.isPending || whatsAppSettingsQuery.isLoading}
+                                    >
+                                        {saveWhatsAppSettingsMutation.isPending
+                                            ? (isArabic ? 'جارٍ الحفظ...' : 'Saving...')
+                                            : (isArabic ? 'حفظ إعدادات واتساب' : 'Save WhatsApp settings')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn-outline border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+                                        onClick={runWhatsAppTest}
+                                        disabled={testWhatsAppMutation.isPending || whatsAppSettingsQuery.isLoading}
+                                    >
+                                        {testWhatsAppMutation.isPending
+                                            ? (isArabic ? 'جارٍ الاختبار...' : 'Testing...')
+                                            : (isArabic ? 'اختبار واتساب' : 'Test WhatsApp')}
+                                    </button>
+                                </div>
+
+                                {whatsAppTestResult ? (
+                                    <div className={`mt-5 rounded-[1.35rem] border p-4 ${whatsAppTestResult.ok ? 'border-emerald-200 bg-white' : 'border-rose-200 bg-rose-50/50'}`}>
+                                        <div className={`text-sm font-semibold ${whatsAppTestResult.ok ? 'text-emerald-800' : 'text-rose-700'}`}>
+                                            {whatsAppTestResult.ok
+                                                ? (isArabic ? 'نجح اختبار واتساب.' : 'WhatsApp test succeeded.')
+                                                : (isArabic ? 'فشل اختبار واتساب.' : 'WhatsApp test failed.')}
+                                        </div>
+                                        <div className="mt-3 grid gap-2 text-sm text-slate-700">
+                                            <div><span className="font-semibold text-slate-900">Phone:</span> {whatsAppTestResult.phone}</div>
+                                            <div><span className="font-semibold text-slate-900">chatId:</span> {whatsAppTestResult.chat_id}</div>
+                                            <div><span className="font-semibold text-slate-900">{isArabic ? 'الحالة' : 'Status'}:</span> {whatsAppTestResult.delivery.status ?? '-'}</div>
+                                            <div><span className="font-semibold text-slate-900">{isArabic ? 'المحاولات' : 'Attempts'}:</span> {whatsAppTestResult.delivery.attempts}</div>
+                                            <div><span className="font-semibold text-slate-900">{isArabic ? 'النص' : 'Message'}:</span> {whatsAppTestResult.message}</div>
+                                            {whatsAppTestResult.delivery.error ? (
+                                                <div><span className="font-semibold text-slate-900">{isArabic ? 'الخطأ' : 'Error'}:</span> {whatsAppTestResult.delivery.error}</div>
+                                            ) : null}
+                                        </div>
+                                        {whatsAppProviderResponse ? (
+                                            <div className="mt-4">
+                                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                                    {isArabic ? 'رد Green API' : 'Green API response'}
+                                                </div>
+                                                <pre className="mt-2 overflow-x-auto rounded-[1rem] border border-slate-200 bg-slate-950 p-4 text-xs text-slate-100">{whatsAppProviderResponse}</pre>
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                ) : null}
+                            </div>
                         </div>
 
                         <div className="space-y-6">
@@ -2997,6 +3276,49 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('fromPreview')}</div>
                                 <div className="mt-3 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
                                     {emailSettingsQuery.data?.mail_from || emailIdentityPreview}
+                                </div>
+                            </div>
+
+                            <div className={cardClass}>
+                                <div className="flex items-start gap-3">
+                                    <div className="rounded-2xl bg-emerald-50 p-3 text-emerald-700">
+                                        <Phone size={22} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-semibold text-slate-950">{isArabic ? 'ملخص واتساب' : 'WhatsApp Summary'}</h2>
+                                        <p className="mt-2 text-sm leading-6 text-slate-500">
+                                            {isArabic
+                                                ? 'ملخص سريع لإعدادات Green API النشطة ونتيجة آخر اختبار.'
+                                                : 'A quick summary of the active Green API settings and the latest test result.'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 space-y-4">
+                                    <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">apiUrl</div>
+                                        <div className="mt-2 break-all text-sm font-semibold text-slate-900">{whatsAppSettingsForm.api_url || '-'}</div>
+                                    </div>
+                                    <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">idInstance</div>
+                                        <div className="mt-2 text-sm font-semibold text-slate-900">{whatsAppSettingsForm.id_instance || '-'}</div>
+                                    </div>
+                                    <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{isArabic ? 'هاتف الاختبار' : 'Test phone'}</div>
+                                        <div className="mt-2 text-sm font-semibold text-slate-900">{whatsAppSettingsQuery.data?.test_phone || '+201145495393'}</div>
+                                    </div>
+                                    <div className={`rounded-[1.5rem] border p-4 ${whatsAppTestResult?.ok ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                                        <div className={`text-xs font-semibold uppercase tracking-[0.18em] ${whatsAppTestResult?.ok ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                            {isArabic ? 'آخر اختبار' : 'Latest test'}
+                                        </div>
+                                        <div className={`mt-2 text-sm font-semibold ${whatsAppTestResult?.ok ? 'text-emerald-900' : 'text-amber-900'}`}>
+                                            {whatsAppTestResult
+                                                ? (whatsAppTestResult.ok
+                                                    ? (isArabic ? 'نجح الإرسال التجريبي.' : 'Test message delivered successfully.')
+                                                    : (whatsAppTestResult.delivery.error || (isArabic ? 'فشل الإرسال التجريبي.' : 'Test delivery failed.')))
+                                                : (isArabic ? 'لم يتم تشغيل اختبار بعد.' : 'No test has been run yet.')}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
