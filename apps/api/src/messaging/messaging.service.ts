@@ -397,6 +397,14 @@ export class MessagingService {
             throw new BadRequestException('Invalid or expired confirmation link.');
         }
 
+        if (recipient.declined_at) {
+            return {
+                confirmed: false,
+                status: 'DECLINED' as RecipientResponseStatus,
+                message: 'You already sent an apology for this assignment.',
+            };
+        }
+
         if (recipient.confirmed_at && !recipient.declined_at) {
             return {
                 confirmed: true,
@@ -438,6 +446,14 @@ export class MessagingService {
 
         if (!recipient) {
             throw new BadRequestException('Invalid or expired confirmation link.');
+        }
+
+        if (recipient.confirmed_at) {
+            return {
+                declined: false,
+                status: 'CONFIRMED' as RecipientResponseStatus,
+                message: 'You already confirmed attendance for this assignment.',
+            };
         }
 
         if (recipient.declined_at && !recipient.confirmed_at) {

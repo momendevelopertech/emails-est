@@ -72,6 +72,16 @@ export default function PublicRecipientResponseClient() {
             return;
         }
 
+        if (status !== 'PENDING') {
+            setViewState('ready');
+            setMessage(
+                status === 'CONFIRMED'
+                    ? 'You already confirmed attendance for this assignment.'
+                    : 'You already sent an apology for this assignment.',
+            );
+            return;
+        }
+
         setViewState('submitting');
         setMessage(action === 'confirm' ? 'Confirming your assignment...' : 'Recording your apology...');
 
@@ -132,13 +142,24 @@ export default function PublicRecipientResponseClient() {
             return;
         }
 
-        if (requestedAction === 'confirm' && status !== 'CONFIRMED') {
+        if (status !== 'PENDING') {
+            if (requestedAction === 'confirm' && status === 'CONFIRMED') {
+                setMessage('You already confirmed attendance for this assignment.');
+            }
+
+            if (requestedAction === 'decline' && status === 'DECLINED') {
+                setMessage('You already sent an apology for this assignment.');
+            }
+            return;
+        }
+
+        if (requestedAction === 'confirm') {
             autoActionHandledRef.current = true;
             void submitAction('confirm');
             return;
         }
 
-        if (requestedAction === 'decline' && status !== 'DECLINED') {
+        if (requestedAction === 'decline') {
             autoActionHandledRef.current = true;
             void submitAction('decline');
         }
