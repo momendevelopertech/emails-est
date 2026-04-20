@@ -238,7 +238,6 @@ export const buildExamAssignmentWhatsAppBody = (
         `Test center: ${String(recipient.test_center || '').trim() || '{{test_center}}'}`,
         `Room: ${String(recipient.room_est1 || '').trim() || '{{room_est1}}'}`,
         `Address: ${String(recipient.address || '').trim() || '{{address}}'}`,
-        `Google Maps: ${String(recipient.map_link || '').trim() || '{{map_link}}'}`,
         '',
         '*Important*',
         `Please be at the test center by *${definition.arrivalTime}* sharp for briefing and preparation before the exam.`,
@@ -249,11 +248,10 @@ export const buildExamAssignmentWhatsAppBody = (
         lines.push(
             '',
             '*Action required*',
-            'Choose one of the links below:',
+            'Please reply directly in WhatsApp using one word:',
             '',
-            `Confirm attendance: ${String(recipient.confirm_url || '').trim() || '{{confirm_url}}'}`,
-            `Send apology: ${String(recipient.decline_url || '').trim() || '{{decline_url}}'}`,
-            `Open response page: ${String(recipient.response_url || '').trim() || '{{response_url}}'}`,
+            'confirm = attendance confirmed',
+            'apology = apology sent',
         );
     }
 

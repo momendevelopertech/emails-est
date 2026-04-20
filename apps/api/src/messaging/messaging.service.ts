@@ -25,9 +25,11 @@ import {
     isRichHtmlEmailTemplate,
     parseExamAssignmentTemplateMeta,
 } from './exam-assignment-template-presets';
+import { normalizeEgyptMobilePhone } from '../shared/egypt-phone';
 
 type SendResult = { recipientId: string; status: RecipientStatus; error?: string };
 type RecipientResponseStatus = 'PENDING' | 'CONFIRMED' | 'DECLINED';
+type WhatsAppReplyAction = 'CONFIRM' | 'DECLINE' | 'UNKNOWN';
 
 @Injectable()
 export class MessagingService {
@@ -516,6 +518,49 @@ export class MessagingService {
         };
     }
 
+    async processWhatsAppReply(phone: string, message: string) {
+        const normalizedPhone = normalizeEgyptMobilePhone(phone);
+        if (!normalizedPhone) {
+            throw new BadRequestException('WhatsApp phone number is required.');
+        }
+
+        const rawMessage = String(message || '').trim();
+        if (!rawMessage) {
+            throw new BadRequestException('WhatsApp message is required.');
+        }
+
+        const replyAction = this.resolveWhatsAppReplyAction(rawMessage);
+        if (replyAction === 'UNKNOWN') {
+            const helpMessage = 'To confirm attendance, reply with "confirm". To send an apology, reply with "apology".';
+            await this.whatsAppService.sendWhatsApp(normalizedPhone, helpMessage);
+            return { matched: false, status: 'PENDING' as RecipientResponseStatus, message: helpMessage };
+        }
+
+        const recipients = await this.prisma.recipient.findMany({
+            where: {
+                phone: { in: this.buildPhoneCandidates(normalizedPhone) },
+                confirmation_token: { not: null },
+            },
+            orderBy: [{ created_at: 'desc' }],
+            take: 1,
+            select: { confirmation_token: true },
+        });
+
+        const token = recipients[0]?.confirmation_token;
+        if (!token) {
+            const notFoundMessage = 'No active assignment was found for this WhatsApp number.';
+            await this.whatsAppService.sendWhatsApp(normalizedPhone, notFoundMessage);
+            return { matched: false, status: 'PENDING' as RecipientResponseStatus, message: notFoundMessage };
+        }
+
+        const response = replyAction === 'CONFIRM'
+            ? await this.confirmRecipient(token)
+            : await this.declineRecipient(token);
+
+        await this.whatsAppService.sendWhatsApp(normalizedPhone, response.message);
+        return { matched: true, status: response.status as RecipientResponseStatus, message: response.message };
+    }
+
     async getTemplates() {
         await this.ensureExamAssignmentTemplates();
         return this.prisma.template.findMany({ orderBy: { created_at: 'desc' } });
@@ -985,6 +1030,34 @@ export class MessagingService {
         }
 
         return 'PENDING';
+    }
+
+    private resolveWhatsAppReplyAction(message: string): WhatsAppReplyAction {
+        const normalized = String(message || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+            .replace(/\s+/g, ' ');
+
+        if (['confirm', 'confirmed', 'yes', 'ok', 'attend', 'حاضر', 'موافق', 'تاكيد', 'تأكيد'].includes(normalized)) {
+            return 'CONFIRM';
+        }
+
+        if (['apology', 'apologize', 'apologise', 'decline', 'sorry', 'اعتذار', 'اعتذر'].includes(normalized)) {
+            return 'DECLINE';
+        }
+
+        return 'UNKNOWN';
+    }
+
+    private buildPhoneCandidates(normalizedLocalPhone: string) {
+        const withCountryCode = `20${normalizedLocalPhone.slice(1)}`;
+        return [
+            normalizedLocalPhone,
+            withCountryCode,
+            `+${withCountryCode}`,
+            `0${withCountryCode.slice(2)}`,
+        ];
     }
 }
 

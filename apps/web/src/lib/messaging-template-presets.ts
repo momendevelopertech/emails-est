@@ -215,7 +215,6 @@ Arrival time: ${config.arrivalTime}
 Test center: {{test_center}}
 Room: {{room_est1}}
 Address: {{address}}
-Google Maps: {{map_link}}
 
 *Important*
 Please be at the test center by *${config.arrivalTime}* sharp for briefing and preparation before the exam.
@@ -223,11 +222,10 @@ Kindly ensure you follow all exam regulations and procedures.
 ${config.variant === 'CONFIRMATION' ? `
 
 *Action required*
-Choose one of the links below:
+Please reply directly in WhatsApp using one word:
 
-Confirm attendance: {{confirm_url}}
-Send apology: {{decline_url}}
-Open response page: {{response_url}}` : ''}
+confirm = attendance confirmed
+apology = apology sent` : ''}
 
 Best regards,
 The EST Team
