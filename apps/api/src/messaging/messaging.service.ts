@@ -849,27 +849,7 @@ export class MessagingService {
                         include_confirmation_button: preset.include_confirmation_button || false,
                     },
                 });
-                return;
             }
-
-            if (
-                existing.type === preset.type &&
-                existing.subject === preset.subject &&
-                existing.body === preset.body &&
-                existing.include_confirmation_button === (preset.include_confirmation_button || false)
-            ) {
-                return;
-            }
-
-            await this.prisma.template.update({
-                where: { id: existing.id },
-                data: {
-                    type: preset.type,
-                    subject: preset.subject,
-                    body: preset.body,
-                    include_confirmation_button: preset.include_confirmation_button || false,
-                },
-            });
         }));
     }
 

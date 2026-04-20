@@ -808,7 +808,6 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         const generated = buildGuidedTemplateContent(guidedTemplateForm);
         setTemplateForm((current) => ({
             ...current,
-            type: 'EMAIL',
             subject: generated.subject,
             body: generated.body,
         }));

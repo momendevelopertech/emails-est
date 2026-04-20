@@ -171,7 +171,7 @@ describe('MessagingService', () => {
         expect(prisma.recipient.delete).toHaveBeenCalledWith({ where: { id: 'r1' } });
     });
 
-    it('getTemplates seeds and refreshes managed EST assignment templates', async () => {
+    it('getTemplates seeds missing EST assignment templates without overwriting existing edits', async () => {
         prisma.template.findMany
             .mockResolvedValueOnce([
                 {
@@ -187,24 +187,16 @@ describe('MessagingService', () => {
                 {
                     id: 'preset-est1',
                     name: 'EST I Exam Assignment',
-                    type: TemplateType.EMAIL,
-                    subject: 'EST I Exam Assignment | {{name}}',
-                    body: '<table><tr><td>refreshed</td></tr></table>',
+                    type: TemplateType.BOTH,
+                    subject: 'Old subject',
+                    body: '<table><tr><td>outdated</td></tr></table>',
                 },
             ]);
-        prisma.template.update.mockResolvedValue({});
         prisma.template.create.mockResolvedValue({});
 
         const templates = await service.getTemplates();
 
-        expect(prisma.template.update).toHaveBeenCalledWith({
-            where: { id: 'preset-est1' },
-            data: expect.objectContaining({
-                type: TemplateType.EMAIL,
-                subject: 'EST I Exam Assignment | {{name}}',
-                body: expect.stringContaining('EST_TEMPLATE_META:'),
-            }),
-        });
+        expect(prisma.template.update).not.toHaveBeenCalled();
         expect(prisma.template.create).toHaveBeenCalledWith({
             data: expect.objectContaining({
                 name: 'EST II Exam Assignment',
@@ -216,6 +208,7 @@ describe('MessagingService', () => {
         expect(templates).toEqual([
             expect.objectContaining({
                 name: 'EST I Exam Assignment',
+                type: TemplateType.BOTH,
             }),
         ]);
     });
