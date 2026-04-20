@@ -173,13 +173,13 @@ export default function PublicRecipientResponseClient() {
                         {status === 'CONFIRMED' ? <HeartHandshake size={28} className="text-emerald-600" /> : status === 'DECLINED' ? <Sparkles size={28} className="text-rose-600" /> : <Clock3 size={28} className="text-slate-500" />}
                     </div>
                     <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                        <div>
-                            <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                        <div className="min-w-0">
+                            <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
                                 <Clock3 size={14} />
                                 <span>EST assignment response</span>
                             </div>
-                            <h1 className="mt-4 text-3xl font-semibold text-slate-950">{statusCopy.title}</h1>
-                            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+                            <h1 className="mt-4 break-words text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">{statusCopy.title}</h1>
+                            <p className="mt-3 max-w-2xl break-words text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">
                                 {statusCopy.body}
                             </p>
                         </div>
@@ -191,29 +191,29 @@ export default function PublicRecipientResponseClient() {
                 </div>
 
                 <div className="mt-8 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-                    <div className="text-lg font-semibold text-slate-900">
+                    <div className="text-lg font-semibold text-slate-900 break-words [overflow-wrap:anywhere]">
                         {recipient?.name || 'Assignment response'}
                     </div>
                     {recipient?.arabic_name ? (
-                        <div className="mt-1 text-sm text-slate-600">{recipient.arabic_name}</div>
+                        <div className="mt-1 break-words text-sm text-slate-600 [overflow-wrap:anywhere]">{recipient.arabic_name}</div>
                     ) : null}
 
                     <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                         <div className="rounded-[1.2rem] border border-slate-200 bg-white p-4">
                             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Room</div>
-                            <div className="mt-2 text-sm font-semibold text-slate-900">{recipient?.room_est1 || EMPTY_VALUE_LABEL}</div>
+                            <div className="mt-2 break-words text-sm font-semibold text-slate-900 [overflow-wrap:anywhere]">{recipient?.room_est1 || EMPTY_VALUE_LABEL}</div>
                         </div>
                         <div className="rounded-[1.2rem] border border-slate-200 bg-white p-4">
                             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Role</div>
-                            <div className="mt-2 text-sm font-semibold text-slate-900">{recipient?.role || EMPTY_VALUE_LABEL}</div>
+                            <div className="mt-2 break-words text-sm font-semibold text-slate-900 [overflow-wrap:anywhere]">{recipient?.role || EMPTY_VALUE_LABEL}</div>
                         </div>
                         <div className="rounded-[1.2rem] border border-slate-200 bg-white p-4">
                             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Type</div>
-                            <div className="mt-2 text-sm font-semibold text-slate-900">{recipient?.type || EMPTY_VALUE_LABEL}</div>
+                            <div className="mt-2 break-words text-sm font-semibold text-slate-900 [overflow-wrap:anywhere]">{recipient?.type || EMPTY_VALUE_LABEL}</div>
                         </div>
                         <div className="rounded-[1.2rem] border border-slate-200 bg-white p-4">
                             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Governorate</div>
-                            <div className="mt-2 text-sm font-semibold text-slate-900">{recipient?.governorate || EMPTY_VALUE_LABEL}</div>
+                            <div className="mt-2 break-words text-sm font-semibold text-slate-900 [overflow-wrap:anywhere]">{recipient?.governorate || EMPTY_VALUE_LABEL}</div>
                         </div>
                     </div>
 
@@ -221,7 +221,7 @@ export default function PublicRecipientResponseClient() {
                         <div className="mt-4 rounded-[1.2rem] border border-slate-200 bg-white p-4 text-sm text-slate-700">
                             <div className="flex items-start gap-2">
                                 <MapPin size={16} className="mt-0.5 shrink-0 text-slate-400" />
-                                <div className="space-y-1">
+                                <div className="min-w-0 space-y-1 break-words [overflow-wrap:anywhere]">
                                     {recipient?.building ? <div><strong>Building:</strong> {recipient.building}</div> : null}
                                     {recipient?.address ? <div><strong>Address:</strong> {recipient.address}</div> : null}
                                     {recipient?.location ? <div><strong>Location:</strong> {recipient.location}</div> : null}
@@ -233,7 +233,7 @@ export default function PublicRecipientResponseClient() {
 
                 <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-white px-5 py-4">
                     <div className="text-sm font-semibold text-slate-900">Current message</div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{message}</p>
+                    <p className="mt-2 break-words text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">{message}</p>
                 </div>
 
                 {!isFinalState ? (
