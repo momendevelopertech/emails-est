@@ -20,8 +20,10 @@ import {
     RECIPIENT_TEXT_FILTER_FIELDS,
 } from './recipient-import';
 import {
+    buildExamAssignmentWhatsAppBody,
     EXAM_ASSIGNMENT_TEMPLATE_PRESETS,
     isRichHtmlEmailTemplate,
+    parseExamAssignmentTemplateMeta,
 } from './exam-assignment-template-presets';
 
 type SendResult = { recipientId: string; status: RecipientStatus; error?: string };
@@ -776,6 +778,11 @@ export class MessagingService {
 
     private renderWhatsAppBody(templateBody: string, recipient: Record<string, any>) {
         if (isRichHtmlEmailTemplate(templateBody)) {
+            const guidedTemplateMeta = parseExamAssignmentTemplateMeta(templateBody);
+            if (guidedTemplateMeta) {
+                return buildExamAssignmentWhatsAppBody(guidedTemplateMeta, recipient);
+            }
+
             const renderedHtml = this.renderTemplate(templateBody, recipient, { escapeHtmlValues: true });
             return this.htmlToPlainText(renderedHtml);
         }
@@ -808,7 +815,20 @@ export class MessagingService {
             String(value || '')
                 .replace(/<style[\s\S]*?<\/style>/gi, ' ')
                 .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-                .replace(/<(br|\/p|\/div|\/tr|\/table|\/h[1-6])\b[^>]*>/gi, '\n')
+                .replace(/<a\b[^>]*href=(['"])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi, (_, _quote, href, label) => {
+                    const cleanLabel = this.decodeHtmlEntities(String(label || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+                    const cleanHref = this.decodeHtmlEntities(String(href || '').trim());
+                    if (!cleanHref) {
+                        return cleanLabel;
+                    }
+
+                    if (!cleanLabel || cleanLabel === cleanHref) {
+                        return cleanHref;
+                    }
+
+                    return `${cleanLabel}: ${cleanHref}`;
+                })
+                .replace(/<(br|\/p|\/div|\/tr|\/table|\/h[1-6]|\/li|li|\/ul|\/ol)\b[^>]*>/gi, '\n')
                 .replace(/<[^>]+>/g, ' ')
                 .replace(/\s+\n/g, '\n')
                 .replace(/\n{3,}/g, '\n\n')
@@ -843,6 +863,24 @@ export class MessagingService {
                 await this.prisma.template.create({
                     data: {
                         name: preset.name,
+                        type: preset.type,
+                        subject: preset.subject,
+                        body: preset.body,
+                        include_confirmation_button: preset.include_confirmation_button || false,
+                    },
+                });
+                return;
+            }
+
+            if (
+                existing.type !== preset.type
+                || existing.subject !== preset.subject
+                || existing.body !== preset.body
+                || existing.include_confirmation_button !== (preset.include_confirmation_button || false)
+            ) {
+                await this.prisma.template.update({
+                    where: { id: existing.id },
+                    data: {
                         type: preset.type,
                         subject: preset.subject,
                         body: preset.body,

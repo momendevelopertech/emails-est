@@ -201,6 +201,38 @@ ${buildMetaComment(config)}
     return { subject, body };
 };
 
+export const buildGuidedWhatsAppText = (config: EstGuidedTemplateConfig) => `
+*${config.examCode} Exam Assignment*
+Invigilator Briefing
+
+Dear {{name}},
+We look forward to welcoming you on *${config.examDay}* the *${config.examDate}* for the *${config.examCode} Exam* as an Invigilator.
+
+*Session details*
+Day: ${config.examDay}
+Date: ${config.examDate}
+Arrival time: ${config.arrivalTime}
+Test center: {{test_center}}
+Room: {{room_est1}}
+Address: {{address}}
+Google Maps: {{map_link}}
+
+*Important*
+Please be at the test center by *${config.arrivalTime}* sharp for briefing and preparation before the exam.
+Kindly ensure you follow all exam regulations and procedures.
+${config.variant === 'CONFIRMATION' ? `
+
+*Action required*
+Choose one of the links below:
+
+Confirm attendance: {{confirm_url}}
+Send apology: {{decline_url}}
+Open response page: {{response_url}}` : ''}
+
+Best regards,
+The EST Team
+`.trim();
+
 const GUIDED_PRESET_DEFINITIONS: Array<{
     id: string;
     name: string;
@@ -210,7 +242,7 @@ const GUIDED_PRESET_DEFINITIONS: Array<{
     {
         id: 'est-i-standard',
         name: 'EST I Exam Assignment',
-        description: 'Friday email without action buttons.',
+        description: 'Friday assignment with polished email and WhatsApp delivery.',
         guidedConfig: {
             examCode: 'EST I',
             variant: 'STANDARD',
@@ -222,7 +254,7 @@ const GUIDED_PRESET_DEFINITIONS: Array<{
     {
         id: 'est-i-confirmation',
         name: 'EST I Exam Assignment (With Confirmation)',
-        description: 'Friday email with confirm and apology buttons.',
+        description: 'Friday assignment with confirmation and apology actions.',
         guidedConfig: {
             examCode: 'EST I',
             variant: 'CONFIRMATION',
@@ -234,7 +266,7 @@ const GUIDED_PRESET_DEFINITIONS: Array<{
     {
         id: 'est-ii-standard',
         name: 'EST II Exam Assignment',
-        description: 'Saturday email without action buttons.',
+        description: 'Saturday assignment with polished email and WhatsApp delivery.',
         guidedConfig: {
             examCode: 'EST II',
             variant: 'STANDARD',
@@ -246,7 +278,7 @@ const GUIDED_PRESET_DEFINITIONS: Array<{
     {
         id: 'est-ii-confirmation',
         name: 'EST II Exam Assignment (With Confirmation)',
-        description: 'Saturday email with confirm and apology buttons.',
+        description: 'Saturday assignment with confirmation and apology actions.',
         guidedConfig: {
             examCode: 'EST II',
             variant: 'CONFIRMATION',
@@ -263,7 +295,7 @@ export const EXAM_ASSIGNMENT_TEMPLATE_PRESETS: TemplatePresetDefinition[] = GUID
     return {
         id: preset.id,
         name: preset.name,
-        type: 'EMAIL',
+        type: 'BOTH',
         subject: content.subject,
         body: content.body,
         description: preset.description,
@@ -381,6 +413,44 @@ export const stripHtmlPreviewText = (value: string) => decodeEntities(
         .replace(/[ \t]{2,}/g, ' ')
         .trim(),
 );
+
+export const htmlToPlainTextWithLinks = (value: string) => decodeEntities(
+    String(value || '')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<a\b[^>]*href=(['"])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi, (_, _quote, href, label) => {
+            const cleanLabel = decodeEntities(String(label || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+            const cleanHref = decodeEntities(String(href || '').trim());
+            if (!cleanHref) {
+                return cleanLabel;
+            }
+
+            if (!cleanLabel || cleanLabel === cleanHref) {
+                return cleanHref;
+            }
+
+            return `${cleanLabel}: ${cleanHref}`;
+        })
+        .replace(/<(br|\/p|\/div|\/tr|\/table|\/h[1-6]|\/li|li|\/ul|\/ol)\b[^>]*>/gi, '\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]{2,}/g, ' ')
+        .trim(),
+);
+
+export const buildWhatsAppPreviewText = (body: string, data: Record<string, string>) => {
+    if (isHtmlTemplateBody(body)) {
+        const guidedConfig = parseGuidedTemplateConfig(body);
+        if (guidedConfig) {
+            return renderTemplateTokens(buildGuidedWhatsAppText(guidedConfig), data);
+        }
+
+        return htmlToPlainTextWithLinks(renderTemplateTokens(body, data, { escapeHtmlValues: true }));
+    }
+
+    return renderTemplateTokens(body, data);
+};
 
 export const buildEmailPreviewDocument = (body: string) => `<!DOCTYPE html>
 <html lang="en">

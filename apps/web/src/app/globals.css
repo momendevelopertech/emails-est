@@ -2584,16 +2584,21 @@ input[type='radio'] {
 
 .template-preview-phone {
     background: var(--preview-whatsapp-shell);
+    border: 1px solid color-mix(in srgb, var(--preview-whatsapp-detail) 65%, transparent);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .template-preview-phone-screen {
     background-color: var(--preview-whatsapp-screen);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg fill='none' stroke='rgba(255,255,255,0.06)'%3E%3Cpath d='M0 16h32M16 0v32'/%3E%3C/g%3E%3C/svg%3E");
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .template-preview-phone-bubble {
     background: var(--preview-whatsapp-bubble);
     color: var(--preview-whatsapp-fg);
+    max-width: min(100%, 31rem);
+    margin-inline-start: auto;
 }
 
 .template-preview-phone-detail {
@@ -2603,6 +2608,7 @@ input[type='radio'] {
 .template-preview-phone-link {
     background: var(--preview-whatsapp-link);
     color: var(--preview-whatsapp-link-fg);
+    border: 1px solid color-mix(in srgb, var(--preview-whatsapp-link-fg) 18%, transparent);
 }
 
 .template-preview-email-shell {

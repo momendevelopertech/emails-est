@@ -25,12 +25,12 @@ import api, { fetchCsrfToken } from '@/lib/api';
 import {
     buildGuidedTemplateContent,
     buildEmailPreviewDocument,
+    buildWhatsAppPreviewText,
     EXAM_ASSIGNMENT_TEMPLATE_PRESETS,
     EstGuidedTemplateConfig,
     isHtmlTemplateBody,
     parseGuidedTemplateConfig,
     renderTemplateTokens,
-    stripHtmlPreviewText,
     TEMPLATE_EDITOR_VARIABLES,
     TEMPLATE_PREVIEW_RECIPIENT,
 } from '@/lib/messaging-template-presets';
@@ -324,6 +324,16 @@ const CONFIRMATION_STYLES: Record<RecipientResponseState, string> = {
     declined: 'bg-rose-50 text-rose-800 border border-rose-200',
 };
 
+type WhatsAppPreviewLink = {
+    label: string;
+    href: string;
+};
+
+type WhatsAppPreviewModel = {
+    message: string;
+    links: WhatsAppPreviewLink[];
+};
+
 const EMPTY_VALUE_LABEL = 'empty';
 
 const RECIPIENT_DETAIL_FIELDS: Array<{ key: keyof Recipient; fallback: string }> = [
@@ -366,6 +376,46 @@ const getRecipientResponseState = (recipient: Pick<Recipient, 'confirmed_at' | '
     if (recipient.declined_at) return 'declined';
     if (recipient.confirmed_at) return 'confirmed';
     return 'pending';
+};
+
+const buildWhatsAppPreviewModel = (value: string): WhatsAppPreviewModel => {
+    const links: WhatsAppPreviewLink[] = [];
+    const messageLines: string[] = [];
+
+    for (const rawLine of String(value || '').split('\n')) {
+        const line = rawLine.trim();
+        if (!line) {
+            if (messageLines[messageLines.length - 1] !== '') {
+                messageLines.push('');
+            }
+            continue;
+        }
+
+        const linkMatch = line.match(/^(?:\d+\.\s*)?(.+?):\s*(https?:\/\/\S+)$/i);
+        if (linkMatch) {
+            links.push({
+                label: linkMatch[1].trim(),
+                href: linkMatch[2].trim(),
+            });
+            continue;
+        }
+
+        messageLines.push(line);
+    }
+
+    return {
+        message: messageLines.join('\n').trim(),
+        links,
+    };
+};
+
+const summarizeText = (value: string, maxLength = 240) => {
+    const compact = String(value || '').replace(/\s+/g, ' ').trim();
+    if (compact.length <= maxLength) {
+        return compact;
+    }
+
+    return `${compact.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 };
 
 const trimRecipientFormValues = (form: RecipientExcelFormState): RecipientExcelFormState => ({
@@ -1171,11 +1221,23 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         () => buildEmailPreviewDocument(templateComposerBodyPreview),
         [templateComposerBodyPreview],
     );
+    const templateComposerWhatsAppPreview = buildWhatsAppPreviewText(templateForm.body, TEMPLATE_PREVIEW_RECIPIENT);
+    const templateComposerWhatsAppModel = useMemo(
+        () => buildWhatsAppPreviewModel(templateComposerWhatsAppPreview),
+        [templateComposerWhatsAppPreview],
+    );
     const currentTemplateBodyPreview = currentTemplate ? renderTemplateBodyPreview(currentTemplate.body) : '';
     const currentTemplateSubjectPreview = currentTemplate ? renderTemplateTokens(currentTemplate.subject, TEMPLATE_PREVIEW_RECIPIENT) : '';
     const currentTemplatePreviewDocument = useMemo(
         () => buildEmailPreviewDocument(currentTemplateBodyPreview),
         [currentTemplateBodyPreview],
+    );
+    const currentTemplateWhatsAppPreview = currentTemplate
+        ? buildWhatsAppPreviewText(currentTemplate.body, TEMPLATE_PREVIEW_RECIPIENT)
+        : '';
+    const currentTemplateWhatsAppModel = useMemo(
+        () => buildWhatsAppPreviewModel(currentTemplateWhatsAppPreview),
+        [currentTemplateWhatsAppPreview],
     );
     const selectedVisibleRecipients = recipients.filter((recipient) => selectedRecipientIds.includes(recipient.id));
     const senderAccounts = emailSettingsQuery.data?.sender_accounts ?? [];
@@ -1735,6 +1797,42 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const cardClass = 'rounded-[1.75rem] border border-slate-200/80 bg-white p-4 shadow-sm shadow-slate-900/5 md:p-5';
     const statClass = 'rounded-[1.35rem] border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm';
+    const renderWhatsAppDeliveryPreview = (model: WhatsAppPreviewModel, label: string) => (
+        <div className="template-preview-phone rounded-[1.6rem] p-3">
+            <div className="template-preview-phone-screen rounded-[1.35rem] p-4">
+                <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/60">
+                    <span>{label}</span>
+                    <span>{TEMPLATE_PREVIEW_RECIPIENT.phone}</span>
+                </div>
+                <div className="mt-4 flex justify-end">
+                    <div className="template-preview-phone-bubble max-w-[560px] rounded-[1.45rem] px-4 py-3 shadow-lg shadow-black/10">
+                        <div className="whitespace-pre-wrap break-words text-sm leading-6">
+                            {model.message || copy.templateBody}
+                        </div>
+                        {model.links.length ? (
+                            <div className="mt-4 space-y-2">
+                                {model.links.map((link, index) => (
+                                    <a
+                                        key={`${link.label}-${index}`}
+                                        href={link.href}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="template-preview-phone-link block rounded-[1rem] px-3 py-2 text-sm font-semibold transition hover:opacity-90"
+                                    >
+                                        <div>{link.label}</div>
+                                        <div className="mt-1 break-all text-xs font-medium opacity-80">{link.href}</div>
+                                    </a>
+                                ))}
+                            </div>
+                        ) : null}
+                        <div className="mt-4 flex justify-end">
+                            <span className="template-preview-phone-detail inline-flex h-1.5 w-16 rounded-full" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 
     return (
         <section className="space-y-4 py-4 md:space-y-5 md:py-5">
@@ -2493,16 +2591,12 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 </div>
                                             )}
 
-                                            {templateForm.type !== 'EMAIL' ? (
-                                                <div className="rounded-[1.25rem] border border-emerald-200 bg-emerald-50 px-4 py-3">
-                                                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
-                                                        {isArabic ? 'نسخة واتساب النصية' : 'WhatsApp text fallback'}
-                                                    </div>
-                                                    <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-emerald-900">
-                                                        {stripHtmlPreviewText(templateComposerBodyPreview) || copy.templateBody}
-                                                    </div>
-                                                </div>
-                                            ) : null}
+                                            {templateForm.type !== 'EMAIL'
+                                                ? renderWhatsAppDeliveryPreview(
+                                                    templateComposerWhatsAppModel,
+                                                    isArabic ? 'معاينة واتساب' : 'WhatsApp preview',
+                                                )
+                                                : null}
                                         </div>
                                     </div>
                                 </div>
@@ -2554,13 +2648,17 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 </div>
                             ) : filteredTemplates.length ? filteredTemplates.map((template) => {
                                 const renderedSubject = renderTemplateTokens(template.subject, TEMPLATE_PREVIEW_RECIPIENT);
-                                const renderedBody = renderTemplateBodyPreview(template.body);
-                                const summaryText = stripHtmlPreviewText(renderedBody);
+                                const summaryText = buildWhatsAppPreviewText(template.body, TEMPLATE_PREVIEW_RECIPIENT);
+                                const whatsAppPreviewText = template.type !== 'EMAIL'
+                                    ? buildWhatsAppPreviewText(template.body, TEMPLATE_PREVIEW_RECIPIENT)
+                                    : '';
+                                const whatsAppPreview = buildWhatsAppPreviewModel(whatsAppPreviewText);
+                                const hasResponseActions = whatsAppPreview.links.length >= 2;
 
                                 return (
-                                    <div key={template.id} className="rounded-[1.5rem] border border-slate-200 p-5 transition hover:border-slate-300 hover:shadow-sm">
-                                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                                            <div className="space-y-2">
+                                    <div key={template.id} className="rounded-[1.75rem] border border-slate-200 bg-gradient-to-br from-white via-white to-slate-50/70 p-5 transition hover:border-slate-300 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
+                                        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                                            <div className="min-w-0 flex-1 space-y-4">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <h3 className="text-lg font-semibold text-slate-950">{template.name}</h3>
                                                     <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${CHANNEL_STYLES[template.type]}`}>
@@ -2571,18 +2669,75 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                             {isArabic ? 'HTML فاخر' : 'Luxury HTML'}
                                                         </span>
                                                     ) : null}
+                                                    {hasResponseActions ? (
+                                                        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                                            {isArabic ? 'رابطا رد جاهزان' : '2 response actions'}
+                                                        </span>
+                                                    ) : null}
                                                 </div>
-                                                <p className="text-sm font-medium text-slate-700">{renderedSubject}</p>
-                                                <p className="text-sm leading-6 text-slate-500">{summaryText || copy.templateBody}</p>
+                                                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.95fr)]">
+                                                    <div className="rounded-[1.25rem] border border-slate-200 bg-white/80 p-4">
+                                                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                                            {isArabic ? 'تجربة الإيميل' : 'Email experience'}
+                                                        </div>
+                                                        <p className="mt-2 text-sm font-semibold text-slate-800">{renderedSubject}</p>
+                                                        <p className="mt-3 text-sm leading-6 text-slate-500">
+                                                            {summarizeText(summaryText || copy.templateBody, 260)}
+                                                        </p>
+                                                    </div>
+                                                    <div className={`rounded-[1.25rem] border p-4 ${template.type === 'EMAIL' ? 'border-slate-200 bg-slate-50' : 'border-emerald-200 bg-emerald-50/70'}`}>
+                                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                                            <div className={`text-[11px] font-semibold uppercase tracking-[0.16em] ${template.type === 'EMAIL' ? 'text-slate-500' : 'text-emerald-700'}`}>
+                                                                {template.type === 'EMAIL'
+                                                                    ? (isArabic ? 'واتساب غير مفعّل' : 'WhatsApp disabled')
+                                                                    : (isArabic ? 'شكل الرسالة على واتساب' : 'WhatsApp delivery')}
+                                                            </div>
+                                                            {template.type !== 'EMAIL' ? (
+                                                                <span className="inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-emerald-800">
+                                                                    <Phone size={12} />
+                                                                    {TEMPLATE_PREVIEW_RECIPIENT.phone}
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
+                                                        <div className="mt-3">
+                                                            {template.type === 'EMAIL' ? (
+                                                                <p className="text-sm leading-6 text-slate-500">
+                                                                    {isArabic ? 'هذا القالب مخصص للإيميل فقط.' : 'This template is configured for email only.'}
+                                                                </p>
+                                                            ) : (
+                                                                <>
+                                                                    <p className="text-sm leading-6 text-emerald-950">
+                                                                        {summarizeText(whatsAppPreview.message || whatsAppPreviewText || copy.templateBody, 220)}
+                                                                    </p>
+                                                                    {whatsAppPreview.links.length ? (
+                                                                        <div className="mt-4 flex flex-wrap gap-2">
+                                                                            {whatsAppPreview.links.slice(0, 3).map((link) => (
+                                                                                <a
+                                                                                    key={`${template.id}-${link.label}`}
+                                                                                    href={link.href}
+                                                                                    target="_blank"
+                                                                                    rel="noreferrer"
+                                                                                    className="inline-flex rounded-full border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 transition hover:border-emerald-300"
+                                                                                >
+                                                                                    {link.label}
+                                                                                </a>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : null}
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
 
-                                            <div className="flex flex-wrap gap-2">
-                                                <button type="button" className="btn-outline" onClick={() => beginEditTemplate(template)}>
+                                            <div className="flex w-full flex-col gap-2 xl:w-[190px]">
+                                                <button type="button" className="btn-outline w-full justify-center" onClick={() => beginEditTemplate(template)}>
                                                     {copy.edit}
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    className="btn-secondary"
+                                                    className="btn-secondary w-full justify-center"
                                                     onClick={() => {
                                                         setCampaignTemplateId(template.id);
                                                         updateTab('campaign');
@@ -2592,7 +2747,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    className="btn-danger"
+                                                    className="btn-danger w-full justify-center"
                                                     onClick={() => deleteTemplateMutation.mutate(template.id)}
                                                     disabled={deleteTemplateMutation.isPending}
                                                 >
@@ -2669,8 +2824,43 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             </p>
                                         )}
                                         {currentTemplate.type !== 'EMAIL' ? (
-                                            <div className="mt-4 rounded-[1.25rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
-                                                {stripHtmlPreviewText(currentTemplateBodyPreview)}
+                                            <div className="mt-4 template-preview-shell rounded-[1.6rem] p-3">
+                                                <div className="rounded-[1.35rem] border border-emerald-200/60 bg-white/70 p-4">
+                                                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                                                            {isArabic ? 'Ù…Ø¹Ø§ÙŠÙ†Ø© ÙˆØ§ØªØ³Ø§Ø¨' : 'WhatsApp delivery preview'}
+                                                        </div>
+                                                        <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800">
+                                                            <Phone size={12} />
+                                                            {TEMPLATE_PREVIEW_RECIPIENT.phone}
+                                                        </div>
+                                                    </div>
+                                                    <div className="template-preview-phone overflow-hidden rounded-[1.6rem] p-3">
+                                                        <div className="template-preview-phone-screen rounded-[1.2rem] px-3 py-4">
+                                                            <div className="template-preview-phone-detail mx-auto mb-4 h-1.5 w-16 rounded-full" />
+                                                            <div className="template-preview-phone-bubble rounded-[1.35rem] px-4 py-4 shadow-sm">
+                                                                <div className="whitespace-pre-wrap text-sm leading-6">
+                                                                    {currentTemplateWhatsAppModel.message || currentTemplateWhatsAppPreview}
+                                                                </div>
+                                                                {currentTemplateWhatsAppModel.links.length ? (
+                                                                    <div className="mt-4 flex flex-wrap gap-2">
+                                                                        {currentTemplateWhatsAppModel.links.map((link) => (
+                                                                            <a
+                                                                                key={`${link.label}-${link.href}`}
+                                                                                href={link.href}
+                                                                                target="_blank"
+                                                                                rel="noreferrer"
+                                                                                className="template-preview-phone-link inline-flex rounded-full px-3 py-2 text-xs font-semibold transition hover:opacity-90"
+                                                                            >
+                                                                                {link.label}
+                                                                            </a>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : null}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         ) : null}
                                     </div>

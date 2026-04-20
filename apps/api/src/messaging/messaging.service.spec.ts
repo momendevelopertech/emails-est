@@ -1,5 +1,6 @@
 import { MessagingService } from './messaging.service';
 import { RecipientStatus, RecipientSheet, TemplateType } from '@prisma/client';
+import { EXAM_ASSIGNMENT_TEMPLATE_PRESETS } from './exam-assignment-template-presets';
 
 describe('MessagingService', () => {
     const prisma: any = {
@@ -171,7 +172,7 @@ describe('MessagingService', () => {
         expect(prisma.recipient.delete).toHaveBeenCalledWith({ where: { id: 'r1' } });
     });
 
-    it('getTemplates seeds missing EST assignment templates without overwriting existing edits', async () => {
+    it('getTemplates syncs the managed EST assignment templates to the latest preset definitions', async () => {
         prisma.template.findMany
             .mockResolvedValueOnce([
                 {
@@ -196,13 +197,19 @@ describe('MessagingService', () => {
 
         const templates = await service.getTemplates();
 
-        expect(prisma.template.update).not.toHaveBeenCalled();
-        expect(prisma.template.create).toHaveBeenCalledWith({
+        expect(prisma.template.update).toHaveBeenCalledWith({
+            where: { id: 'preset-est1' },
             data: expect.objectContaining({
-                name: 'EST II Exam Assignment',
-                type: TemplateType.EMAIL,
-                subject: 'EST II Exam Assignment | {{name}}',
+                type: TemplateType.BOTH,
+                subject: 'EST I Exam Assignment | {{name}}',
                 body: expect.stringContaining('EST_TEMPLATE_META:'),
+            }),
+        });
+        expect(prisma.template.create).toHaveBeenCalledTimes(3);
+        expect(prisma.template.create).toHaveBeenNthCalledWith(1, {
+            data: expect.objectContaining({
+                name: 'EST I Exam Assignment (With Confirmation)',
+                type: TemplateType.BOTH,
             }),
         });
         expect(templates).toEqual([
@@ -271,5 +278,44 @@ describe('MessagingService', () => {
         });
         expect(res.total).toBe(1);
         expect(prisma.log.create).toHaveBeenCalled();
+    });
+
+    it('renders guided HTML templates into a structured WhatsApp message with action links', async () => {
+        prisma.template.findUnique.mockResolvedValue({
+            id: 't2',
+            name: 'EST I Exam Assignment (With Confirmation)',
+            type: TemplateType.BOTH,
+            subject: EXAM_ASSIGNMENT_TEMPLATE_PRESETS[1].subject,
+            body: EXAM_ASSIGNMENT_TEMPLATE_PRESETS[1].body,
+        });
+        prisma.recipient.findMany.mockResolvedValue([
+            {
+                id: 'r2',
+                name: 'Momen',
+                email: 'momen@example.com',
+                phone: '01145495393',
+                confirmation_token: 'confirm-token',
+                test_center: 'Arab Academy Abu Qir',
+                room_est1: '201',
+                address: 'Abu Qir, Alexandria',
+                map_link: 'https://maps.example.test/abu-qir',
+                status: RecipientStatus.PENDING,
+            },
+        ]);
+        prisma.recipient.update.mockResolvedValue({});
+        prisma.log.create.mockResolvedValue({});
+        emailService.sendEmail.mockResolvedValue({ ok: true });
+        whatsAppService.sendWhatsApp.mockResolvedValue({ ok: true });
+
+        await service.sendCampaign({ templateId: 't2', mode: 'all_pending' } as any);
+
+        expect(whatsAppService.sendWhatsApp).toHaveBeenCalledTimes(1);
+        expect(whatsAppService.sendWhatsApp.mock.calls[0][0]).toBe('01145495393');
+        const whatsAppMessage = whatsAppService.sendWhatsApp.mock.calls[0][1];
+        expect(whatsAppMessage).toContain('*Action required*');
+        expect(whatsAppMessage).toContain('Choose one of the links below:');
+        expect(whatsAppMessage).toContain('Confirm attendance:');
+        expect(whatsAppMessage).toContain('Send apology:');
+        expect(whatsAppMessage).toContain('/messaging/confirm?token=confirm-token&action=confirm');
     });
 });

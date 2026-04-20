@@ -18,8 +18,9 @@ type EstTemplateDefinition = {
 };
 
 const EST_LOGO_URL = 'https://emails-est-web.vercel.app/brand/est-logo-dark.svg';
+const META_PREFIX = 'EST_TEMPLATE_META:';
 
-const buildMetaComment = (definition: EstTemplateDefinition) => `<!-- EST_TEMPLATE_META:${encodeURIComponent(JSON.stringify(definition))} -->`;
+const buildMetaComment = (definition: EstTemplateDefinition) => `<!-- ${META_PREFIX}${encodeURIComponent(JSON.stringify(definition))} -->`;
 
 const buildButtonsBlock = () => `
     <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:28px;text-align:center;">
@@ -34,6 +35,13 @@ const buildButtonsBlock = () => `
         </p>
     </div>
 `.trim();
+
+const normalizeWhatsAppText = (value: string) => String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
 
 const buildExamAssignmentEmailBody = (definition: EstTemplateDefinition) => {
     const responseBlock = definition.variant === 'CONFIRMATION' ? buildButtonsBlock() : '';
@@ -180,6 +188,80 @@ ${buildMetaComment(definition)}
 `.trim();
 };
 
+export const parseExamAssignmentTemplateMeta = (body: string): EstTemplateDefinition | null => {
+    const match = String(body || '').match(new RegExp(`<!--\\s*${META_PREFIX}([\\s\\S]*?)\\s*-->`, 'i'));
+    if (!match?.[1]) {
+        return null;
+    }
+
+    try {
+        const parsed = JSON.parse(decodeURIComponent(match[1])) as Partial<EstTemplateDefinition>;
+        if (
+            (parsed.key === 'est-i-standard' || parsed.key === 'est-i-confirmation' || parsed.key === 'est-ii-standard' || parsed.key === 'est-ii-confirmation')
+            && (parsed.examCode === 'EST I' || parsed.examCode === 'EST II')
+            && (parsed.variant === 'STANDARD' || parsed.variant === 'CONFIRMATION')
+            && typeof parsed.examDay === 'string'
+            && typeof parsed.examDate === 'string'
+            && typeof parsed.arrivalTime === 'string'
+        ) {
+            return {
+                key: parsed.key,
+                examCode: parsed.examCode,
+                variant: parsed.variant,
+                examDay: parsed.examDay,
+                examDate: parsed.examDate,
+                arrivalTime: parsed.arrivalTime,
+            };
+        }
+    } catch {
+        return null;
+    }
+
+    return null;
+};
+
+export const buildExamAssignmentWhatsAppBody = (
+    definition: EstTemplateDefinition,
+    recipient: Record<string, any>,
+) => {
+    const lines = [
+        `*${definition.examCode} Exam Assignment*`,
+        'Invigilator Briefing',
+        '',
+        `Dear ${String(recipient.name || '').trim() || '{{name}}'},`,
+        `We look forward to welcoming you on *${definition.examDay}* the *${definition.examDate}* for the *${definition.examCode} Exam* as an Invigilator.`,
+        '',
+        '*Session details*',
+        `Day: ${definition.examDay}`,
+        `Date: ${definition.examDate}`,
+        `Arrival time: ${definition.arrivalTime}`,
+        `Test center: ${String(recipient.test_center || '').trim() || '{{test_center}}'}`,
+        `Room: ${String(recipient.room_est1 || '').trim() || '{{room_est1}}'}`,
+        `Address: ${String(recipient.address || '').trim() || '{{address}}'}`,
+        `Google Maps: ${String(recipient.map_link || '').trim() || '{{map_link}}'}`,
+        '',
+        '*Important*',
+        `Please be at the test center by *${definition.arrivalTime}* sharp for briefing and preparation before the exam.`,
+        'Kindly ensure you follow all exam regulations and procedures.',
+    ];
+
+    if (definition.variant === 'CONFIRMATION') {
+        lines.push(
+            '',
+            '*Action required*',
+            'Choose one of the links below:',
+            '',
+            `Confirm attendance: ${String(recipient.confirm_url || '').trim() || '{{confirm_url}}'}`,
+            `Send apology: ${String(recipient.decline_url || '').trim() || '{{decline_url}}'}`,
+            `Open response page: ${String(recipient.response_url || '').trim() || '{{response_url}}'}`,
+        );
+    }
+
+    lines.push('', 'Best regards,', 'The EST Team');
+
+    return normalizeWhatsAppText(lines.join('\n'));
+};
+
 const TEMPLATE_DEFINITIONS: EstTemplateDefinition[] = [
     {
         key: 'est-i-standard',
@@ -217,7 +299,7 @@ const TEMPLATE_DEFINITIONS: EstTemplateDefinition[] = [
 
 export const EXAM_ASSIGNMENT_TEMPLATE_PRESETS: TemplateRecord[] = TEMPLATE_DEFINITIONS.map((definition) => ({
     name: `${definition.examCode} Exam Assignment${definition.variant === 'CONFIRMATION' ? ' (With Confirmation)' : ''}`,
-    type: TemplateType.EMAIL,
+    type: TemplateType.BOTH,
     subject: `${definition.examCode} Exam Assignment${definition.variant === 'CONFIRMATION' ? ' - Action Required' : ''} | {{name}}`,
     body: buildExamAssignmentEmailBody(definition),
     include_confirmation_button: definition.variant === 'CONFIRMATION',
