@@ -163,11 +163,33 @@ model Log {
 }
 
 model EmailSettings {
-  id           String   @id @default("default")
-  sender_name  String
-  sender_email String
-  mail_from    String
-  updated_at   DateTime @updatedAt
+  id                     String              @id @default("default")
+  sender_name            String
+  sender_email           String
+  mail_from              String
+  active_sender_account_id String?
+  updated_at             DateTime            @updatedAt
+  active_sender_account  SenderEmailAccount? @relation(fields: [active_sender_account_id], references: [id], onDelete: SetNull)
 
   @@map("email_settings")
+}
+
+model SenderEmailAccount {
+  id               String          @id @default(cuid())
+  label            String
+  sender_name      String
+  sender_email     String
+  mail_from        String
+  smtp_host        String
+  smtp_port        Int             @default(587)
+  smtp_secure      Boolean         @default(false)
+  smtp_require_tls Boolean         @default(true)
+  smtp_username    String
+  smtp_password    String
+  smtp_daily_limit Int?
+  created_at       DateTime        @default(now())
+  updated_at       DateTime        @updatedAt
+  active_in_settings EmailSettings[]
+
+  @@map("sender_email_accounts")
 }

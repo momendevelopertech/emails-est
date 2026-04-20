@@ -1,11 +1,15 @@
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
+import { IsEmail, IsOptional, IsString } from 'class-validator';
 
 export class UpdateEmailSettingsDto {
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  sender_name: string;
+  sender_name?: string;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsEmail()
-  sender_email: string;
+  sender_email?: string;
+
+  @IsOptional()
+  @IsString()
+  active_sender_account_id?: string | null;
 }

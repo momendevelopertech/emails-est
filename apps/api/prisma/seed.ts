@@ -1,40 +1,15 @@
 import { PrismaClient, RecipientStatus, TemplateType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { EST1_ALL_FIXTURE_ROWS } from './fixtures/est1-all.fixture';
+import { EXAM_ASSIGNMENT_TEMPLATE_PRESETS } from '../src/messaging/exam-assignment-template-presets';
 import { normalizeRecipientImport } from '../src/messaging/recipient-import';
 
 const prisma = new PrismaClient();
 
-const SEEDED_TEMPLATE_DEFINITIONS = [
-  {
-    name: 'EST I Exam Assignment - V2 Modern',
-    type: TemplateType.BOTH,
-    subject: 'EST I Exam Assignment Notice - {{name}}',
-    body: 'Dear {{name}},\n\nYou have been assigned to the EST I exam.\n\nExam Details:\n- Room: {{room_est1}}\n- Location: {{building}}\n- Governorate: {{governorate}}\n- Address: {{address}}\n- Test Center: {{building}}\n\nPlease arrive 15 minutes before your scheduled time at {{location}}.\n\nBest regards,\nEST Examination Team',
-    include_confirmation_button: false,
-  },
-  {
-    name: 'EST II Exam Assignment - V2 Modern',
-    type: TemplateType.BOTH,
-    subject: 'EST II Exam Assignment Notice - {{name}}',
-    body: 'Dear {{name}},\n\nYou have been assigned to the EST II exam.\n\nExam Details:\n- Room: {{room_est1}}\n- Location: {{building}}\n- Governorate: {{governorate}}\n- Address: {{address}}\n- Test Center: {{building}}\n\nPlease arrive 15 minutes before your scheduled time at {{location}}.\n\nBest regards,\nEST Examination Team',
-    include_confirmation_button: false,
-  },
-  {
-    name: 'EST I Exam Assignment - V2 Modern (With Confirmation)',
-    type: TemplateType.BOTH,
-    subject: 'EST I Exam Assignment Notice - {{name}} (Action Required)',
-    body: 'Dear {{name}},\n\nYou have been assigned to the EST I exam.\n\nExam Details:\n- Room: {{room_est1}}\n- Location: {{building}}\n- Governorate: {{governorate}}\n- Address: {{address}}\n- Test Center: {{building}}\n\nPlease arrive 15 minutes before your scheduled time at {{location}}.\n\nPlease confirm your attendance or decline by clicking the link below:\n{{confirm_url}}\n\nBest regards,\nEST Examination Team',
-    include_confirmation_button: true,
-  },
-  {
-    name: 'EST II Exam Assignment - V2 Modern (With Confirmation)',
-    type: TemplateType.BOTH,
-    subject: 'EST II Exam Assignment Notice - {{name}} (Action Required)',
-    body: 'Dear {{name}},\n\nYou have been assigned to the EST II exam.\n\nExam Details:\n- Room: {{room_est1}}\n- Location: {{building}}\n- Governorate: {{governorate}}\n- Address: {{address}}\n- Test Center: {{building}}\n\nPlease arrive 15 minutes before your scheduled time at {{location}}.\n\nPlease confirm your attendance or decline by clicking the link below:\n{{confirm_url}}\n\nBest regards,\nEST Examination Team',
-    include_confirmation_button: true,
-  },
-] as const;
+const SEEDED_TEMPLATE_DEFINITIONS = EXAM_ASSIGNMENT_TEMPLATE_PRESETS.map((template) => ({
+  ...template,
+  type: template.type ?? TemplateType.EMAIL,
+}));
 
 const SEEDED_RECIPIENTS = EST1_ALL_FIXTURE_ROWS.map((row, index) => ({
   id: `seed-est1-${String(index + 1).padStart(4, '0')}`,

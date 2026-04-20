@@ -79,11 +79,23 @@ describe('EmailService', () => {
         }));
     });
 
-    it('prefers the database email identity and caches it for subsequent sends', async () => {
+    it('prefers the active database sender account and caches it for subsequent sends', async () => {
         prisma.emailSettings.findUnique.mockResolvedValue({
             sender_name: 'EST',
             sender_email: 'sender@example.com',
-            mail_from: 'EST <sender@example.com>',
+            active_sender_account: {
+                id: 'acct-1',
+                updated_at: new Date('2026-04-20T08:00:00.000Z'),
+                sender_name: 'EST',
+                sender_email: 'sender@example.com',
+                mail_from: 'EST <sender@example.com>',
+                smtp_host: 'smtp.db.example.com',
+                smtp_port: 465,
+                smtp_secure: true,
+                smtp_require_tls: true,
+                smtp_username: 'db-mailer@example.com',
+                smtp_password: 'db-secret',
+            },
         });
         sendMail.mockResolvedValue({ messageId: 'msg-1', response: '250 queued' });
 
@@ -102,6 +114,15 @@ describe('EmailService', () => {
         });
 
         expect(prisma.emailSettings.findUnique).toHaveBeenCalledTimes(1);
+        expect(nodemailer.createTransport).toHaveBeenCalledWith(expect.objectContaining({
+            host: 'smtp.db.example.com',
+            port: 465,
+            secure: true,
+            auth: {
+                user: 'db-mailer@example.com',
+                pass: 'db-secret',
+            },
+        }));
         expect(sendMail).toHaveBeenNthCalledWith(1, expect.objectContaining({
             from: 'EST <sender@example.com>',
         }));

@@ -23,9 +23,12 @@ import {
 import * as XLSX from 'xlsx';
 import api, { fetchCsrfToken } from '@/lib/api';
 import {
+    buildGuidedTemplateContent,
     buildEmailPreviewDocument,
     EXAM_ASSIGNMENT_TEMPLATE_PRESETS,
+    EstGuidedTemplateConfig,
     isHtmlTemplateBody,
+    parseGuidedTemplateConfig,
     renderTemplateTokens,
     stripHtmlPreviewText,
     TEMPLATE_EDITOR_VARIABLES,
@@ -166,11 +169,30 @@ type EmailSettingsRecord = {
     sender_name: string;
     sender_email: string;
     mail_from: string;
+    active_sender_account_id: string | null;
+    using_env_fallback: boolean;
     smtp_host: string;
     smtp_port: number;
     sent_today_success_count: number;
     smtp_daily_limit: number | null;
     smtp_remaining_today: number | null;
+    sender_accounts: SenderEmailAccount[];
+};
+
+type SenderEmailAccount = {
+    id: string;
+    label: string;
+    sender_name: string;
+    sender_email: string;
+    mail_from: string;
+    smtp_host: string;
+    smtp_port: number;
+    smtp_secure: boolean;
+    smtp_require_tls: boolean;
+    smtp_username: string;
+    smtp_daily_limit: number | null;
+    has_password: boolean;
+    is_active: boolean;
 };
 
 const EMPTY_RECIPIENTS: Recipient[] = [];
@@ -227,6 +249,19 @@ const EMPTY_TEMPLATE_FORM = {
     type: 'EMAIL' as TemplateType,
     subject: '',
     body: '',
+};
+
+const EMPTY_SENDER_ACCOUNT_FORM = {
+    label: '',
+    sender_name: '',
+    sender_email: '',
+    smtp_host: '',
+    smtp_port: '587',
+    smtp_secure: false,
+    smtp_require_tls: true,
+    smtp_username: '',
+    smtp_password: '',
+    smtp_daily_limit: '',
 };
 
 const ALL_CYCLES_VALUE = '__all_cycles__';
@@ -541,13 +576,18 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
     const [isTemplateComposerOpen, setIsTemplateComposerOpen] = useState(false);
     const [activeTemplateField, setActiveTemplateField] = useState<TemplateEditorField>('body');
+    const [guidedTemplateForm, setGuidedTemplateForm] = useState<EstGuidedTemplateConfig | null>(null);
+    const [isAdvancedTemplateEditorOpen, setIsAdvancedTemplateEditorOpen] = useState(false);
     const [campaignTemplateId, setCampaignTemplateId] = useState('');
     const [sendScope, setSendScope] = useState<SendScope>('selected');
     const [logsExpanded, setLogsExpanded] = useState(false);
     const [emailSettingsForm, setEmailSettingsForm] = useState({
         sender_name: '',
         sender_email: '',
+        active_sender_account_id: '',
     });
+    const [senderAccountForm, setSenderAccountForm] = useState(EMPTY_SENDER_ACCOUNT_FORM);
+    const [editingSenderAccountId, setEditingSenderAccountId] = useState<string | null>(null);
     const [recipientForm, setRecipientForm] = useState<RecipientExcelFormState>(EMPTY_RECIPIENT_FORM);
     const [recipientFormErrors, setRecipientFormErrors] = useState<RecipientFormErrors>({});
     const [editingRecipientId, setEditingRecipientId] = useState<string | null>(null);
@@ -697,9 +737,24 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             setEmailSettingsForm({
                 sender_name: emailSettingsQuery.data.sender_name,
                 sender_email: emailSettingsQuery.data.sender_email,
+                active_sender_account_id: emailSettingsQuery.data.active_sender_account_id || '',
             });
         }
     }, [emailSettingsQuery.data]);
+
+    useEffect(() => {
+        if (!guidedTemplateForm) {
+            return;
+        }
+
+        const generated = buildGuidedTemplateContent(guidedTemplateForm);
+        setTemplateForm((current) => ({
+            ...current,
+            type: 'EMAIL',
+            subject: generated.subject,
+            body: generated.body,
+        }));
+    }, [guidedTemplateForm]);
 
     useEffect(() => {
         if (!isRecipientFormOpen && !isTemplateComposerOpen) {
@@ -814,6 +869,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             setTemplateForm(EMPTY_TEMPLATE_FORM);
             setEditingTemplateId(null);
             setIsTemplateComposerOpen(false);
+            setGuidedTemplateForm(null);
+            setIsAdvancedTemplateEditorOpen(false);
             setActiveTemplateField('body');
             setCampaignTemplateId(savedTemplate?.id || campaignTemplateId);
             void queryClient.invalidateQueries({ queryKey: ['messaging-templates'] });
@@ -833,6 +890,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             setEditingTemplateId(null);
             setIsTemplateComposerOpen(false);
             setTemplateForm(EMPTY_TEMPLATE_FORM);
+            setGuidedTemplateForm(null);
+            setIsAdvancedTemplateEditorOpen(false);
             setActiveTemplateField('body');
             void queryClient.invalidateQueries({ queryKey: ['messaging-templates'] });
         },
@@ -872,8 +931,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         mutationFn: async () => {
             await fetchCsrfToken();
             const response = await api.patch('/settings/email', {
-                sender_name: emailSettingsForm.sender_name.trim(),
-                sender_email: emailSettingsForm.sender_email.trim(),
+                sender_name: emailSettingsForm.sender_name.trim() || undefined,
+                sender_email: emailSettingsForm.sender_email.trim() || undefined,
+                active_sender_account_id: emailSettingsForm.active_sender_account_id || null,
             });
             return response.data as EmailSettingsRecord;
         },
@@ -881,12 +941,82 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             setEmailSettingsForm({
                 sender_name: data.sender_name,
                 sender_email: data.sender_email,
+                active_sender_account_id: data.active_sender_account_id || '',
             });
             void queryClient.invalidateQueries({ queryKey: ['email-settings'] });
             toast.success(t('emailSettingsSaveSuccess'));
         },
         onError(error: any) {
             toast.error(error?.message || t('emailSettingsSaveError'));
+        },
+    });
+
+    const saveSenderAccountMutation = useMutation({
+        mutationFn: async () => {
+            await fetchCsrfToken();
+            const payload = {
+                label: senderAccountForm.label.trim(),
+                sender_name: senderAccountForm.sender_name.trim(),
+                sender_email: senderAccountForm.sender_email.trim(),
+                smtp_host: senderAccountForm.smtp_host.trim(),
+                smtp_port: Number.parseInt(senderAccountForm.smtp_port, 10) || 587,
+                smtp_secure: senderAccountForm.smtp_secure,
+                smtp_require_tls: senderAccountForm.smtp_require_tls,
+                smtp_username: senderAccountForm.smtp_username.trim(),
+                smtp_password: senderAccountForm.smtp_password.trim() || undefined,
+                smtp_daily_limit: senderAccountForm.smtp_daily_limit.trim()
+                    ? Number.parseInt(senderAccountForm.smtp_daily_limit, 10)
+                    : undefined,
+            };
+
+            if (editingSenderAccountId) {
+                const response = await api.patch(`/settings/email/accounts/${editingSenderAccountId}`, payload);
+                return response.data as EmailSettingsRecord;
+            }
+
+            const response = await api.post('/settings/email/accounts', {
+                ...payload,
+                smtp_password: senderAccountForm.smtp_password.trim(),
+            });
+            return response.data as EmailSettingsRecord;
+        },
+        onSuccess(data) {
+            setEmailSettingsForm({
+                sender_name: data.sender_name,
+                sender_email: data.sender_email,
+                active_sender_account_id: data.active_sender_account_id || '',
+            });
+            setSenderAccountForm(EMPTY_SENDER_ACCOUNT_FORM);
+            setEditingSenderAccountId(null);
+            void queryClient.invalidateQueries({ queryKey: ['email-settings'] });
+            toast.success(editingSenderAccountId ? t('senderAccountUpdated') : t('senderAccountCreated'));
+        },
+        onError(error: any) {
+            toast.error(error?.message || t('senderAccountSaveError'));
+        },
+    });
+
+    const deleteSenderAccountMutation = useMutation({
+        mutationFn: async (id: string) => {
+            await fetchCsrfToken();
+            const response = await api.delete(`/settings/email/accounts/${id}`);
+            return response.data as EmailSettingsRecord;
+        },
+        onSuccess(data, deletedId) {
+            if (editingSenderAccountId === deletedId) {
+                setEditingSenderAccountId(null);
+                setSenderAccountForm(EMPTY_SENDER_ACCOUNT_FORM);
+            }
+            setEmailSettingsForm({
+                sender_name: data.sender_name,
+                sender_email: data.sender_email,
+                active_sender_account_id: data.active_sender_account_id || '',
+            });
+            void queryClient.invalidateQueries({ queryKey: ['email-settings'] });
+            toast.success(t('senderAccountDeleted'));
+        },
+        onError(error: any) {
+            toast.error(error?.message || t('senderAccountDeleteError'));
         },
     });
 
@@ -931,6 +1061,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         [currentTemplateBodyPreview],
     );
     const selectedVisibleRecipients = recipients.filter((recipient) => selectedRecipientIds.includes(recipient.id));
+    const senderAccounts = emailSettingsQuery.data?.sender_accounts ?? [];
+    const activeSenderAccount = senderAccounts.find((account) => account.id === emailSettingsForm.active_sender_account_id) || null;
     const emailIdentityPreview = emailSettingsForm.sender_email
         ? `${emailSettingsForm.sender_name.trim() || t('senderNamePlaceholder')} <${emailSettingsForm.sender_email}>`
         : emailSettingsForm.sender_name.trim() || '-';
@@ -1226,6 +1358,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     };
 
     const beginEditTemplate = (template: Template) => {
+        const parsedGuidedConfig = parseGuidedTemplateConfig(template.body);
         setEditingTemplateId(template.id);
         setTemplateForm({
             name: template.name,
@@ -1233,6 +1366,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             subject: template.subject,
             body: template.body,
         });
+        setGuidedTemplateForm(parsedGuidedConfig);
+        setIsAdvancedTemplateEditorOpen(!parsedGuidedConfig);
         setActiveTemplateField('body');
         setIsTemplateComposerOpen(true);
         updateTab('templates');
@@ -1241,6 +1376,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const openTemplateComposer = () => {
         setEditingTemplateId(null);
         setTemplateForm(EMPTY_TEMPLATE_FORM);
+        setGuidedTemplateForm(null);
+        setIsAdvancedTemplateEditorOpen(false);
         setActiveTemplateField('body');
         setIsTemplateComposerOpen(true);
     };
@@ -1248,6 +1385,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const closeTemplateComposer = () => {
         setEditingTemplateId(null);
         setTemplateForm(EMPTY_TEMPLATE_FORM);
+        setGuidedTemplateForm(null);
+        setIsAdvancedTemplateEditorOpen(false);
         setActiveTemplateField('body');
         setIsTemplateComposerOpen(false);
     };
@@ -1264,7 +1403,30 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             subject: preset.subject,
             body: preset.body,
         });
+        setGuidedTemplateForm(preset.guidedConfig);
+        setIsAdvancedTemplateEditorOpen(false);
         setActiveTemplateField('body');
+    };
+
+    const openNewSenderAccountForm = () => {
+        setEditingSenderAccountId(null);
+        setSenderAccountForm(EMPTY_SENDER_ACCOUNT_FORM);
+    };
+
+    const beginEditSenderAccount = (account: SenderEmailAccount) => {
+        setEditingSenderAccountId(account.id);
+        setSenderAccountForm({
+            label: account.label,
+            sender_name: account.sender_name,
+            sender_email: account.sender_email,
+            smtp_host: account.smtp_host,
+            smtp_port: String(account.smtp_port),
+            smtp_secure: account.smtp_secure,
+            smtp_require_tls: account.smtp_require_tls,
+            smtp_username: account.smtp_username,
+            smtp_password: '',
+            smtp_daily_limit: account.smtp_daily_limit ? String(account.smtp_daily_limit) : '',
+        });
     };
 
     const insertTemplateVariable = (token: string) => {
@@ -1307,11 +1469,27 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     };
 
     const saveEmailSettings = () => {
-        if (!emailSettingsForm.sender_name.trim() || !emailSettingsForm.sender_email.trim()) {
+        if (!emailSettingsForm.active_sender_account_id && (!emailSettingsForm.sender_name.trim() || !emailSettingsForm.sender_email.trim())) {
             toast.error(t('emailSettingsValidationError'));
             return;
         }
         saveEmailSettingsMutation.mutate();
+    };
+
+    const saveSenderAccount = () => {
+        if (
+            !senderAccountForm.label.trim()
+            || !senderAccountForm.sender_name.trim()
+            || !senderAccountForm.sender_email.trim()
+            || !senderAccountForm.smtp_host.trim()
+            || !senderAccountForm.smtp_username.trim()
+            || (!editingSenderAccountId && !senderAccountForm.smtp_password.trim())
+        ) {
+            toast.error(t('senderAccountValidationError'));
+            return;
+        }
+
+        saveSenderAccountMutation.mutate();
     };
 
     const buildFilterPayload = (applyPendingFallback = true) => {
@@ -1942,12 +2120,12 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             <div className="flex flex-col gap-4">
                                                 <div>
                                                     <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                                        {isArabic ? 'قوالب جاهزة سريعة' : 'Quick luxury presets'}
+                                                        {isArabic ? 'قوالب EST الرسمية' : 'Official EST presets'}
                                                     </div>
                                                     <p className="mt-2 text-sm leading-6 text-slate-600">
                                                         {isArabic
-                                                            ? 'حمّل شكل EST I أو EST II الجاهز، ثم عدّل أي جزء في الـ HTML من نفس شاشة الإديت.'
-                                                            : 'Load the EST I or EST II luxury layout, then edit every part of the HTML directly from this editor.'}
+                                                            ? 'حمّل أحد القوالب الأربعة الرسمية، ثم عدّل اليوم والتاريخ ووقت الحضور من المحرر المبسط.'
+                                                            : 'Load one of the 4 official EST templates, then adjust day, date, and arrival time from the guided editor.'}
                                                     </p>
                                                 </div>
                                                 <div className="grid gap-3 md:grid-cols-2">
@@ -1965,6 +2143,70 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {guidedTemplateForm ? (
+                                            <div className="rounded-[1.6rem] border border-amber-200 bg-amber-50 p-4 md:p-5">
+                                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                                    <div>
+                                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+                                                            {isArabic ? 'محرر EST المبسط' : 'Guided EST editor'}
+                                                        </div>
+                                                        <p className="mt-2 text-sm leading-6 text-amber-900">
+                                                            {isArabic
+                                                                ? 'اليوم والتاريخ ووقت الحضور هم أكثر عناصر مهمة للتعديل. غيرهم من هنا مباشرة والقالب هيتبني تلقائياً.'
+                                                                : 'Day, date, and arrival time are the main fields to adjust. Update them here and the template rebuilds automatically.'}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        className="btn-outline"
+                                                        onClick={() => setIsAdvancedTemplateEditorOpen((current) => !current)}
+                                                    >
+                                                        {isAdvancedTemplateEditorOpen
+                                                            ? (isArabic ? 'إخفاء HTML المتقدم' : 'Hide advanced HTML')
+                                                            : (isArabic ? 'إظهار HTML المتقدم' : 'Show advanced HTML')}
+                                                    </button>
+                                                </div>
+
+                                                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                                                    <div>
+                                                        <label className="mb-2 block text-sm font-medium text-amber-950">{isArabic ? 'يوم الامتحان' : 'Exam day'}</label>
+                                                        <input
+                                                            value={guidedTemplateForm.examDay}
+                                                            onChange={(event) => setGuidedTemplateForm((current) => current ? { ...current, examDay: event.target.value } : current)}
+                                                            className="input w-full bg-white"
+                                                            placeholder={isArabic ? 'مثال: Friday' : 'e.g. Friday'}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="mb-2 block text-sm font-medium text-amber-950">{isArabic ? 'التاريخ الكامل' : 'Full date'}</label>
+                                                        <input
+                                                            value={guidedTemplateForm.examDate}
+                                                            onChange={(event) => setGuidedTemplateForm((current) => current ? { ...current, examDate: event.target.value } : current)}
+                                                            className="input w-full bg-white"
+                                                            placeholder={isArabic ? 'مثال: 15th of May 2026' : 'e.g. 15th of May 2026'}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="mb-2 block text-sm font-medium text-amber-950">{isArabic ? 'وقت الحضور' : 'Arrival time'}</label>
+                                                        <input
+                                                            value={guidedTemplateForm.arrivalTime}
+                                                            onChange={(event) => setGuidedTemplateForm((current) => current ? { ...current, arrivalTime: event.target.value } : current)}
+                                                            className="input w-full bg-white"
+                                                            placeholder={isArabic ? 'مثال: 7:30 AM' : 'e.g. 7:30 AM'}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="mb-2 block text-sm font-medium text-amber-950">{isArabic ? 'نوع القالب' : 'Template mode'}</label>
+                                                        <div className="rounded-[1rem] border border-amber-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900">
+                                                            {guidedTemplateForm.variant === 'CONFIRMATION'
+                                                                ? (isArabic ? 'بزرار تأكيد واعتذار' : 'With confirmation buttons')
+                                                                : (isArabic ? 'بدون زرار' : 'Without buttons')}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : null}
 
                                         <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
                                             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -2004,6 +2246,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             className="input w-full"
                                             placeholder={copy.templateName}
                                         />
+                                        {!guidedTemplateForm || isAdvancedTemplateEditorOpen ? (
+                                            <>
                                         <FormSelect
                                             value={templateForm.type}
                                             onChange={(nextValue) => setTemplateForm((current) => ({ ...current, type: nextValue as TemplateType }))}
@@ -2029,9 +2273,21 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                         />
                                         <div className="rounded-[1.35rem] border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm leading-6 text-cyan-900">
                                             {isArabic
-                                                ? 'تقدر تكتب HTML كامل داخل نص التيمبلت. الإيميل هيتبعت بنفس التصميم، ولو القناة Email + WhatsApp فالواتساب هيستقبل نسخة نصية نظيفة تلقائيًا.'
-                                                : 'You can author full HTML inside the template body. Email will keep the rich layout, and if the template is Email + WhatsApp, WhatsApp will receive a clean text fallback automatically.'}
+                                                ? (guidedTemplateForm
+                                                    ? 'أنت في وضع HTML المتقدم. أي تعديل هنا سيكون يدويًا على التيمبلت.'
+                                                    : 'تقدر تكتب HTML كامل داخل نص التيمبلت. الإيميل هيتبعت بنفس التصميم، ولو القناة Email + WhatsApp فالواتساب هيستقبل نسخة نصية نظيفة تلقائيًا.')
+                                                : (guidedTemplateForm
+                                                    ? 'You are in advanced HTML mode. Edits here are manual changes to the template markup.'
+                                                    : 'You can author full HTML inside the template body. Email will keep the rich layout, and if the template is Email + WhatsApp, WhatsApp will receive a clean text fallback automatically.')}
                                         </div>
+                                            </>
+                                        ) : (
+                                            <div className="rounded-[1.35rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-900">
+                                                {isArabic
+                                                    ? 'القالب يتبني تلقائيًا من المحرر المبسط. استخدم زر "إظهار HTML المتقدم" إذا حبيت تعدل الكود يدويًا.'
+                                                    : 'This template is currently generated from the guided editor. Use "Show advanced HTML" only if you want manual code editing.'}
+                                            </div>
+                                        )}
                                     </div>
 
                                     <div className="rounded-[1.5rem] border border-slate-200 bg-white p-4 md:p-5">
@@ -2048,6 +2304,23 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                     {templateComposerSubjectPreview || copy.templateSubject}
                                                 </div>
                                             </div>
+
+                                            {guidedTemplateForm ? (
+                                                <div className="grid gap-3 md:grid-cols-3">
+                                                    <div className="rounded-[1.15rem] border border-amber-200 bg-amber-50 px-4 py-3">
+                                                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700">{isArabic ? 'اليوم' : 'Day'}</div>
+                                                        <div className="mt-2 text-sm font-semibold text-slate-900">{guidedTemplateForm.examDay}</div>
+                                                    </div>
+                                                    <div className="rounded-[1.15rem] border border-slate-200 bg-slate-50 px-4 py-3">
+                                                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{isArabic ? 'التاريخ' : 'Date'}</div>
+                                                        <div className="mt-2 text-sm font-semibold text-slate-900">{guidedTemplateForm.examDate}</div>
+                                                    </div>
+                                                    <div className="rounded-[1.15rem] border border-slate-900 bg-slate-900 px-4 py-3">
+                                                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300">{isArabic ? 'الوقت' : 'Time'}</div>
+                                                        <div className="mt-2 text-sm font-semibold text-amber-300">{guidedTemplateForm.arrivalTime}</div>
+                                                    </div>
+                                                </div>
+                                            ) : null}
 
                                             {isHtmlTemplateBody(templateForm.body) && templateForm.type !== 'WHATSAPP' ? (
                                                 <div className="template-preview-shell rounded-[1.6rem] p-3">
@@ -2408,7 +2681,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             )}
             {activeTab === 'settings' && (
                 isSuperAdmin ? (
-                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
                         <div className={cardClass}>
                             <div className="flex items-start gap-3">
                                 <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
@@ -2421,29 +2694,70 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             </div>
 
                             <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
-                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('emailIdentityTitle')}</div>
-                                <p className="mt-2 text-sm leading-6 text-slate-600">{t('emailIdentityDescription')}</p>
+                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{isArabic ? 'الحساب النشط للإرسال' : 'Active sender account'}</div>
+                                <p className="mt-2 text-sm leading-6 text-slate-600">
+                                    {isArabic
+                                        ? 'اختار الإيميل اللي هيطلع منه الإرسال الآن. لو سيبت الاختيار على fallback النظام هيرجع لقيم البيئة.'
+                                        : 'Choose which sender account should be used right now. If you keep fallback selected, the system will use environment values.'}
+                                </p>
 
                                 <div className="mt-5 grid gap-4">
                                     <div>
-                                        <label className="mb-2 block text-sm font-medium text-slate-700">{t('senderName')}</label>
-                                        <input
-                                            value={emailSettingsForm.sender_name}
-                                            onChange={(event) => setEmailSettingsForm((current) => ({ ...current, sender_name: event.target.value }))}
-                                            className="input w-full"
-                                            placeholder={t('senderNamePlaceholder')}
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">{isArabic ? 'أرسل من' : 'Send from'}</label>
+                                        <FormSelect
+                                            value={emailSettingsForm.active_sender_account_id || '__env__'}
+                                            onChange={(nextValue) => {
+                                                const nextId = nextValue === '__env__' ? '' : nextValue;
+                                                const selectedAccount = senderAccounts.find((account) => account.id === nextId) || null;
+                                                setEmailSettingsForm((current) => ({
+                                                    ...current,
+                                                    active_sender_account_id: nextId,
+                                                    sender_name: selectedAccount?.sender_name || current.sender_name,
+                                                    sender_email: selectedAccount?.sender_email || current.sender_email,
+                                                }));
+                                            }}
+                                            ariaLabel={isArabic ? 'أرسل من' : 'Send from'}
+                                            options={[
+                                                { value: '__env__', label: isArabic ? 'Fallback من البيئة' : 'Environment fallback' },
+                                                ...senderAccounts.map((account) => ({
+                                                    value: account.id,
+                                                    label: `${account.label} - ${account.sender_email}`,
+                                                })),
+                                            ]}
                                         />
                                     </div>
 
-                                    <div>
-                                        <label className="mb-2 block text-sm font-medium text-slate-700">{t('senderEmail')}</label>
-                                        <input
-                                            value={emailSettingsForm.sender_email}
-                                            readOnly
-                                            className="input w-full cursor-not-allowed bg-slate-100 text-slate-500"
-                                        />
-                                        <p className="mt-2 text-xs text-slate-500">{t('senderEmailHint')}</p>
-                                    </div>
+                                    {!emailSettingsForm.active_sender_account_id ? (
+                                        <>
+                                            <div>
+                                                <label className="mb-2 block text-sm font-medium text-slate-700">{t('senderName')}</label>
+                                                <input
+                                                    value={emailSettingsForm.sender_name}
+                                                    onChange={(event) => setEmailSettingsForm((current) => ({ ...current, sender_name: event.target.value }))}
+                                                    className="input w-full"
+                                                    placeholder={t('senderNamePlaceholder')}
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="mb-2 block text-sm font-medium text-slate-700">{t('senderEmail')}</label>
+                                                <input
+                                                    value={emailSettingsForm.sender_email}
+                                                    onChange={(event) => setEmailSettingsForm((current) => ({ ...current, sender_email: event.target.value }))}
+                                                    className="input w-full"
+                                                    placeholder="sender@example.com"
+                                                />
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="rounded-[1.25rem] border border-slate-200 bg-white p-4 text-sm text-slate-700">
+                                            <div className="font-semibold text-slate-900">{activeSenderAccount?.label || '-'}</div>
+                                            <div className="mt-1">{activeSenderAccount?.smtp_username || '-'}</div>
+                                            <div className="mt-3 text-xs text-slate-500">
+                                                {isArabic ? 'تقدر تعدل التفاصيل من فورم الحسابات بالأسفل.' : 'You can edit the full credentials in the sender accounts form below.'}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="rounded-[1.25rem] border border-emerald-200 bg-emerald-50 p-4">
                                         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">{t('fromPreview')}</div>
@@ -2462,6 +2776,177 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     </button>
                                 </div>
                             </div>
+
+                            <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-white p-5">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{isArabic ? 'حسابات الإرسال' : 'Sender accounts'}</div>
+                                        <p className="mt-2 text-sm leading-6 text-slate-600">
+                                            {isArabic
+                                                ? 'ضيف أكثر من SMTP account واختار منهم وقت ما تحتاج بدون الرجوع لـ .env.'
+                                                : 'Add multiple SMTP accounts and switch between them without editing the .env file.'}
+                                        </p>
+                                    </div>
+                                    <button type="button" className="btn-outline" onClick={openNewSenderAccountForm}>
+                                        {editingSenderAccountId ? (isArabic ? 'إضافة حساب جديد' : 'Add another account') : (isArabic ? 'حساب جديد' : 'New account')}
+                                    </button>
+                                </div>
+
+                                <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,1.05fr)]">
+                                    <div className="space-y-3">
+                                        {senderAccounts.length ? senderAccounts.map((account) => (
+                                            <div key={account.id} className={`rounded-[1.35rem] border p-4 ${account.is_active ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                    <div>
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <div className="text-sm font-semibold text-slate-950">{account.label}</div>
+                                                            {account.is_active ? (
+                                                                <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                                                                    {isArabic ? 'نشط' : 'Active'}
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
+                                                        <div className="mt-2 text-sm text-slate-700">{account.mail_from}</div>
+                                                        <div className="mt-1 text-xs text-slate-500">{account.smtp_host}:{account.smtp_port} • {account.smtp_username}</div>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {!account.is_active ? (
+                                                            <button
+                                                                type="button"
+                                                                className="btn-outline"
+                                                                onClick={() => setEmailSettingsForm((current) => ({
+                                                                    ...current,
+                                                                    active_sender_account_id: account.id,
+                                                                    sender_name: account.sender_name,
+                                                                    sender_email: account.sender_email,
+                                                                }))}
+                                                            >
+                                                                {isArabic ? 'تحديده' : 'Use it'}
+                                                            </button>
+                                                        ) : null}
+                                                        <button type="button" className="btn-outline" onClick={() => beginEditSenderAccount(account)}>
+                                                            {copy.edit}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="btn-outline border-rose-200 text-rose-700 hover:bg-rose-50"
+                                                            onClick={() => deleteSenderAccountMutation.mutate(account.id)}
+                                                            disabled={deleteSenderAccountMutation.isPending}
+                                                        >
+                                                            {copy.delete}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )) : (
+                                            <div className="rounded-[1.35rem] border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
+                                                {isArabic ? 'لا توجد حسابات إرسال محفوظة حتى الآن.' : 'No sender accounts saved yet.'}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="rounded-[1.35rem] border border-slate-200 bg-slate-50 p-4 md:p-5">
+                                        <div className="text-sm font-semibold text-slate-950">
+                                            {editingSenderAccountId
+                                                ? (isArabic ? 'تعديل حساب الإرسال' : 'Edit sender account')
+                                                : (isArabic ? 'إضافة حساب إرسال' : 'Add sender account')}
+                                        </div>
+                                        <div className="mt-4 grid gap-4">
+                                            <input
+                                                value={senderAccountForm.label}
+                                                onChange={(event) => setSenderAccountForm((current) => ({ ...current, label: event.target.value }))}
+                                                className="input w-full"
+                                                placeholder={isArabic ? 'اسم داخلي للحساب' : 'Internal account label'}
+                                            />
+                                            <input
+                                                value={senderAccountForm.sender_name}
+                                                onChange={(event) => setSenderAccountForm((current) => ({ ...current, sender_name: event.target.value }))}
+                                                className="input w-full"
+                                                placeholder={t('senderNamePlaceholder')}
+                                            />
+                                            <input
+                                                value={senderAccountForm.sender_email}
+                                                onChange={(event) => setSenderAccountForm((current) => ({ ...current, sender_email: event.target.value }))}
+                                                className="input w-full"
+                                                placeholder="sender@example.com"
+                                            />
+                                            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_140px]">
+                                                <input
+                                                    value={senderAccountForm.smtp_host}
+                                                    onChange={(event) => setSenderAccountForm((current) => ({ ...current, smtp_host: event.target.value }))}
+                                                    className="input w-full"
+                                                    placeholder="smtp.example.com"
+                                                />
+                                                <input
+                                                    value={senderAccountForm.smtp_port}
+                                                    onChange={(event) => setSenderAccountForm((current) => ({ ...current, smtp_port: event.target.value }))}
+                                                    className="input w-full"
+                                                    placeholder="587"
+                                                />
+                                            </div>
+                                            <input
+                                                value={senderAccountForm.smtp_username}
+                                                onChange={(event) => setSenderAccountForm((current) => ({ ...current, smtp_username: event.target.value }))}
+                                                className="input w-full"
+                                                placeholder={isArabic ? 'اسم مستخدم SMTP' : 'SMTP username'}
+                                            />
+                                            <input
+                                                type="password"
+                                                value={senderAccountForm.smtp_password}
+                                                onChange={(event) => setSenderAccountForm((current) => ({ ...current, smtp_password: event.target.value }))}
+                                                className="input w-full"
+                                                placeholder={editingSenderAccountId
+                                                    ? (isArabic ? 'اتركه فارغاً للاحتفاظ بالباسورد الحالي' : 'Leave blank to keep current password')
+                                                    : (isArabic ? 'كلمة مرور SMTP' : 'SMTP password')}
+                                            />
+                                            <input
+                                                value={senderAccountForm.smtp_daily_limit}
+                                                onChange={(event) => setSenderAccountForm((current) => ({ ...current, smtp_daily_limit: event.target.value }))}
+                                                className="input w-full"
+                                                placeholder={isArabic ? 'الحد اليومي الاختياري' : 'Optional daily limit'}
+                                            />
+                                            <div className="grid gap-3 sm:grid-cols-2">
+                                                <label className="flex items-center gap-3 rounded-[1rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={senderAccountForm.smtp_secure}
+                                                        onChange={(event) => setSenderAccountForm((current) => ({ ...current, smtp_secure: event.target.checked }))}
+                                                    />
+                                                    <span>{isArabic ? 'اتصال آمن SSL' : 'Secure SSL'}</span>
+                                                </label>
+                                                <label className="flex items-center gap-3 rounded-[1rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={senderAccountForm.smtp_require_tls}
+                                                        onChange={(event) => setSenderAccountForm((current) => ({ ...current, smtp_require_tls: event.target.checked }))}
+                                                    />
+                                                    <span>{isArabic ? 'إجبار TLS' : 'Require TLS'}</span>
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-5 flex flex-wrap gap-3">
+                                            <button
+                                                type="button"
+                                                className="btn-primary"
+                                                onClick={saveSenderAccount}
+                                                disabled={saveSenderAccountMutation.isPending}
+                                            >
+                                                {editingSenderAccountId
+                                                    ? (isArabic ? 'حفظ التعديل' : 'Save account')
+                                                    : (isArabic ? 'إضافة الحساب' : 'Add account')}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="btn-outline"
+                                                onClick={openNewSenderAccountForm}
+                                            >
+                                                {isArabic ? 'تفريغ الفورم' : 'Clear form'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="space-y-6">
@@ -2477,6 +2962,14 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 </div>
 
                                 <div className="mt-5 space-y-4">
+                                    <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{isArabic ? 'مصدر الإرسال الحالي' : 'Current sender source'}</div>
+                                        <div className="mt-2 text-sm font-semibold text-slate-900">
+                                            {emailSettingsQuery.data?.using_env_fallback
+                                                ? (isArabic ? 'Fallback من البيئة' : 'Environment fallback')
+                                                : (activeSenderAccount?.label || (isArabic ? 'حساب محفوظ' : 'Saved account'))}
+                                        </div>
+                                    </div>
                                     <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
                                         <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{t('host')}</div>
                                         <div className="mt-2 text-sm font-semibold text-slate-900">{emailSettingsQuery.data?.smtp_host || '-'}</div>

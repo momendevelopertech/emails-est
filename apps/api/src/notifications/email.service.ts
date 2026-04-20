@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
-import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import SMTPPool from 'nodemailer/lib/smtp-pool';
+import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type EmailDeliveryResult = {
@@ -19,6 +19,17 @@ type SendEmailOptions = {
     html: string;
 };
 
+type ResolvedSenderConfig = {
+    key: string;
+    mailFrom: string;
+    host: string;
+    port: number;
+    secure: boolean;
+    requireTLS: boolean;
+    user: string;
+    pass: string;
+};
+
 const DEFAULT_RETRY_ATTEMPTS = 3;
 const DEFAULT_RETRY_DELAY_MS = 500;
 const EMAIL_SETTINGS_CACHE_MS = 60_000;
@@ -28,16 +39,15 @@ const SIMPLE_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export class EmailService {
     private readonly logger = new Logger(EmailService.name);
     private transporter?: nodemailer.Transporter;
-    private cachedMailFrom?: { value: string; expiresAt: number };
+    private transporterKey?: string;
+    private cachedSenderConfig?: { value: ResolvedSenderConfig | null; expiresAt: number };
 
     constructor(private readonly prisma: PrismaService) {}
 
     clearMailFromCache() {
-        this.cachedMailFrom = undefined;
-    }
-
-    hasConfig() {
-        return Boolean(this.getMailHost() && this.getMailUser() && this.getMailPass());
+        this.cachedSenderConfig = undefined;
+        this.transporter = undefined;
+        this.transporterKey = undefined;
     }
 
     async sendEmail(options: SendEmailOptions): Promise<EmailDeliveryResult> {
@@ -60,7 +70,8 @@ export class EmailService {
             return { ok: false, recipient: options.to, attempts: 0, error: 'Email HTML body is missing' };
         }
 
-        if (!this.hasConfig()) {
+        const senderConfig = await this.getSenderConfig();
+        if (!senderConfig) {
             this.logger.warn('Email not configured');
             return { ok: false, recipient: options.to, attempts: 0, error: 'Email not configured' };
         }
@@ -69,8 +80,8 @@ export class EmailService {
 
         for (let attempt = 1; attempt <= DEFAULT_RETRY_ATTEMPTS; attempt += 1) {
             try {
-                const info = await this.getTransporter().sendMail({
-                    from: await this.getMailFrom(),
+                const info = await this.getTransporter(senderConfig).sendMail({
+                    from: senderConfig.mailFrom,
                     to: options.to,
                     subject: options.subject,
                     html: options.html,
@@ -105,13 +116,101 @@ export class EmailService {
         };
     }
 
-    private getTransporter() {
-        if (!this.transporter) {
-            const options = this.buildTransportOptions();
-            this.transporter = nodemailer.createTransport(options);
+    private getTransporter(config: ResolvedSenderConfig) {
+        if (!this.transporter || this.transporterKey !== config.key) {
+            this.transporter = nodemailer.createTransport(this.buildTransportOptions(config));
+            this.transporterKey = config.key;
         }
 
         return this.transporter;
+    }
+
+    private async getSenderConfig() {
+        if (this.cachedSenderConfig && this.cachedSenderConfig.expiresAt > Date.now()) {
+            return this.cachedSenderConfig.value;
+        }
+
+        let value: ResolvedSenderConfig | null = null;
+
+        try {
+            const settings = await this.prisma.emailSettings.findUnique({
+                where: { id: 'default' },
+                select: {
+                    active_sender_account: {
+                        select: {
+                            id: true,
+                            updated_at: true,
+                            sender_name: true,
+                            sender_email: true,
+                            mail_from: true,
+                            smtp_host: true,
+                            smtp_port: true,
+                            smtp_secure: true,
+                            smtp_require_tls: true,
+                            smtp_username: true,
+                            smtp_password: true,
+                        },
+                    },
+                    sender_name: true,
+                    sender_email: true,
+                },
+            });
+
+            const account = settings?.active_sender_account;
+            if (account && account.smtp_host?.trim() && account.smtp_username?.trim() && account.smtp_password) {
+                value = {
+                    key: `db:${account.id}:${account.updated_at.toISOString()}`,
+                    mailFrom: account.mail_from?.trim() || this.buildMailFrom(account.sender_name, account.sender_email),
+                    host: account.smtp_host.trim(),
+                    port: account.smtp_port,
+                    secure: account.smtp_secure,
+                    requireTLS: account.smtp_require_tls,
+                    user: account.smtp_username.trim(),
+                    pass: account.smtp_password,
+                };
+            } else {
+                const envConfig = this.getEnvConfig();
+                if (envConfig) {
+                    const senderName = settings?.sender_name?.trim() || this.getDefaultSenderName();
+                    const senderEmail = settings?.sender_email?.trim() || this.getDefaultSenderEmail();
+                    value = {
+                        ...envConfig,
+                        mailFrom: this.buildMailFrom(senderName, senderEmail),
+                    };
+                }
+            }
+        } catch (error: any) {
+            this.logger.warn(`Failed to load email sender configuration from database. Falling back to env values: ${error?.message || 'unknown error'}`);
+            value = this.getEnvConfig();
+        }
+
+        this.cachedSenderConfig = {
+            value,
+            expiresAt: Date.now() + EMAIL_SETTINGS_CACHE_MS,
+        };
+
+        return value;
+    }
+
+    private getEnvConfig(): ResolvedSenderConfig | null {
+        const host = this.getMailHost();
+        const user = this.getMailUser();
+        const pass = this.getMailPass();
+
+        if (!host || !user || !pass) {
+            return null;
+        }
+
+        return {
+            key: `env:${host}:${this.getMailPort()}:${user}`,
+            mailFrom: this.getEnvMailFrom(),
+            host,
+            port: this.getMailPort(),
+            secure: this.isSecure(),
+            requireTLS: this.getRequireTls(),
+            user,
+            pass,
+        };
     }
 
     private getMailHost() {
@@ -129,39 +228,6 @@ export class EmailService {
 
     private getMailPass() {
         return process.env.MAIL_PASS || '';
-    }
-
-    private async getMailFrom() {
-        if (this.cachedMailFrom && this.cachedMailFrom.expiresAt > Date.now()) {
-            return this.cachedMailFrom.value;
-        }
-
-        try {
-            const record = await this.prisma.emailSettings.findUnique({
-                where: { id: 'default' },
-                select: {
-                    sender_name: true,
-                    sender_email: true,
-                },
-            });
-
-            const mailFrom = record
-                ? this.buildMailFrom(
-                    record.sender_name?.trim() || this.getDefaultSenderName(),
-                    record.sender_email?.trim() || this.getDefaultSenderEmail(),
-                )
-                : this.getEnvMailFrom();
-
-            this.cachedMailFrom = {
-                value: mailFrom,
-                expiresAt: Date.now() + EMAIL_SETTINGS_CACHE_MS,
-            };
-
-            return mailFrom;
-        } catch (error: any) {
-            this.logger.warn(`Failed to load email identity from database. Falling back to env values: ${error?.message || 'unknown error'}`);
-            return this.getEnvMailFrom();
-        }
     }
 
     private getEnvMailFrom() {
@@ -186,7 +252,7 @@ export class EmailService {
     }
 
     private getDefaultSenderEmail() {
-        return (process.env.SENDER_EMAIL || '').trim();
+        return (process.env.SENDER_EMAIL || this.getMailUser() || '').trim();
     }
 
     private isSecure() {
@@ -225,16 +291,16 @@ export class EmailService {
         return configured ?? true;
     }
 
-    private buildTransportOptions(): SMTPTransport.Options | SMTPPool.Options {
+    private buildTransportOptions(config: ResolvedSenderConfig): SMTPTransport.Options | SMTPPool.Options {
         const common: SMTPTransport.Options = {
-            host: this.getMailHost(),
-            port: this.getMailPort(),
-            secure: this.isSecure(),
+            host: config.host,
+            port: config.port,
+            secure: config.secure,
             auth: {
-                user: this.getMailUser(),
-                pass: this.getMailPass(),
+                user: config.user,
+                pass: config.pass,
             },
-            requireTLS: this.getRequireTls(),
+            requireTLS: config.requireTLS,
             tls: {
                 rejectUnauthorized: this.getRejectUnauthorized(),
             },
@@ -261,6 +327,8 @@ export class EmailService {
     }
 
     private waitBeforeRetry() {
-        return new Promise((resolve) => setTimeout(resolve, DEFAULT_RETRY_DELAY_MS));
+        return new Promise((resolve) => {
+            setTimeout(resolve, DEFAULT_RETRY_DELAY_MS);
+        });
     }
 }
