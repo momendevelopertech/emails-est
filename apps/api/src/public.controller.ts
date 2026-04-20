@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
 import { MessagingService } from './messaging/messaging.service';
 import { ConfirmRecipientDto } from './messaging/dto/confirm-recipient.dto';
+import { WhatsAppReplyDto } from './messaging/dto/whatsapp-reply.dto';
 
 @Controller('public')
 export class PublicController {
@@ -21,5 +22,11 @@ export class PublicController {
     @Get('recipients/response')
     async getRecipientResponse(@Query('token') token?: string) {
         return this.messagingService.getRecipientResponse(token || '');
+    }
+
+    @Post('whatsapp/reply')
+    @HttpCode(HttpStatus.OK)
+    async handleWhatsAppReply(@Body() body: WhatsAppReplyDto) {
+        return this.messagingService.processWhatsAppReply(body.phone, body.message);
     }
 }

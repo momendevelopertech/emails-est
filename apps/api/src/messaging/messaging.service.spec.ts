@@ -8,6 +8,7 @@ describe('MessagingService', () => {
             create: jest.fn(),
             createMany: jest.fn(),
             delete: jest.fn(),
+            findUnique: jest.fn(),
             findMany: jest.fn(),
             update: jest.fn(),
             count: jest.fn(),
@@ -280,7 +281,7 @@ describe('MessagingService', () => {
         expect(prisma.log.create).toHaveBeenCalled();
     });
 
-    it('renders guided HTML templates into a structured WhatsApp message with action links', async () => {
+    it('renders guided HTML templates into a structured WhatsApp message without system links', async () => {
         prisma.template.findUnique.mockResolvedValue({
             id: 't2',
             name: 'EST I Exam Assignment (With Confirmation)',
@@ -313,9 +314,41 @@ describe('MessagingService', () => {
         expect(whatsAppService.sendWhatsApp.mock.calls[0][0]).toBe('01145495393');
         const whatsAppMessage = whatsAppService.sendWhatsApp.mock.calls[0][1];
         expect(whatsAppMessage).toContain('*Action required*');
-        expect(whatsAppMessage).toContain('Choose one of the links below:');
-        expect(whatsAppMessage).toContain('Confirm attendance:');
-        expect(whatsAppMessage).toContain('Send apology:');
-        expect(whatsAppMessage).toContain('/messaging/confirm?token=confirm-token&action=confirm');
+        expect(whatsAppMessage).toContain('Please reply directly in WhatsApp using one word:');
+        expect(whatsAppMessage).toContain('confirm = attendance confirmed');
+        expect(whatsAppMessage).toContain('apology = apology sent');
+        expect(whatsAppMessage).not.toContain('/messaging/confirm?token=confirm-token&action=confirm');
+        expect(whatsAppMessage).not.toContain('Google Maps:');
+    });
+
+    it('processWhatsAppReply confirms attendance and sends a status reply', async () => {
+        prisma.recipient.findMany.mockResolvedValue([{ confirmation_token: 'confirm-token' }]);
+        prisma.recipient.findUnique.mockResolvedValue({
+            id: 'r2',
+            confirmed_at: null,
+            declined_at: null,
+            name: 'Momen',
+            email: 'momen@example.com',
+        });
+        prisma.recipient.update.mockResolvedValue({});
+        whatsAppService.sendWhatsApp.mockResolvedValue({ ok: true });
+
+        const response = await service.processWhatsAppReply('201145495393', 'confirm');
+
+        expect(response).toEqual(expect.objectContaining({
+            matched: true,
+            status: 'CONFIRMED',
+        }));
+        expect(prisma.recipient.update).toHaveBeenCalledWith({
+            where: { id: 'r2' },
+            data: {
+                confirmed_at: expect.any(Date),
+                declined_at: null,
+            },
+        });
+        expect(whatsAppService.sendWhatsApp).toHaveBeenCalledWith(
+            '01145495393',
+            'Your assignment has been confirmed successfully.',
+        );
     });
 });
