@@ -128,7 +128,7 @@ function buildDefaultMailFrom(senderName: string, senderEmail: string) {
 }
 
 async function seedEmailSettings(client: PrismaClient) {
-  const senderName = (process.env.SENDER_NAME || 'SPHINX HR').trim() || 'SPHINX HR';
+  const senderName = (process.env.SENDER_NAME || 'EST').trim() || 'EST';
   const senderEmail = (process.env.SENDER_EMAIL || process.env.MAIL_USER || '').trim();
   const mailFrom = buildDefaultMailFrom(senderName, senderEmail);
 
@@ -241,11 +241,11 @@ async function main() {
   });
 
   await upsertSeedUser(prisma, {
-    id: 'seed-superadmin-sphinx',
+    id: 'seed-superadmin-est',
     employeeNumber: 'SEED-ADMIN-002',
-    email: 'superadmin@sphinx.com',
+    email: 'superadmin@est.com',
     username: 'superadmin',
-    fullName: 'SPHINX Super Admin',
+    fullName: 'EST Super Admin',
     passwordHash,
   });
 

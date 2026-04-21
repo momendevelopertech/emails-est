@@ -11,4 +11,4 @@ export const GREEN_API_TEST_PHONE = '+201145495393';
 export const GREEN_API_TEST_CHAT_ID = '201145495393@c.us';
 
 export const buildGreenApiTestMessage = () =>
-  `SPHINX HR Green API test message sent at ${new Date().toISOString()}`;
+  `EST Green API test message sent at ${new Date().toISOString()}`;

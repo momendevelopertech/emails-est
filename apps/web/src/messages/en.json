@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "SPHINX HR",
+    "name": "EST",
     "tagline": "Enterprise HR Management System"
   },
   "common": {
@@ -496,7 +496,7 @@
     "selectBranchFirst": "Select branch first",
     "fingerprintId": "Fingerprint ID",
     "tempPassword": "Temp Password",
-    "defaultPassword": "Default Password (SPHINX@2026)",
+    "defaultPassword": "Default Password (EST@2026)",
     "role": "Role",
     "status": "Status",
     "active": "Active",
@@ -785,7 +785,7 @@
     "tabsHint": "Split into focused sections for easier review and editing.",
     "profileTabsHint": "Your personal settings are grouped here so you can update them quickly.",
     "profilePageTitle": "My Settings",
-    "profilePageDescription": "Manage your profile details and how SPHINX HR reaches you.",
+    "profilePageDescription": "Manage your profile details and how EST reaches you.",
     "profilePersonalTitle": "Personal details",
     "profilePersonalDescription": "Update the name and contact information used for your account.",
     "profileFullName": "Full name (English)",

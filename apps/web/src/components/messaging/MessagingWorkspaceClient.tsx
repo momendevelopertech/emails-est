@@ -224,6 +224,39 @@ type WhatsAppTestResult = {
     };
 };
 
+type HierarchyBriefResult = {
+    dry_run: boolean;
+    cycle_id: string | null;
+    sheet: 'LEGACY' | 'EST1' | 'EST2' | null;
+    summary: {
+        buildings: number;
+        floors: number;
+        heads: {
+            targeted: number;
+            sent: number;
+            failed: number;
+            skipped: number;
+        };
+        seniors: {
+            targeted: number;
+            sent: number;
+            failed: number;
+            skipped: number;
+        };
+    };
+    details: Array<{
+        recipient_id: string;
+        recipient_name: string;
+        role: 'HEAD' | 'SENIOR';
+        phone: string | null;
+        building: string;
+        floor: string | null;
+        status: 'SENT' | 'FAILED' | 'SKIPPED';
+        reason?: string;
+        message_preview: string;
+    }>;
+};
+
 const EMPTY_RECIPIENTS: Recipient[] = [];
 const EMPTY_RECIPIENT_FORM: RecipientExcelFormState = {
     room_est1: '',
@@ -460,7 +493,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const { user, ready, isChecking, error } = useRequireAuth(locale);
-    const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+    const canManageSettings = user?.role === 'SUPER_ADMIN' || user?.role === 'HR_ADMIN';
 
     const copy = useMemo(() => ({
         tabs: {
@@ -674,6 +707,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     });
     const [whatsAppSettingsForm, setWhatsAppSettingsForm] = useState(EMPTY_WHATSAPP_SETTINGS_FORM);
     const [whatsAppTestResult, setWhatsAppTestResult] = useState<WhatsAppTestResult | null>(null);
+    const [hierarchyBriefResult, setHierarchyBriefResult] = useState<HierarchyBriefResult | null>(null);
     const [senderAccountForm, setSenderAccountForm] = useState(EMPTY_SENDER_ACCOUNT_FORM);
     const [editingSenderAccountId, setEditingSenderAccountId] = useState<string | null>(null);
     const [recipientForm, setRecipientForm] = useState<RecipientExcelFormState>(EMPTY_RECIPIENT_FORM);
@@ -782,6 +816,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         setPage(1);
     }, [recipientFilterOptionsQuery.data?.sheets, selectedSheet]);
 
+    useEffect(() => {
+        setHierarchyBriefResult(null);
+    }, [selectedCycleId, selectedSheet]);
+
     const templatesQuery = useQuery<Template[]>({
         queryKey: ['messaging-templates'],
         queryFn: async () => {
@@ -811,7 +849,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             const response = await api.get('/settings/email');
             return response.data;
         },
-        enabled: ready && isSuperAdmin,
+        enabled: ready && canManageSettings,
     });
 
     const whatsAppSettingsQuery = useQuery<WhatsAppSettingsRecord>({
@@ -820,7 +858,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             const response = await api.get('/settings/whatsapp');
             return response.data;
         },
-        enabled: ready && isSuperAdmin,
+        enabled: ready && canManageSettings,
     });
 
     useEffect(() => {
@@ -1032,6 +1070,31 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         },
         onError(error: any) {
             toast.error(error?.message || copy.sendError);
+        },
+    });
+
+    const sendHierarchyBriefsMutation = useMutation({
+        mutationFn: async () => {
+            await fetchCsrfToken();
+            const response = await api.post('/messaging/send-hierarchy-briefs', {
+                cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+                sheet: selectedSheet || undefined,
+                dry_run: false,
+            });
+            return response.data as HierarchyBriefResult;
+        },
+        onSuccess(data) {
+            setHierarchyBriefResult(data);
+            const totalSent = data.summary.heads.sent + data.summary.seniors.sent;
+            const totalFailed = data.summary.heads.failed + data.summary.seniors.failed;
+            toast.success(
+                isArabic
+                    ? `تم إرسال رسائل الهيكل: ${totalSent} ناجح / ${totalFailed} فشل`
+                    : `Hierarchy briefs sent: ${totalSent} delivered / ${totalFailed} failed`,
+            );
+        },
+        onError(error: any) {
+            toast.error(error?.message || (isArabic ? 'تعذر إرسال رسائل الـ Head/Senior حالياً.' : 'Unable to send head/senior briefs right now.'));
         },
     });
 
@@ -2947,7 +3010,60 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             >
                                 {copy.retryFailed}
                             </button>
+                            <button
+                                type="button"
+                                className="btn-outline"
+                                onClick={() => sendHierarchyBriefsMutation.mutate()}
+                                disabled={sendHierarchyBriefsMutation.isPending || sendMutation.isPending || retryMutation.isPending}
+                            >
+                                {sendHierarchyBriefsMutation.isPending
+                                    ? (isArabic ? 'جاري إرسال رسائل الـ Head/Senior...' : 'Sending head/senior briefs...')
+                                    : (isArabic ? 'إرسال رسائل الـ Head/Senior' : 'Send Head/Senior WhatsApp briefs')}
+                            </button>
                         </div>
+
+                        {hierarchyBriefResult ? (
+                            <div className="mt-5 rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
+                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                    {isArabic ? 'نتيجة رسائل الهيكل' : 'Hierarchy brief result'}
+                                </div>
+                                <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <div className="text-xs text-slate-500">{isArabic ? 'المباني' : 'Buildings'}</div>
+                                        <div className="mt-1 text-lg font-semibold text-slate-900">{hierarchyBriefResult.summary.buildings}</div>
+                                    </div>
+                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <div className="text-xs text-slate-500">{isArabic ? 'الأدوار' : 'Floors'}</div>
+                                        <div className="mt-1 text-lg font-semibold text-slate-900">{hierarchyBriefResult.summary.floors}</div>
+                                    </div>
+                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <div className="text-xs text-slate-500">{isArabic ? 'رسائل الـ Head' : 'Head briefs'}</div>
+                                        <div className="mt-1 text-lg font-semibold text-emerald-700">
+                                            {hierarchyBriefResult.summary.heads.sent}/{hierarchyBriefResult.summary.heads.targeted}
+                                        </div>
+                                    </div>
+                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <div className="text-xs text-slate-500">{isArabic ? 'رسائل الـ Senior' : 'Senior briefs'}</div>
+                                        <div className="mt-1 text-lg font-semibold text-emerald-700">
+                                            {hierarchyBriefResult.summary.seniors.sent}/{hierarchyBriefResult.summary.seniors.targeted}
+                                        </div>
+                                    </div>
+                                </div>
+                                {hierarchyBriefResult.details.length ? (
+                                    <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600">
+                                        <div className="font-semibold text-slate-800">{isArabic ? 'آخر النتائج' : 'Recent delivery details'}</div>
+                                        <div className="mt-2 space-y-1">
+                                            {hierarchyBriefResult.details.slice(0, 6).map((item) => (
+                                                <div key={`${item.recipient_id}-${item.role}`} className="truncate">
+                                                    {item.recipient_name} - {item.role} - {item.status}
+                                                    {item.reason ? ` (${item.reason})` : ''}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : null}
                     </div>
 
                     <div className={cardClass}>
@@ -3018,7 +3134,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                 </div>
             )}
             {activeTab === 'settings' && (
-                isSuperAdmin ? (
+                canManageSettings ? (
                     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
                         <div className={cardClass}>
                             <div className="flex items-start gap-3">

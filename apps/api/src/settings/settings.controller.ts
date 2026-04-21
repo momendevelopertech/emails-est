@@ -25,25 +25,25 @@ export class SettingsController {
 
   @Patch('email')
   async updateEmailSettings(@Req() req: Request, @Body() body: UpdateEmailSettingsDto) {
-    this.ensureSuperAdmin(req);
+    this.ensureSettingsManager(req);
     return this.settingsService.updateEmailSettings(body);
   }
 
   @Patch('whatsapp')
   async updateWhatsAppSettings(@Req() req: Request, @Body() body: UpdateWhatsAppSettingsDto) {
-    this.ensureSuperAdmin(req);
+    this.ensureSettingsManager(req);
     return this.settingsService.updateWhatsAppSettings(body);
   }
 
   @Post('whatsapp/test')
   async testWhatsAppSettings(@Req() req: Request, @Body() body: TestWhatsAppSettingsDto) {
-    this.ensureSuperAdmin(req);
+    this.ensureSettingsManager(req);
     return this.settingsService.testWhatsAppSettings(body);
   }
 
   @Post('email/accounts')
   async createSenderEmailAccount(@Req() req: Request, @Body() body: CreateSenderEmailAccountDto) {
-    this.ensureSuperAdmin(req);
+    this.ensureSettingsManager(req);
     return this.settingsService.createSenderEmailAccount(body);
   }
 
@@ -53,20 +53,20 @@ export class SettingsController {
     @Param('id') id: string,
     @Body() body: UpdateSenderEmailAccountDto,
   ) {
-    this.ensureSuperAdmin(req);
+    this.ensureSettingsManager(req);
     return this.settingsService.updateSenderEmailAccount(id, body);
   }
 
   @Delete('email/accounts/:id')
   async deleteSenderEmailAccount(@Req() req: Request, @Param('id') id: string) {
-    this.ensureSuperAdmin(req);
+    this.ensureSettingsManager(req);
     return this.settingsService.deleteSenderEmailAccount(id);
   }
 
-  private ensureSuperAdmin(req: Request) {
+  private ensureSettingsManager(req: Request) {
     const role = (req as Request & { user?: { role?: string } }).user?.role;
-    if (role !== 'SUPER_ADMIN') {
-      throw new ForbiddenException('Only super admins can manage system settings.');
+    if (role !== 'SUPER_ADMIN' && role !== 'HR_ADMIN') {
+      throw new ForbiddenException('Only super admins and HR admins can manage system settings.');
     }
   }
 }

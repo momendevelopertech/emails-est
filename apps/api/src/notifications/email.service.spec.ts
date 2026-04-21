@@ -24,7 +24,7 @@ describe('EmailService', () => {
             MAIL_PASS: 'secret',
             MAIL_FROM: '',
             SENDER_EMAIL: 'sender@example.com',
-            SENDER_NAME: 'SPHINX HR',
+            SENDER_NAME: 'EST',
             MAIL_SECURE: 'false',
             MAIL_REQUIRE_TLS: 'true',
         };
@@ -73,7 +73,7 @@ describe('EmailService', () => {
         });
 
         expect(sendMail).toHaveBeenCalledWith(expect.objectContaining({
-            from: 'SPHINX HR <sender@example.com>',
+            from: 'EST <sender@example.com>',
             to: 'employee@example.com',
             subject: 'Hello',
         }));

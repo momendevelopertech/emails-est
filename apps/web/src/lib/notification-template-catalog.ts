@@ -61,8 +61,8 @@ export const DEFAULT_NOTIFICATION_TEMPLATES: NotificationTemplateMap = {
     accountCreated: {
         titleAr: 'تم إنشاء حسابك بنجاح',
         titleEn: 'Your account is ready',
-        introAr: 'تم تجهيز حسابك على SPHINX HR ويمكنك تسجيل الدخول من الرابط التالي.',
-        introEn: 'Your SPHINX HR account is ready and you can sign in from the link below.',
+        introAr: 'تم تجهيز حسابك على EST ويمكنك تسجيل الدخول من الرابط التالي.',
+        introEn: 'Your EST account is ready and you can sign in from the link below.',
         footerAr: '{passwordHint}',
         footerEn: '{passwordHint}',
     },
@@ -214,7 +214,7 @@ const accountPreviewValues = {
         employeeNumber: 'EMP-1024',
         username: 'ahmed1024',
         workflowMode: 'سير الموافقات',
-        temporaryPassword: 'SPHINX@2026',
+        temporaryPassword: 'EST@2026',
         passwordHint: 'يرجى تغيير كلمة المرور بعد أول تسجيل دخول.',
     },
     en: {
@@ -222,7 +222,7 @@ const accountPreviewValues = {
         employeeNumber: 'EMP-1024',
         username: 'ahmed1024',
         workflowMode: 'Approval Workflow',
-        temporaryPassword: 'SPHINX@2026',
+        temporaryPassword: 'EST@2026',
         passwordHint: 'Please change your password after your first login.',
     },
 };
@@ -324,7 +324,7 @@ const permissionActionPreviewValues = {
 const accountPreviewDetails: TemplatePreviewDetail[] = [
     { icon: '🆔', labelAr: 'رقم الموظف', labelEn: 'Employee #', valueAr: 'EMP-1024', valueEn: 'EMP-1024' },
     { icon: '👤', labelAr: 'اسم المستخدم', labelEn: 'Username', valueAr: 'ahmed1024', valueEn: 'ahmed1024' },
-    { icon: '🔐', labelAr: 'كلمة المرور المؤقتة', labelEn: 'Temporary password', valueAr: 'SPHINX@2026', valueEn: 'SPHINX@2026' },
+    { icon: '🔐', labelAr: 'كلمة المرور المؤقتة', labelEn: 'Temporary password', valueAr: 'EST@2026', valueEn: 'EST@2026' },
     { icon: '📌', labelAr: 'وضع الطلبات', labelEn: 'Request mode', valueAr: 'سير الموافقات', valueEn: 'Approval Workflow' },
 ];
 

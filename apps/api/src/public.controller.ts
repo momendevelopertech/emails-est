@@ -29,4 +29,10 @@ export class PublicController {
     async handleWhatsAppReply(@Body() body: WhatsAppReplyDto) {
         return this.messagingService.processWhatsAppReply(body.phone, body.message);
     }
+
+    @Post('whatsapp/webhook')
+    @HttpCode(HttpStatus.OK)
+    async handleWhatsAppWebhook(@Body() body: unknown) {
+        return this.messagingService.processWhatsAppWebhook(body);
+    }
 }

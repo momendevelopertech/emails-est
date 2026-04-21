@@ -261,12 +261,12 @@ export function buildDownloadWorkbook(kind: DownloadKind) {
             ...(kind === 'sample'
                 ? [[
                     'AASTM-Abuqir',
-                    'Sphinx Alex',
+                    'EST Alex',
                     'Mr. Osama El-Mahdy',
                     'اسامة محمد زكى المهدى',
                     'osama.elmahdy@york-press.com',
                     '201223199310',
-                    'Sphinx Alex',
+                    'EST Alex',
                     '',
                     '',
                     '',

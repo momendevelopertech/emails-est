@@ -420,7 +420,7 @@ export class SettingsService {
   }
 
   private getFallbackSenderName() {
-    return (process.env.SENDER_NAME || 'SPHINX HR').trim() || 'SPHINX HR';
+    return (process.env.SENDER_NAME || 'EST').trim() || 'EST';
   }
 
   private getFallbackSenderEmail() {

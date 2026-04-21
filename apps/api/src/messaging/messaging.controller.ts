@@ -8,6 +8,7 @@ import { UpdateTemplateDto } from './dto/update-template.dto';
 import { SendCampaignDto } from './dto/send-campaign.dto';
 import { RetryRecipientsDto } from './dto/retry-recipients.dto';
 import { RecipientFilterDto } from './dto/recipient-filter.dto';
+import { SendHierarchyBriefsDto } from './dto/send-hierarchy-briefs.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('messaging')
@@ -82,6 +83,11 @@ export class MessagingController {
     @Post('retry')
     async retryRecipients(@Body() body: RetryRecipientsDto) {
         return this.messagingService.retryRecipients(body);
+    }
+
+    @Post('send-hierarchy-briefs')
+    async sendHierarchyBriefs(@Body() body: SendHierarchyBriefsDto) {
+        return this.messagingService.sendHierarchyWhatsAppBriefs(body);
     }
 
     @Get('logs')

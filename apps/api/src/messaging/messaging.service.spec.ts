@@ -317,6 +317,7 @@ describe('MessagingService', () => {
         expect(whatsAppMessage).toContain('Please reply directly in WhatsApp using one word:');
         expect(whatsAppMessage).toContain('confirm = attendance confirmed');
         expect(whatsAppMessage).toContain('apology = apology sent');
+        expect(whatsAppMessage).not.toContain('Room:');
         expect(whatsAppMessage).not.toContain('/messaging/confirm?token=confirm-token&action=confirm');
         expect(whatsAppMessage).not.toContain('Google Maps:');
     });
@@ -348,7 +349,91 @@ describe('MessagingService', () => {
         });
         expect(whatsAppService.sendWhatsApp).toHaveBeenCalledWith(
             '01145495393',
-            'Your assignment has been confirmed successfully.',
+            'تم تأكيد الحضور بنجاح.',
         );
+    });
+
+    it('processWhatsAppWebhook handles Green API payloads and routes them to confirm/apology flow', async () => {
+        prisma.recipient.findMany.mockResolvedValue([{ confirmation_token: 'confirm-token' }]);
+        prisma.recipient.findUnique.mockResolvedValue({
+            id: 'r2',
+            confirmed_at: null,
+            declined_at: null,
+            name: 'Momen',
+            email: 'momen@example.com',
+        });
+        prisma.recipient.update.mockResolvedValue({});
+        whatsAppService.sendWhatsApp.mockResolvedValue({ ok: true });
+
+        const response = await service.processWhatsAppWebhook({
+            typeWebhook: 'incomingMessageReceived',
+            senderData: {
+                chatId: '201145495393@c.us',
+            },
+            messageData: {
+                textMessageData: {
+                    textMessage: 'confirm',
+                },
+            },
+        });
+
+        expect(response).toEqual(expect.objectContaining({
+            processed: true,
+            matched: true,
+            status: 'CONFIRMED',
+        }));
+        expect(whatsAppService.sendWhatsApp).toHaveBeenCalledWith(
+            '01145495393',
+            'تم تأكيد الحضور بنجاح.',
+        );
+    });
+
+    it('sendHierarchyWhatsAppBriefs sends summary to heads and assignment details to seniors', async () => {
+        prisma.recipient.findMany.mockResolvedValue([
+            {
+                id: 'head-1',
+                name: 'Head A',
+                phone: '01111111111',
+                role: 'Head',
+                building: 'Building A',
+                test_center: 'Building A',
+                division: '1',
+                room_est1: null,
+            },
+            {
+                id: 'senior-1',
+                name: 'Senior A',
+                phone: '01122222222',
+                role: 'Senior',
+                building: 'Building A',
+                test_center: 'Building A',
+                division: '1',
+                room_est1: null,
+            },
+            {
+                id: 'inv-1',
+                name: 'Invigilator A',
+                phone: '01133333333',
+                role: 'Invigilator',
+                building: 'Building A',
+                test_center: 'Building A',
+                division: '1',
+                room_est1: '201',
+            },
+        ]);
+        whatsAppService.sendWhatsApp.mockResolvedValue({ ok: true });
+
+        const result = await service.sendHierarchyWhatsAppBriefs({
+            cycleId: 'cycle-1',
+            sheet: RecipientSheet.EST1,
+            dry_run: false,
+        });
+
+        expect(result.summary.buildings).toBe(1);
+        expect(result.summary.heads.sent).toBe(1);
+        expect(result.summary.seniors.sent).toBe(1);
+        expect(whatsAppService.sendWhatsApp).toHaveBeenCalledTimes(2);
+        expect(whatsAppService.sendWhatsApp.mock.calls[0][1]).toContain('*EST Building Brief*');
+        expect(whatsAppService.sendWhatsApp.mock.calls[1][1]).toContain('*EST Senior Brief*');
     });
 });

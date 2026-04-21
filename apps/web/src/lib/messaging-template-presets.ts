@@ -55,6 +55,22 @@ const buildButtonsBlock = () => `
 
 export const buildGuidedTemplateContent = (config: EstGuidedTemplateConfig) => {
     const responseBlock = config.variant === 'CONFIRMATION' ? buildButtonsBlock() : '';
+    const roomBlock = config.variant === 'CONFIRMATION'
+        ? ''
+        : `
+                                        <tr>
+                                            <td style="padding:0 0 12px;">
+                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:20px;border:1px solid #e2e8f0;background:#f8fafc;">
+                                                    <tr>
+                                                        <td style="padding:16px 18px;">
+                                                            <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Room #</div>
+                                                            <div style="margin-top:8px;font-size:16px;line-height:1.7;font-weight:800;color:#111111;">{{room_est1}}</div>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+`.trim();
     const subject = `${config.examCode} Exam Assignment${config.variant === 'CONFIRMATION' ? ' - Action Required' : ''} | {{name}}`;
 
     const body = `
@@ -72,10 +88,7 @@ ${buildMetaComment(config)}
                                     <div style="margin-top:18px;display:inline-block;padding:8px 14px;border-radius:999px;background:#ffe347;color:#111111;font-size:12px;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;">
                                         ${config.examCode} Exam Assignment
                                     </div>
-                                    <div style="margin-top:16px;font-size:28px;line-height:1.2;font-weight:900;color:#ffffff;">
-                                        Invigilator Briefing
-                                    </div>
-                                    <p style="margin:12px 0 0;font-size:15px;line-height:1.8;color:rgba(255,255,255,0.86);">
+                                    <p style="margin:16px 0 0;font-size:15px;line-height:1.8;color:rgba(255,255,255,0.86);">
                                         Dear {{name}}, we look forward to welcoming you on <strong>${config.examDay}</strong> the <strong>${config.examDate}</strong> for the <strong>${config.examCode} Exam</strong> as an Invigilator.
                                     </p>
                                 </td>
@@ -133,18 +146,7 @@ ${buildMetaComment(config)}
                                                 </table>
                                             </td>
                                         </tr>
-                                        <tr>
-                                            <td style="padding:0 0 12px;">
-                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:20px;border:1px solid #e2e8f0;background:#f8fafc;">
-                                                    <tr>
-                                                        <td style="padding:16px 18px;">
-                                                            <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Room #</div>
-                                                            <div style="margin-top:8px;font-size:16px;line-height:1.7;font-weight:800;color:#111111;">{{room_est1}}</div>
-                                                        </td>
-                                                    </tr>
-                                                </table>
-                                            </td>
-                                        </tr>
+                                        ${roomBlock}
                                         <tr>
                                             <td style="padding:0 0 12px;">
                                                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:20px;border:1px solid #e2e8f0;background:#f8fafc;">
@@ -203,7 +205,6 @@ ${buildMetaComment(config)}
 
 export const buildGuidedWhatsAppText = (config: EstGuidedTemplateConfig) => `
 *${config.examCode} Exam Assignment*
-Invigilator Briefing
 
 Dear {{name}},
 We look forward to welcoming you on *${config.examDay}* the *${config.examDate}* for the *${config.examCode} Exam* as an Invigilator.
@@ -213,7 +214,7 @@ Day: ${config.examDay}
 Date: ${config.examDate}
 Arrival time: ${config.arrivalTime}
 Test center: {{test_center}}
-Room: {{room_est1}}
+${config.variant === 'CONFIRMATION' ? '' : 'Room: {{room_est1}}'}
 Address: {{address}}
 
 *Important*

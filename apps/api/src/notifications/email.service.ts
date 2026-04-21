@@ -244,11 +244,11 @@ export class EmailService {
         if (this.getMailUser()) {
             return `${senderName} <${this.getMailUser()}>`;
         }
-        return 'SPHINX HR <noreply@sphinx.com>';
+        return 'EST <noreply@est.com>';
     }
 
     private getDefaultSenderName() {
-        return (process.env.SENDER_NAME || 'SPHINX HR').trim() || 'SPHINX HR';
+        return (process.env.SENDER_NAME || 'EST').trim() || 'EST';
     }
 
     private getDefaultSenderEmail() {

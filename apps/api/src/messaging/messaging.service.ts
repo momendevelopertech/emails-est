@@ -30,6 +30,7 @@ import { normalizeEgyptMobilePhone } from '../shared/egypt-phone';
 type SendResult = { recipientId: string; status: RecipientStatus; error?: string };
 type RecipientResponseStatus = 'PENDING' | 'CONFIRMED' | 'DECLINED';
 type WhatsAppReplyAction = 'CONFIRM' | 'DECLINE' | 'UNKNOWN';
+type HierarchyRole = 'HEAD' | 'SENIOR' | 'INVIGILATOR';
 
 @Injectable()
 export class MessagingService {
@@ -531,7 +532,7 @@ export class MessagingService {
 
         const replyAction = this.resolveWhatsAppReplyAction(rawMessage);
         if (replyAction === 'UNKNOWN') {
-            const helpMessage = 'To confirm attendance, reply with "confirm". To send an apology, reply with "apology".';
+            const helpMessage = 'للتأكيد اكتب confirm. للاعتذار اكتب apology.';
             await this.whatsAppService.sendWhatsApp(normalizedPhone, helpMessage);
             return { matched: false, status: 'PENDING' as RecipientResponseStatus, message: helpMessage };
         }
@@ -548,7 +549,7 @@ export class MessagingService {
 
         const token = recipients[0]?.confirmation_token;
         if (!token) {
-            const notFoundMessage = 'No active assignment was found for this WhatsApp number.';
+            const notFoundMessage = 'لا يوجد تكليف نشط مرتبط برقم واتساب هذا.';
             await this.whatsAppService.sendWhatsApp(normalizedPhone, notFoundMessage);
             return { matched: false, status: 'PENDING' as RecipientResponseStatus, message: notFoundMessage };
         }
@@ -557,8 +558,273 @@ export class MessagingService {
             ? await this.confirmRecipient(token)
             : await this.declineRecipient(token);
 
-        await this.whatsAppService.sendWhatsApp(normalizedPhone, response.message);
-        return { matched: true, status: response.status as RecipientResponseStatus, message: response.message };
+        const outgoingMessage = this.resolveWhatsAppStatusReply(replyAction, response.status as RecipientResponseStatus);
+        await this.whatsAppService.sendWhatsApp(normalizedPhone, outgoingMessage);
+        return { matched: true, status: response.status as RecipientResponseStatus, message: outgoingMessage };
+    }
+
+    async processWhatsAppWebhook(payload: unknown) {
+        const incoming = this.extractIncomingWhatsAppText(payload);
+        if (!incoming) {
+            return { processed: false, ignored: true, reason: 'No incoming text message payload detected.' };
+        }
+
+        const result = await this.processWhatsAppReply(incoming.phone, incoming.message);
+        return {
+            processed: true,
+            ignored: false,
+            ...result,
+            source_phone: incoming.phone,
+            source_message: incoming.message,
+        };
+    }
+
+    async sendHierarchyWhatsAppBriefs(options?: { cycleId?: string; sheet?: RecipientSheet; dry_run?: boolean }) {
+        const cycleId = String(options?.cycleId || '').trim();
+        const dryRun = Boolean(options?.dry_run);
+        const where: Prisma.RecipientWhereInput = {};
+
+        if (cycleId) {
+            where.cycleId = cycleId;
+        }
+
+        if (options?.sheet) {
+            where.sheet = options.sheet;
+        }
+
+        const recipients = await this.prisma.recipient.findMany({
+            where,
+            select: {
+                id: true,
+                name: true,
+                phone: true,
+                role: true,
+                building: true,
+                test_center: true,
+                division: true,
+                room_est1: true,
+            },
+        });
+
+        const byBuilding = new Map<string, typeof recipients>();
+        for (const recipient of recipients) {
+            const building = this.resolveHierarchyBuilding(recipient);
+            const bucket = byBuilding.get(building) ?? [];
+            bucket.push(recipient);
+            byBuilding.set(building, bucket);
+        }
+
+        const details: Array<{
+            recipient_id: string;
+            recipient_name: string;
+            role: 'HEAD' | 'SENIOR';
+            phone: string | null;
+            building: string;
+            floor: string | null;
+            status: 'SENT' | 'FAILED' | 'SKIPPED';
+            reason?: string;
+            message_preview: string;
+        }> = [];
+
+        let targetedHeads = 0;
+        let sentHeads = 0;
+        let failedHeads = 0;
+        let skippedHeads = 0;
+        let targetedSeniors = 0;
+        let sentSeniors = 0;
+        let failedSeniors = 0;
+        let skippedSeniors = 0;
+        let floorCount = 0;
+
+        for (const [building, buildingRecipients] of byBuilding.entries()) {
+            const heads = this.deduplicateHierarchyRecipients(
+                buildingRecipients.filter((recipient) => this.resolveHierarchyRole(recipient.role) === 'HEAD'),
+            );
+            const seniors = this.deduplicateHierarchyRecipients(
+                buildingRecipients.filter((recipient) => this.resolveHierarchyRole(recipient.role) === 'SENIOR'),
+            );
+            const invigilators = buildingRecipients.filter((recipient) => this.resolveHierarchyRole(recipient.role) === 'INVIGILATOR');
+
+            const seniorsByFloor = new Map<string, typeof seniors>();
+            for (const senior of seniors) {
+                const floor = this.resolveHierarchyFloor(senior);
+                const list = seniorsByFloor.get(floor) ?? [];
+                list.push(senior);
+                seniorsByFloor.set(floor, list);
+            }
+
+            const invigilatorsByFloor = new Map<string, typeof invigilators>();
+            for (const invigilator of invigilators) {
+                const floor = this.resolveHierarchyFloor(invigilator);
+                const list = invigilatorsByFloor.get(floor) ?? [];
+                list.push(invigilator);
+                invigilatorsByFloor.set(floor, list);
+            }
+
+            floorCount += new Set<string>([
+                ...Array.from(seniorsByFloor.keys()),
+                ...Array.from(invigilatorsByFloor.keys()),
+            ]).size;
+
+            for (const head of heads) {
+                targetedHeads += 1;
+                const message = this.buildHeadBriefMessage(building, seniorsByFloor);
+
+                if (!head.phone) {
+                    skippedHeads += 1;
+                    details.push({
+                        recipient_id: head.id,
+                        recipient_name: head.name || 'Unknown',
+                        role: 'HEAD',
+                        phone: null,
+                        building,
+                        floor: null,
+                        status: 'SKIPPED',
+                        reason: 'Missing phone number',
+                        message_preview: message,
+                    });
+                    continue;
+                }
+
+                if (dryRun) {
+                    sentHeads += 1;
+                    details.push({
+                        recipient_id: head.id,
+                        recipient_name: head.name || 'Unknown',
+                        role: 'HEAD',
+                        phone: head.phone,
+                        building,
+                        floor: null,
+                        status: 'SENT',
+                        reason: 'Dry run preview',
+                        message_preview: message,
+                    });
+                    continue;
+                }
+
+                const delivery = await this.whatsAppService.sendWhatsApp(head.phone, message);
+                if (delivery.ok) {
+                    sentHeads += 1;
+                    details.push({
+                        recipient_id: head.id,
+                        recipient_name: head.name || 'Unknown',
+                        role: 'HEAD',
+                        phone: head.phone,
+                        building,
+                        floor: null,
+                        status: 'SENT',
+                        message_preview: message,
+                    });
+                    continue;
+                }
+
+                failedHeads += 1;
+                details.push({
+                    recipient_id: head.id,
+                    recipient_name: head.name || 'Unknown',
+                    role: 'HEAD',
+                    phone: head.phone,
+                    building,
+                    floor: null,
+                    status: 'FAILED',
+                    reason: delivery.error || 'Unknown WhatsApp delivery error',
+                    message_preview: message,
+                });
+            }
+
+            for (const senior of seniors) {
+                targetedSeniors += 1;
+                const floor = this.resolveHierarchyFloor(senior);
+                const floorInvigilators = this.deduplicateHierarchyRecipients(
+                    (invigilatorsByFloor.get(floor) ?? []).filter((item) => item.id !== senior.id),
+                );
+                const message = this.buildSeniorBriefMessage(building, floor, floorInvigilators);
+
+                if (!senior.phone) {
+                    skippedSeniors += 1;
+                    details.push({
+                        recipient_id: senior.id,
+                        recipient_name: senior.name || 'Unknown',
+                        role: 'SENIOR',
+                        phone: null,
+                        building,
+                        floor,
+                        status: 'SKIPPED',
+                        reason: 'Missing phone number',
+                        message_preview: message,
+                    });
+                    continue;
+                }
+
+                if (dryRun) {
+                    sentSeniors += 1;
+                    details.push({
+                        recipient_id: senior.id,
+                        recipient_name: senior.name || 'Unknown',
+                        role: 'SENIOR',
+                        phone: senior.phone,
+                        building,
+                        floor,
+                        status: 'SENT',
+                        reason: 'Dry run preview',
+                        message_preview: message,
+                    });
+                    continue;
+                }
+
+                const delivery = await this.whatsAppService.sendWhatsApp(senior.phone, message);
+                if (delivery.ok) {
+                    sentSeniors += 1;
+                    details.push({
+                        recipient_id: senior.id,
+                        recipient_name: senior.name || 'Unknown',
+                        role: 'SENIOR',
+                        phone: senior.phone,
+                        building,
+                        floor,
+                        status: 'SENT',
+                        message_preview: message,
+                    });
+                    continue;
+                }
+
+                failedSeniors += 1;
+                details.push({
+                    recipient_id: senior.id,
+                    recipient_name: senior.name || 'Unknown',
+                    role: 'SENIOR',
+                    phone: senior.phone,
+                    building,
+                    floor,
+                    status: 'FAILED',
+                    reason: delivery.error || 'Unknown WhatsApp delivery error',
+                    message_preview: message,
+                });
+            }
+        }
+
+        return {
+            dry_run: dryRun,
+            cycle_id: cycleId || null,
+            sheet: options?.sheet || null,
+            summary: {
+                buildings: byBuilding.size,
+                floors: floorCount,
+                heads: {
+                    targeted: targetedHeads,
+                    sent: sentHeads,
+                    failed: failedHeads,
+                    skipped: skippedHeads,
+                },
+                seniors: {
+                    targeted: targetedSeniors,
+                    sent: sentSeniors,
+                    failed: failedSeniors,
+                    skipped: skippedSeniors,
+                },
+            },
+            details,
+        };
     }
 
     async getTemplates() {
@@ -1048,6 +1314,201 @@ export class MessagingService {
         }
 
         return 'UNKNOWN';
+    }
+
+    private extractIncomingWhatsAppText(payload: unknown) {
+        const body = (payload && typeof payload === 'object') ? (payload as Record<string, any>) : {};
+        const messageData = body.messageData || {};
+        const senderData = body.senderData || {};
+        const typeWebhook = String(body.typeWebhook || '').trim();
+        if (typeWebhook && typeWebhook !== 'incomingMessageReceived') {
+            return null;
+        }
+
+        const message = this.extractWebhookMessageText(messageData);
+        if (!message) {
+            return null;
+        }
+
+        const phone = this.extractWebhookMessagePhone(senderData, body);
+        if (!phone) {
+            return null;
+        }
+
+        return { phone, message };
+    }
+
+    private extractWebhookMessageText(messageData: Record<string, any>) {
+        const text = String(
+            messageData?.textMessageData?.textMessage
+            ?? messageData?.extendedTextMessageData?.text
+            ?? messageData?.buttonsResponseMessage?.selectedButtonId
+            ?? messageData?.buttonsResponseMessage?.selectedDisplayText
+            ?? messageData?.templateButtonReplyMessage?.selectedId
+            ?? messageData?.templateButtonReplyMessage?.selectedDisplayText
+            ?? '',
+        ).trim();
+
+        return text || null;
+    }
+
+    private extractWebhookMessagePhone(senderData: Record<string, any>, body: Record<string, any>) {
+        const raw = String(
+            senderData?.chatId
+            ?? senderData?.sender
+            ?? senderData?.senderId
+            ?? body?.chatId
+            ?? '',
+        ).trim();
+
+        if (!raw || raw.endsWith('@g.us')) {
+            return null;
+        }
+
+        const normalizedChat = raw.replace(/@.+$/, '');
+        return normalizeEgyptMobilePhone(normalizedChat);
+    }
+
+    private resolveWhatsAppStatusReply(action: WhatsAppReplyAction, status: RecipientResponseStatus) {
+        if (action === 'CONFIRM') {
+            if (status === 'CONFIRMED') {
+                return 'تم تأكيد الحضور بنجاح.';
+            }
+            if (status === 'DECLINED') {
+                return 'تم تسجيل اعتذارك مسبقًا لهذا التكليف.';
+            }
+            return 'لم يتم العثور على تكليف صالح للتأكيد.';
+        }
+
+        if (action === 'DECLINE') {
+            if (status === 'DECLINED') {
+                return 'تم قبول الاعتذار بنجاح.';
+            }
+            if (status === 'CONFIRMED') {
+                return 'تم تأكيد الحضور مسبقًا لهذا التكليف.';
+            }
+            return 'لم يتم العثور على تكليف صالح للاعتذار.';
+        }
+
+        return 'يرجى الرد بكلمة confirm للتأكيد أو apology للاعتذار.';
+    }
+
+    private resolveHierarchyRole(role?: string | null): HierarchyRole {
+        const normalized = String(role || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+            .replace(/\s+/g, ' ');
+
+        if (!normalized) {
+            return 'INVIGILATOR';
+        }
+
+        if (
+            normalized.includes('head')
+            || normalized.includes('chief')
+            || normalized.includes('lead')
+            || normalized.includes('هيد')
+            || normalized.includes('رئيس')
+        ) {
+            return 'HEAD';
+        }
+
+        if (
+            normalized.includes('senior')
+            || normalized.includes('سنيور')
+        ) {
+            return 'SENIOR';
+        }
+
+        return 'INVIGILATOR';
+    }
+
+    private resolveHierarchyBuilding(recipient: { building?: string | null; test_center?: string | null }) {
+        return normalizeImportValue(recipient.building)
+            ?? normalizeImportValue(recipient.test_center)
+            ?? 'Unassigned Building';
+    }
+
+    private resolveHierarchyFloor(recipient: { division?: string | null }) {
+        return normalizeImportValue(recipient.division) ?? 'General';
+    }
+
+    private deduplicateHierarchyRecipients<T extends { id: string; phone?: string | null; name?: string | null }>(items: T[]) {
+        const seen = new Set<string>();
+        const output: T[] = [];
+
+        for (const item of items) {
+            const key = normalizeImportValue(item.phone) || `${normalizeImportValue(item.name) || ''}:${item.id}`;
+            if (seen.has(key)) {
+                continue;
+            }
+            seen.add(key);
+            output.push(item);
+        }
+
+        return output;
+    }
+
+    private buildHeadBriefMessage(
+        building: string,
+        seniorsByFloor: Map<string, Array<{ name: string | null; phone: string | null }>>,
+    ) {
+        const lines = [
+            '*EST Building Brief*',
+            `Building: ${building}`,
+            '',
+            '*Floors and assigned seniors*',
+        ];
+
+        const floorEntries = Array.from(seniorsByFloor.entries()).sort(([floorA], [floorB]) => floorA.localeCompare(floorB));
+        if (!floorEntries.length) {
+            lines.push('- No senior assignments available yet.');
+        } else {
+            for (const [floor, seniors] of floorEntries) {
+                const people = seniors.length
+                    ? seniors.map((senior) => {
+                        const seniorName = normalizeImportValue(senior.name) ?? 'Unnamed Senior';
+                        const seniorPhone = normalizeImportValue(senior.phone) ?? 'No phone';
+                        return `${seniorName} (${seniorPhone})`;
+                    }).join(', ')
+                    : 'No senior assigned';
+                lines.push(`- Floor ${floor}: ${people}`);
+            }
+        }
+
+        lines.push('', 'Best regards,', 'EST Team');
+        return lines.join('\n');
+    }
+
+    private buildSeniorBriefMessage(
+        building: string,
+        floor: string,
+        invigilators: Array<{ name: string | null; phone: string | null; room_est1: string | null }>,
+    ) {
+        const lines = [
+            '*EST Senior Brief*',
+            `Building: ${building}`,
+            `Floor: ${floor}`,
+            '',
+            '*Invigilators in this floor*',
+        ];
+
+        if (!invigilators.length) {
+            lines.push('No invigilators assigned to this floor yet.');
+        } else {
+            invigilators
+                .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+                .forEach((invigilator, index) => {
+                    const name = normalizeImportValue(invigilator.name) ?? 'Unnamed Invigilator';
+                    const phone = normalizeImportValue(invigilator.phone) ?? 'No phone';
+                    const room = normalizeImportValue(invigilator.room_est1) ?? 'No room';
+                    lines.push(`${index + 1}. ${name} | ${phone} | Room ${room}`);
+                });
+        }
+
+        lines.push('', 'Best regards,', 'EST Team');
+        return lines.join('\n');
     }
 
     private buildPhoneCandidates(normalizedLocalPhone: string) {

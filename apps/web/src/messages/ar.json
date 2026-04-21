@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "SPHINX HR",
+    "name": "EST",
     "tagline": "نظام إدارة الموارد البشرية"
   },
   "common": {
@@ -496,7 +496,7 @@
     "selectBranchFirst": "اختر الفرع أولاً",
     "fingerprintId": "رقم البصمة",
     "tempPassword": "كلمة مرور مؤقتة",
-    "defaultPassword": "كلمة المرور الافتراضية (SPHINX@2026)",
+    "defaultPassword": "كلمة المرور الافتراضية (EST@2026)",
     "role": "الدور",
     "status": "الحالة",
     "active": "نشط",
@@ -780,7 +780,7 @@
     "tabsHint": "تم تقسيم الصفحة إلى أقسام أوضح حتى يسهل مراجعتها وتعديلها.",
     "profileTabsHint": "تم جمع إعداداتك الشخصية هنا حتى يسهل تعديلها بسرعة.",
     "profilePageTitle": "إعداداتي",
-    "profilePageDescription": "حدّث بياناتك الشخصية واختر كيف تصلك رسائل SPHINX HR.",
+    "profilePageDescription": "حدّث بياناتك الشخصية واختر كيف تصلك رسائل EST.",
     "profilePersonalTitle": "البيانات الشخصية",
     "profilePersonalDescription": "عدّل الاسم وبيانات التواصل المرتبطة بحسابك.",
     "profileFullName": "الاسم الكامل بالإنجليزية",
