@@ -85,9 +85,19 @@ export class MessagingController {
         return this.messagingService.retryRecipients(body);
     }
 
+    @Post('hierarchy-briefs/preview')
+    async previewHierarchyBriefs(@Body() body: SendHierarchyBriefsDto) {
+        return this.messagingService.previewHierarchyBriefs(body);
+    }
+
+    @Post('hierarchy-briefs/send')
+    async sendHierarchyBriefsConfirmed(@Body() body: SendHierarchyBriefsDto) {
+        return this.messagingService.sendHierarchyBriefs(body);
+    }
+
     @Post('send-hierarchy-briefs')
     async sendHierarchyBriefs(@Body() body: SendHierarchyBriefsDto) {
-        return this.messagingService.sendHierarchyWhatsAppBriefs(body);
+        return this.messagingService.sendHierarchyBriefs(body);
     }
 
     @Get('logs')

@@ -224,10 +224,19 @@ type WhatsAppTestResult = {
     };
 };
 
+type HierarchyBriefChannel = 'WHATSAPP' | 'EMAIL';
+
 type HierarchyBriefResult = {
     dry_run: boolean;
     cycle_id: string | null;
     sheet: 'LEGACY' | 'EST1' | 'EST2' | null;
+    channels: HierarchyBriefChannel[];
+    filters: {
+        include_heads: boolean;
+        include_seniors: boolean;
+        selected_head_ids: string[];
+        selected_senior_ids: string[];
+    };
     summary: {
         buildings: number;
         floors: number;
@@ -243,17 +252,93 @@ type HierarchyBriefResult = {
             failed: number;
             skipped: number;
         };
+        channels: {
+            whatsapp: {
+                requested: boolean;
+                ready: number;
+                missing: number;
+                sent: number;
+                failed: number;
+                skipped: number;
+            };
+            email: {
+                requested: boolean;
+                ready: number;
+                missing: number;
+                sent: number;
+                failed: number;
+                skipped: number;
+            };
+        };
     };
-    details: Array<{
+    available_targets: {
+        heads: Array<{
+            recipient_id: string;
+            recipient_name: string;
+            row_order: number;
+            building: string;
+            phone: string | null;
+            email: string | null;
+            seniors_count: number;
+        }>;
+        seniors: Array<{
+            recipient_id: string;
+            recipient_name: string;
+            row_order: number;
+            building: string;
+            floor: string;
+            phone: string | null;
+            email: string | null;
+            members_count: number;
+            head_id: string | null;
+        }>;
+    };
+    preview: {
+        heads: HierarchyBriefPreviewTarget[];
+        seniors: HierarchyBriefPreviewTarget[];
+        ordered: HierarchyBriefPreviewTarget[];
+    };
+    delivery?: Array<{
         recipient_id: string;
         recipient_name: string;
         role: 'HEAD' | 'SENIOR';
+        row_order: number;
+        channels: Array<{
+            channel: HierarchyBriefChannel;
+            status: 'SENT' | 'FAILED' | 'SKIPPED';
+            reason?: string;
+        }>;
+    }>;
+};
+
+type HierarchyBriefPreviewTarget = {
+    role: 'HEAD' | 'SENIOR';
+    recipient_id: string;
+    recipient_name: string;
+    row_order: number;
+    building: string;
+    floor: string | null;
+    phone: string | null;
+    email: string | null;
+    whatsapp_message: string;
+    email_subject: string;
+    seniors: Array<{
+        recipient_id: string;
+        recipient_name: string;
+        row_order: number;
+        floor: string;
         phone: string | null;
-        building: string;
-        floor: string | null;
-        status: 'SENT' | 'FAILED' | 'SKIPPED';
-        reason?: string;
-        message_preview: string;
+        email: string | null;
+        invigilators_count: number;
+    }>;
+    members: Array<{
+        recipient_id: string;
+        recipient_name: string;
+        row_order: number;
+        role: string | null;
+        room: string | null;
+        phone: string | null;
+        email: string | null;
     }>;
 };
 
@@ -707,7 +792,14 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     });
     const [whatsAppSettingsForm, setWhatsAppSettingsForm] = useState(EMPTY_WHATSAPP_SETTINGS_FORM);
     const [whatsAppTestResult, setWhatsAppTestResult] = useState<WhatsAppTestResult | null>(null);
-    const [hierarchyBriefResult, setHierarchyBriefResult] = useState<HierarchyBriefResult | null>(null);
+    const [hierarchyPreviewResult, setHierarchyPreviewResult] = useState<HierarchyBriefResult | null>(null);
+    const [hierarchySendResult, setHierarchySendResult] = useState<HierarchyBriefResult | null>(null);
+    const [hierarchyIncludeHeads, setHierarchyIncludeHeads] = useState(true);
+    const [hierarchyIncludeSeniors, setHierarchyIncludeSeniors] = useState(true);
+    const [hierarchyChannels, setHierarchyChannels] = useState<HierarchyBriefChannel[]>(['WHATSAPP', 'EMAIL']);
+    const [hierarchySelectedHeadIds, setHierarchySelectedHeadIds] = useState<string[]>([]);
+    const [hierarchySelectedSeniorIds, setHierarchySelectedSeniorIds] = useState<string[]>([]);
+    const [isHierarchyConfirmOpen, setIsHierarchyConfirmOpen] = useState(false);
     const [senderAccountForm, setSenderAccountForm] = useState(EMPTY_SENDER_ACCOUNT_FORM);
     const [editingSenderAccountId, setEditingSenderAccountId] = useState<string | null>(null);
     const [recipientForm, setRecipientForm] = useState<RecipientExcelFormState>(EMPTY_RECIPIENT_FORM);
@@ -817,8 +909,35 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     }, [recipientFilterOptionsQuery.data?.sheets, selectedSheet]);
 
     useEffect(() => {
-        setHierarchyBriefResult(null);
+        setHierarchyPreviewResult(null);
+        setHierarchySendResult(null);
+        setHierarchySelectedHeadIds([]);
+        setHierarchySelectedSeniorIds([]);
+        setIsHierarchyConfirmOpen(false);
     }, [selectedCycleId, selectedSheet]);
+
+    useEffect(() => {
+        if (!hierarchyIncludeHeads) {
+            setHierarchySelectedHeadIds([]);
+        }
+    }, [hierarchyIncludeHeads]);
+
+    useEffect(() => {
+        if (!hierarchyIncludeSeniors) {
+            setHierarchySelectedSeniorIds([]);
+        }
+    }, [hierarchyIncludeSeniors]);
+
+    useEffect(() => {
+        setHierarchyPreviewResult(null);
+        setHierarchySendResult(null);
+    }, [
+        hierarchyIncludeHeads,
+        hierarchyIncludeSeniors,
+        hierarchyChannels,
+        hierarchySelectedHeadIds,
+        hierarchySelectedSeniorIds,
+    ]);
 
     const templatesQuery = useQuery<Template[]>({
         queryKey: ['messaging-templates'],
@@ -1073,31 +1192,44 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         },
     });
 
-    const sendHierarchyBriefsMutation = useMutation({
-        mutationFn: async () => {
+    const previewHierarchyBriefsMutation = useMutation({
+        mutationFn: async (payload: Record<string, unknown>) => {
             await fetchCsrfToken();
-            const response = await api.post('/messaging/send-hierarchy-briefs', {
-                cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
-                sheet: selectedSheet || undefined,
-                dry_run: false,
-            });
+            const response = await api.post('/messaging/hierarchy-briefs/preview', payload);
             return response.data as HierarchyBriefResult;
         },
         onSuccess(data) {
-            setHierarchyBriefResult(data);
-            const totalSent = data.summary.heads.sent + data.summary.seniors.sent;
-            const totalFailed = data.summary.heads.failed + data.summary.seniors.failed;
+            setHierarchyPreviewResult(data);
+            setHierarchySendResult(null);
+            const totalTargets = data.summary.heads.targeted + data.summary.seniors.targeted;
             toast.success(
-                isArabic
-                    ? `تم إرسال رسائل الهيكل: ${totalSent} ناجح / ${totalFailed} فشل`
-                    : `Hierarchy briefs sent: ${totalSent} delivered / ${totalFailed} failed`,
+                `Preview generated for ${totalTargets} targets.`,
             );
         },
         onError(error: any) {
-            toast.error(error?.message || (isArabic ? 'تعذر إرسال رسائل الـ Head/Senior حالياً.' : 'Unable to send head/senior briefs right now.'));
+            toast.error(error?.message || 'Unable to generate hierarchy preview right now.');
         },
     });
 
+    const sendHierarchyBriefsMutation = useMutation({
+        mutationFn: async (payload: Record<string, unknown>) => {
+            await fetchCsrfToken();
+            const response = await api.post('/messaging/hierarchy-briefs/send', payload);
+            return response.data as HierarchyBriefResult;
+        },
+        onSuccess(data) {
+            setHierarchySendResult(data);
+            setIsHierarchyConfirmOpen(false);
+            const totalSent = data.summary.heads.sent + data.summary.seniors.sent;
+            const totalFailed = data.summary.heads.failed + data.summary.seniors.failed;
+            toast.success(
+                `Hierarchy briefs sent: ${totalSent} delivered / ${totalFailed} failed`,
+            );
+        },
+        onError(error: any) {
+            toast.error(error?.message || 'Unable to send head/senior briefs right now.');
+        },
+    });
     const saveEmailSettingsMutation = useMutation({
         mutationFn: async () => {
             await fetchCsrfToken();
@@ -1311,6 +1443,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const emailIdentityPreview = emailSettingsForm.sender_email
         ? `${emailSettingsForm.sender_name.trim() || t('senderNamePlaceholder')} <${emailSettingsForm.sender_email}>`
         : emailSettingsForm.sender_name.trim() || '-';
+    const hierarchyReferenceResult = hierarchyPreviewResult ?? hierarchySendResult;
+    const availableHierarchyHeads = hierarchyReferenceResult?.available_targets.heads ?? [];
+    const availableHierarchySeniors = hierarchyReferenceResult?.available_targets.seniors ?? [];
+    const hierarchyPreviewTargets = hierarchyPreviewResult?.preview.ordered ?? [];
+    const hierarchyDeliveryRows = hierarchySendResult?.delivery ?? [];
 
     const pageStats = useMemo(() => ({
         pending: recipients.filter((recipient) => recipient.status === 'PENDING').length,
@@ -1785,6 +1922,64 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             payload.status = 'PENDING';
         }
         return payload;
+    };
+
+    const buildHierarchyBriefPayload = () => ({
+        cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+        sheet: selectedSheet || undefined,
+        include_heads: hierarchyIncludeHeads,
+        include_seniors: hierarchyIncludeSeniors,
+        head_ids: hierarchyIncludeHeads && hierarchySelectedHeadIds.length ? hierarchySelectedHeadIds : undefined,
+        senior_ids: hierarchyIncludeSeniors && hierarchySelectedSeniorIds.length ? hierarchySelectedSeniorIds : undefined,
+        channels: hierarchyChannels,
+    });
+
+    const previewHierarchyBriefs = () => {
+        if (!hierarchyIncludeHeads && !hierarchyIncludeSeniors) {
+            toast.error(isArabic ? 'يجب تفعيل Head أو Senior على الأقل.' : 'Enable at least one target role (Head or Senior).');
+            return;
+        }
+
+        if (!hierarchyChannels.length) {
+            toast.error(isArabic ? 'اختر قناة إرسال واحدة على الأقل (WhatsApp أو Email).' : 'Select at least one delivery channel (WhatsApp or Email).');
+            return;
+        }
+
+        previewHierarchyBriefsMutation.mutate(buildHierarchyBriefPayload());
+    };
+
+    const confirmSendHierarchyBriefs = () => {
+        if (!hierarchyPreviewResult) {
+            toast.error(isArabic ? 'اعمل معاينة الأول قبل التأكيد.' : 'Generate a preview first before confirming send.');
+            return;
+        }
+
+        sendHierarchyBriefsMutation.mutate(buildHierarchyBriefPayload());
+    };
+
+    const toggleHierarchyChannel = (channel: HierarchyBriefChannel) => {
+        setHierarchyChannels((current) => {
+            if (current.includes(channel)) {
+                return current.filter((item) => item !== channel);
+            }
+            return [...current, channel];
+        });
+    };
+
+    const toggleHierarchyHead = (headId: string) => {
+        setHierarchySelectedHeadIds((current) => (
+            current.includes(headId)
+                ? current.filter((id) => id !== headId)
+                : [...current, headId]
+        ));
+    };
+
+    const toggleHierarchySenior = (seniorId: string) => {
+        setHierarchySelectedSeniorIds((current) => (
+            current.includes(seniorId)
+                ? current.filter((id) => id !== seniorId)
+                : [...current, seniorId]
+        ));
     };
 
     const handleSend = () => {
@@ -2677,6 +2872,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                         )}
                     </div>
 
+                    
+
                     <div className={cardClass}>
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                             <h2 className="text-xl font-semibold text-slate-950">{copy.templatesTitle}</h2>
@@ -3010,61 +3207,307 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             >
                                 {copy.retryFailed}
                             </button>
-                            <button
-                                type="button"
-                                className="btn-outline"
-                                onClick={() => sendHierarchyBriefsMutation.mutate()}
-                                disabled={sendHierarchyBriefsMutation.isPending || sendMutation.isPending || retryMutation.isPending}
-                            >
-                                {sendHierarchyBriefsMutation.isPending
-                                    ? (isArabic ? 'جاري إرسال رسائل الـ Head/Senior...' : 'Sending head/senior briefs...')
-                                    : (isArabic ? 'إرسال رسائل الـ Head/Senior' : 'Send Head/Senior WhatsApp briefs')}
-                            </button>
                         </div>
 
-                        {hierarchyBriefResult ? (
-                            <div className="mt-5 rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
-                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                    {isArabic ? 'نتيجة رسائل الهيكل' : 'Hierarchy brief result'}
-                                </div>
-                                <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                                        <div className="text-xs text-slate-500">{isArabic ? 'المباني' : 'Buildings'}</div>
-                                        <div className="mt-1 text-lg font-semibold text-slate-900">{hierarchyBriefResult.summary.buildings}</div>
+                        <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
+                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                Head/Senior Briefs
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-slate-600">
+                                Choose roles, channels, and targets, then preview exact messages in Excel row order before confirming send.
+                            </p>
+
+                            <div className="mt-4 grid gap-3 md:grid-cols-2">
+                                <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={hierarchyIncludeHeads}
+                                        onChange={(event) => setHierarchyIncludeHeads(event.target.checked)}
+                                    />
+                                    <span>Send to Heads</span>
+                                </label>
+                                <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={hierarchyIncludeSeniors}
+                                        onChange={(event) => setHierarchyIncludeSeniors(event.target.checked)}
+                                    />
+                                    <span>Send to Seniors</span>
+                                </label>
+                                <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={hierarchyChannels.includes('WHATSAPP')}
+                                        onChange={() => toggleHierarchyChannel('WHATSAPP')}
+                                    />
+                                    <span>WhatsApp</span>
+                                </label>
+                                <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={hierarchyChannels.includes('EMAIL')}
+                                        onChange={() => toggleHierarchyChannel('EMAIL')}
+                                    />
+                                    <span>Email</span>
+                                </label>
+                            </div>
+
+                            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                                <div className="rounded-[1.1rem] border border-slate-200 bg-white p-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="text-sm font-semibold text-slate-900">Head selection</div>
+                                        <button
+                                            type="button"
+                                            className="text-xs font-semibold text-slate-600 underline decoration-dotted underline-offset-4"
+                                            onClick={() => setHierarchySelectedHeadIds([])}
+                                        >
+                                            All heads
+                                        </button>
                                     </div>
-                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                                        <div className="text-xs text-slate-500">{isArabic ? 'الأدوار' : 'Floors'}</div>
-                                        <div className="mt-1 text-lg font-semibold text-slate-900">{hierarchyBriefResult.summary.floors}</div>
-                                    </div>
-                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                                        <div className="text-xs text-slate-500">{isArabic ? 'رسائل الـ Head' : 'Head briefs'}</div>
-                                        <div className="mt-1 text-lg font-semibold text-emerald-700">
-                                            {hierarchyBriefResult.summary.heads.sent}/{hierarchyBriefResult.summary.heads.targeted}
-                                        </div>
-                                    </div>
-                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                                        <div className="text-xs text-slate-500">{isArabic ? 'رسائل الـ Senior' : 'Senior briefs'}</div>
-                                        <div className="mt-1 text-lg font-semibold text-emerald-700">
-                                            {hierarchyBriefResult.summary.seniors.sent}/{hierarchyBriefResult.summary.seniors.targeted}
-                                        </div>
-                                    </div>
-                                </div>
-                                {hierarchyBriefResult.details.length ? (
-                                    <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600">
-                                        <div className="font-semibold text-slate-800">{isArabic ? 'آخر النتائج' : 'Recent delivery details'}</div>
-                                        <div className="mt-2 space-y-1">
-                                            {hierarchyBriefResult.details.slice(0, 6).map((item) => (
-                                                <div key={`${item.recipient_id}-${item.role}`} className="truncate">
-                                                    {item.recipient_name} - {item.role} - {item.status}
-                                                    {item.reason ? ` (${item.reason})` : ''}
-                                                </div>
+                                    {availableHierarchyHeads.length ? (
+                                        <div className="mt-3 max-h-44 space-y-2 overflow-auto pr-1">
+                                            {availableHierarchyHeads.map((head) => (
+                                                <label key={head.recipient_id} className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="mt-1 h-4 w-4"
+                                                        checked={hierarchySelectedHeadIds.includes(head.recipient_id)}
+                                                        onChange={() => toggleHierarchyHead(head.recipient_id)}
+                                                        disabled={!hierarchyIncludeHeads}
+                                                    />
+                                                    <span>
+                                                        #{head.row_order} {head.recipient_name} ({head.building})
+                                                    </span>
+                                                </label>
                                             ))}
                                         </div>
+                                    ) : (
+                                        <div className="mt-3 text-xs text-slate-500">
+                                            Run preview once to load head options.
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="rounded-[1.1rem] border border-slate-200 bg-white p-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="text-sm font-semibold text-slate-900">Senior selection</div>
+                                        <button
+                                            type="button"
+                                            className="text-xs font-semibold text-slate-600 underline decoration-dotted underline-offset-4"
+                                            onClick={() => setHierarchySelectedSeniorIds([])}
+                                        >
+                                            All seniors
+                                        </button>
+                                    </div>
+                                    {availableHierarchySeniors.length ? (
+                                        <div className="mt-3 max-h-44 space-y-2 overflow-auto pr-1">
+                                            {availableHierarchySeniors.map((senior) => (
+                                                <label key={senior.recipient_id} className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="mt-1 h-4 w-4"
+                                                        checked={hierarchySelectedSeniorIds.includes(senior.recipient_id)}
+                                                        onChange={() => toggleHierarchySenior(senior.recipient_id)}
+                                                        disabled={!hierarchyIncludeSeniors}
+                                                    />
+                                                    <span>
+                                                        #{senior.row_order} {senior.recipient_name} ({senior.floor})
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="mt-3 text-xs text-slate-500">
+                                            Run preview once to load senior options.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="mt-4 flex flex-wrap gap-3">
+                                <button
+                                    type="button"
+                                    className="btn-outline"
+                                    onClick={previewHierarchyBriefs}
+                                    disabled={previewHierarchyBriefsMutation.isPending || sendHierarchyBriefsMutation.isPending}
+                                >
+                                    {previewHierarchyBriefsMutation.isPending ? 'Generating preview...' : 'Preview Head/Senior briefs'}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn-primary"
+                                    onClick={() => setIsHierarchyConfirmOpen(true)}
+                                    disabled={!hierarchyPreviewResult || sendHierarchyBriefsMutation.isPending}
+                                >
+                                    {sendHierarchyBriefsMutation.isPending ? 'Sending...' : 'Confirm and send'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {hierarchyPreviewResult ? (
+                            <div className="mt-5 rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
+                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Hierarchy Preview</div>
+                                <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <div className="text-xs text-slate-500">Buildings</div>
+                                        <div className="mt-1 text-lg font-semibold text-slate-900">{hierarchyPreviewResult.summary.buildings}</div>
+                                    </div>
+                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <div className="text-xs text-slate-500">Floors</div>
+                                        <div className="mt-1 text-lg font-semibold text-slate-900">{hierarchyPreviewResult.summary.floors}</div>
+                                    </div>
+                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <div className="text-xs text-slate-500">Heads</div>
+                                        <div className="mt-1 text-lg font-semibold text-slate-900">{hierarchyPreviewResult.summary.heads.targeted}</div>
+                                    </div>
+                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <div className="text-xs text-slate-500">Seniors</div>
+                                        <div className="mt-1 text-lg font-semibold text-slate-900">{hierarchyPreviewResult.summary.seniors.targeted}</div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                                        <div className="font-semibold text-slate-900">WhatsApp</div>
+                                        <div className="mt-1">{hierarchyPreviewResult.summary.channels.whatsapp.ready} ready / {hierarchyPreviewResult.summary.channels.whatsapp.missing} missing</div>
+                                    </div>
+                                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                                        <div className="font-semibold text-slate-900">Email</div>
+                                        <div className="mt-1">{hierarchyPreviewResult.summary.channels.email.ready} ready / {hierarchyPreviewResult.summary.channels.email.missing} missing</div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 space-y-3">
+                                    {hierarchyPreviewTargets.map((target) => (
+                                        <div key={target.recipient_id} className="rounded-xl border border-slate-200 bg-white p-3">
+                                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                                <span className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700">#{target.row_order}</span>
+                                                <span>{target.role}</span>
+                                                <span>{target.recipient_name}</span>
+                                                <span>{target.building}</span>
+                                                {target.floor ? <span>{target.floor}</span> : null}
+                                            </div>
+                                            <div className="mt-2 grid gap-2 text-xs text-slate-600 md:grid-cols-2">
+                                                <div>Phone: {target.phone || '-'}</div>
+                                                <div>Email: {target.email || '-'}</div>
+                                            </div>
+                                            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs whitespace-pre-wrap text-slate-700">
+                                                {target.whatsapp_message}
+                                            </div>
+
+                                            {target.role === 'HEAD' ? (
+                                                <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+                                                    <table className="min-w-full divide-y divide-slate-200 text-xs">
+                                                        <thead className="bg-slate-50 text-slate-600">
+                                                            <tr>
+                                                                <th className="px-2 py-2 text-start">Row</th>
+                                                                <th className="px-2 py-2 text-start">Floor</th>
+                                                                <th className="px-2 py-2 text-start">Senior</th>
+                                                                <th className="px-2 py-2 text-start">Invigilators</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-slate-200 bg-white">
+                                                            {target.seniors.length ? target.seniors.map((senior) => (
+                                                                <tr key={senior.recipient_id}>
+                                                                    <td className="px-2 py-2">{senior.row_order}</td>
+                                                                    <td className="px-2 py-2">{senior.floor}</td>
+                                                                    <td className="px-2 py-2">{senior.recipient_name}</td>
+                                                                    <td className="px-2 py-2">{senior.invigilators_count}</td>
+                                                                </tr>
+                                                            )) : (
+                                                                <tr>
+                                                                    <td colSpan={4} className="px-2 py-3 text-center text-slate-500">No seniors under this head.</td>
+                                                                </tr>
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+                                                    <table className="min-w-full divide-y divide-slate-200 text-xs">
+                                                        <thead className="bg-slate-50 text-slate-600">
+                                                            <tr>
+                                                                <th className="px-2 py-2 text-start">Row</th>
+                                                                <th className="px-2 py-2 text-start">Room</th>
+                                                                <th className="px-2 py-2 text-start">Name</th>
+                                                                <th className="px-2 py-2 text-start">Role</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-slate-200 bg-white">
+                                                            {target.members.length ? target.members.map((member) => (
+                                                                <tr key={member.recipient_id}>
+                                                                    <td className="px-2 py-2">{member.row_order}</td>
+                                                                    <td className="px-2 py-2">{member.room || '-'}</td>
+                                                                    <td className="px-2 py-2">{member.recipient_name}</td>
+                                                                    <td className="px-2 py-2">{member.role || '-'}</td>
+                                                                </tr>
+                                                            )) : (
+                                                                <tr>
+                                                                    <td colSpan={4} className="px-2 py-3 text-center text-slate-500">No invigilators under this senior.</td>
+                                                                </tr>
+                                                            )}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
+
+                        {hierarchySendResult ? (
+                            <div className="mt-5 rounded-[1.25rem] border border-emerald-200 bg-emerald-50/50 p-4">
+                                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Delivery result</div>
+                                <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                    <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <div className="text-xs text-slate-500">Heads</div>
+                                        <div className="mt-1 text-lg font-semibold text-emerald-700">{hierarchySendResult.summary.heads.sent}/{hierarchySendResult.summary.heads.targeted}</div>
+                                    </div>
+                                    <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <div className="text-xs text-slate-500">Seniors</div>
+                                        <div className="mt-1 text-lg font-semibold text-emerald-700">{hierarchySendResult.summary.seniors.sent}/{hierarchySendResult.summary.seniors.targeted}</div>
+                                    </div>
+                                    <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <div className="text-xs text-slate-500">WhatsApp</div>
+                                        <div className="mt-1 text-lg font-semibold text-emerald-700">{hierarchySendResult.summary.channels.whatsapp.sent}</div>
+                                    </div>
+                                    <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        <div className="text-xs text-slate-500">Email</div>
+                                        <div className="mt-1 text-lg font-semibold text-emerald-700">{hierarchySendResult.summary.channels.email.sent}</div>
+                                    </div>
+                                </div>
+                                {hierarchyDeliveryRows.length ? (
+                                    <div className="mt-4 space-y-2 rounded-xl border border-emerald-200 bg-white p-3 text-xs text-slate-700">
+                                        {hierarchyDeliveryRows.slice(0, 30).map((item) => (
+                                            <div key={`${item.recipient_id}-${item.role}`} className="rounded-lg border border-slate-200 px-3 py-2">
+                                                <div className="font-semibold text-slate-900">#{item.row_order} {item.recipient_name} ({item.role})</div>
+                                                <div className="mt-1">
+                                                    {item.channels.map((channelResult) => `${channelResult.channel}: ${channelResult.status}${channelResult.reason ? ` (${channelResult.reason})` : ''}`).join(' | ')}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 ) : null}
                             </div>
                         ) : null}
+
                     </div>
+
+                    <ConfirmDialog
+                        open={isHierarchyConfirmOpen}
+                        title="Confirm hierarchy brief sending"
+                        description={`This will send briefs to ${hierarchyPreviewTargets.length} targets using selected channels. Continue?`}
+                        confirmLabel="Confirm send"
+                        cancelLabel="Cancel"
+                        isLoading={sendHierarchyBriefsMutation.isPending}
+                        onCancel={() => setIsHierarchyConfirmOpen(false)}
+                        onConfirm={confirmSendHierarchyBriefs}
+                    />
 
                     <div className={cardClass}>
                         <button
@@ -3638,3 +4081,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         </section>
     );
 }
+
+
+
+

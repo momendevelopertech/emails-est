@@ -9,6 +9,7 @@ import { SendCampaignDto } from './dto/send-campaign.dto';
 import { RetryRecipientsDto } from './dto/retry-recipients.dto';
 import { RecipientFilterDto } from './dto/recipient-filter.dto';
 import { ImportRecipientsDto } from './dto/import-recipients.dto';
+import { HierarchyBriefChannel, SendHierarchyBriefsDto } from './dto/send-hierarchy-briefs.dto';
 import { Prisma, RecipientSheet, RecipientStatus, TemplateType } from '@prisma/client';
 import { format } from 'date-fns';
 import { randomUUID } from 'crypto';
@@ -31,6 +32,72 @@ type SendResult = { recipientId: string; status: RecipientStatus; error?: string
 type RecipientResponseStatus = 'PENDING' | 'CONFIRMED' | 'DECLINED';
 type WhatsAppReplyAction = 'CONFIRM' | 'DECLINE' | 'UNKNOWN';
 type HierarchyRole = 'HEAD' | 'SENIOR' | 'INVIGILATOR';
+type HierarchyTargetRole = 'HEAD' | 'SENIOR';
+
+type HierarchyRecipientRow = {
+    id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    role: string | null;
+    building: string | null;
+    test_center: string | null;
+    division: string | null;
+    room_est1: string | null;
+    created_at: Date;
+};
+
+type HierarchyRecipientWithOrder = HierarchyRecipientRow & {
+    row_order: number;
+    normalized_role: HierarchyRole;
+    normalized_building: string;
+};
+
+type HierarchySeniorNode = {
+    target: HierarchyRecipientWithOrder;
+    floor: string;
+    head_id: string | null;
+    members: HierarchyRecipientWithOrder[];
+};
+
+type HierarchyHeadNode = {
+    target: HierarchyRecipientWithOrder;
+    seniors: HierarchySeniorNode[];
+};
+
+type HierarchyTargetPreview = {
+    role: HierarchyTargetRole;
+    recipient_id: string;
+    recipient_name: string;
+    row_order: number;
+    building: string;
+    floor: string | null;
+    phone: string | null;
+    email: string | null;
+    whatsapp_message: string;
+    email_subject: string;
+    email_body_html: string;
+    seniors: Array<{
+        recipient_id: string;
+        recipient_name: string;
+        row_order: number;
+        floor: string;
+        phone: string | null;
+        email: string | null;
+        invigilators_count: number;
+    }>;
+    members: Array<{
+        recipient_id: string;
+        recipient_name: string;
+        row_order: number;
+        role: string | null;
+        room: string | null;
+        phone: string | null;
+        email: string | null;
+    }>;
+};
+
+type ChannelDeliveryState = 'SENT' | 'FAILED' | 'SKIPPED';
 
 @Injectable()
 export class MessagingService {
@@ -356,11 +423,13 @@ export class MessagingService {
                 },
             }),
             this.prisma.recipient.createMany({
-                data: normalizedRecipients.map((recipient) => {
+                data: normalizedRecipients.map((recipient, index) => {
                     const { cycleId: _ignored, ...rest } = recipient;
                     return {
                         ...rest,
                         cycleId,
+                        // Preserve Excel row order deterministically for preview/send sequencing.
+                        created_at: new Date(createdAt.getTime() + index),
                     };
                 }),
             }),
@@ -579,251 +648,329 @@ export class MessagingService {
         };
     }
 
-    async sendHierarchyWhatsAppBriefs(options?: { cycleId?: string; sheet?: RecipientSheet; dry_run?: boolean }) {
-        const cycleId = String(options?.cycleId || '').trim();
-        const dryRun = Boolean(options?.dry_run);
-        const where: Prisma.RecipientWhereInput = {};
+    async previewHierarchyBriefs(options?: SendHierarchyBriefsDto) {
+        return this.buildAndMaybeSendHierarchyBriefs({
+            ...options,
+            dry_run: true,
+        });
+    }
 
+    async sendHierarchyBriefs(options?: SendHierarchyBriefsDto) {
+        return this.buildAndMaybeSendHierarchyBriefs({
+            ...options,
+            dry_run: false,
+        });
+    }
+
+    async sendHierarchyWhatsAppBriefs(options?: Partial<SendHierarchyBriefsDto>) {
+        return this.buildAndMaybeSendHierarchyBriefs({
+            ...options,
+            channels: [HierarchyBriefChannel.WHATSAPP],
+            dry_run: Boolean(options?.dry_run),
+        });
+    }
+
+    private async buildAndMaybeSendHierarchyBriefs(options: Partial<SendHierarchyBriefsDto>) {
+        const cycleId = normalizeImportValue(options.cycleId);
+        const includeHeads = options.include_heads !== false;
+        const includeSeniors = options.include_seniors !== false;
+        const dryRun = Boolean(options.dry_run);
+
+        if (!includeHeads && !includeSeniors) {
+            throw new BadRequestException('At least one target type (heads or seniors) must be enabled.');
+        }
+
+        const requestedChannels = (options.channels?.length
+            ? options.channels
+            : [HierarchyBriefChannel.WHATSAPP, HierarchyBriefChannel.EMAIL]
+        ).filter((channel) => channel === HierarchyBriefChannel.WHATSAPP || channel === HierarchyBriefChannel.EMAIL);
+
+        const channels = Array.from(new Set(requestedChannels));
+        if (!channels.length) {
+            throw new BadRequestException('At least one delivery channel is required.');
+        }
+
+        const where: Prisma.RecipientWhereInput = {};
         if (cycleId) {
             where.cycleId = cycleId;
         }
-
-        if (options?.sheet) {
+        if (options.sheet) {
             where.sheet = options.sheet;
         }
 
         const recipients = await this.prisma.recipient.findMany({
             where,
+            orderBy: [
+                { created_at: 'asc' },
+                { id: 'asc' },
+            ],
             select: {
                 id: true,
                 name: true,
+                email: true,
                 phone: true,
                 role: true,
                 building: true,
                 test_center: true,
                 division: true,
                 room_est1: true,
+                created_at: true,
             },
         });
 
-        const byBuilding = new Map<string, typeof recipients>();
-        for (const recipient of recipients) {
-            const building = this.resolveHierarchyBuilding(recipient);
-            const bucket = byBuilding.get(building) ?? [];
-            bucket.push(recipient);
-            byBuilding.set(building, bucket);
+        const normalizedRows: HierarchyRecipientWithOrder[] = recipients.map((recipient, index) => ({
+            ...recipient,
+            row_order: index + 1,
+            normalized_role: this.resolveHierarchyRole(recipient.role),
+            normalized_building: this.resolveHierarchyBuilding(recipient),
+        }));
+
+        const headsOrdered: HierarchyHeadNode[] = [];
+        const seniorsOrdered: HierarchySeniorNode[] = [];
+        const headById = new Map<string, HierarchyHeadNode>();
+        const seniorById = new Map<string, HierarchySeniorNode>();
+        let currentHeadId: string | null = null;
+        let currentSeniorId: string | null = null;
+
+        for (const row of normalizedRows) {
+            if (row.normalized_role === 'HEAD') {
+                const node: HierarchyHeadNode = { target: row, seniors: [] };
+                headsOrdered.push(node);
+                headById.set(row.id, node);
+                currentHeadId = row.id;
+                currentSeniorId = null;
+                continue;
+            }
+
+            if (row.normalized_role === 'SENIOR') {
+                const headId = currentHeadId;
+                const node: HierarchySeniorNode = {
+                    target: row,
+                    floor: this.resolveHierarchyFloor(row),
+                    head_id: headId,
+                    members: [],
+                };
+
+                seniorsOrdered.push(node);
+                seniorById.set(row.id, node);
+                currentSeniorId = row.id;
+
+                if (headId && headById.has(headId)) {
+                    headById.get(headId)!.seniors.push(node);
+                }
+                continue;
+            }
+
+            if (!currentSeniorId || !seniorById.has(currentSeniorId)) {
+                continue;
+            }
+
+            seniorById.get(currentSeniorId)!.members.push(row);
         }
 
-        const details: Array<{
+        const selectedHeadIds = options.head_ids?.length ? new Set(options.head_ids) : null;
+        const selectedSeniorIds = options.senior_ids?.length ? new Set(options.senior_ids) : null;
+
+        const selectedHeadNodes = includeHeads
+            ? headsOrdered.filter((node) => !selectedHeadIds || selectedHeadIds.has(node.target.id))
+            : [];
+        const selectedSeniorNodes = includeSeniors
+            ? seniorsOrdered.filter((node) => !selectedSeniorIds || selectedSeniorIds.has(node.target.id))
+            : [];
+
+        const headTargets = selectedHeadNodes.map((node) => this.buildHeadTargetPreview(node));
+        const seniorTargets = selectedSeniorNodes.map((node) => this.buildSeniorTargetPreview(node));
+        const orderedTargets = [...headTargets, ...seniorTargets].sort((a, b) => a.row_order - b.row_order);
+
+        const buildingsCount = new Set([
+            ...headsOrdered.map((node) => node.target.normalized_building),
+            ...seniorsOrdered.map((node) => node.target.normalized_building),
+        ]).size;
+        const floorsCount = new Set(seniorsOrdered.map((node) => node.floor)).size;
+
+        const summary = {
+            buildings: buildingsCount,
+            floors: floorsCount,
+            heads: {
+                targeted: headTargets.length,
+                sent: 0,
+                failed: 0,
+                skipped: 0,
+            },
+            seniors: {
+                targeted: seniorTargets.length,
+                sent: 0,
+                failed: 0,
+                skipped: 0,
+            },
+            channels: {
+                whatsapp: {
+                    requested: channels.includes(HierarchyBriefChannel.WHATSAPP),
+                    ready: orderedTargets.filter((target) => Boolean(target.phone)).length,
+                    missing: orderedTargets.filter((target) => !target.phone).length,
+                    sent: 0,
+                    failed: 0,
+                    skipped: 0,
+                },
+                email: {
+                    requested: channels.includes(HierarchyBriefChannel.EMAIL),
+                    ready: orderedTargets.filter((target) => Boolean(target.email)).length,
+                    missing: orderedTargets.filter((target) => !target.email).length,
+                    sent: 0,
+                    failed: 0,
+                    skipped: 0,
+                },
+            },
+        };
+
+        const responseBase = {
+            dry_run: dryRun,
+            cycle_id: cycleId || null,
+            sheet: options.sheet || null,
+            channels,
+            filters: {
+                include_heads: includeHeads,
+                include_seniors: includeSeniors,
+                selected_head_ids: Array.from(selectedHeadIds ?? []),
+                selected_senior_ids: Array.from(selectedSeniorIds ?? []),
+            },
+            summary,
+            available_targets: {
+                heads: headsOrdered.map((node) => ({
+                    recipient_id: node.target.id,
+                    recipient_name: normalizeImportValue(node.target.name) || 'Unknown',
+                    row_order: node.target.row_order,
+                    building: node.target.normalized_building,
+                    phone: normalizeImportValue(node.target.phone),
+                    email: normalizeImportValue(node.target.email),
+                    seniors_count: node.seniors.length,
+                })),
+                seniors: seniorsOrdered.map((node) => ({
+                    recipient_id: node.target.id,
+                    recipient_name: normalizeImportValue(node.target.name) || 'Unknown',
+                    row_order: node.target.row_order,
+                    building: node.target.normalized_building,
+                    floor: node.floor,
+                    phone: normalizeImportValue(node.target.phone),
+                    email: normalizeImportValue(node.target.email),
+                    members_count: node.members.length,
+                    head_id: node.head_id,
+                })),
+            },
+            preview: {
+                heads: headTargets,
+                seniors: seniorTargets,
+                ordered: orderedTargets,
+            },
+        };
+
+        if (dryRun) {
+            return responseBase;
+        }
+
+        const delivery: Array<{
             recipient_id: string;
             recipient_name: string;
-            role: 'HEAD' | 'SENIOR';
-            phone: string | null;
-            building: string;
-            floor: string | null;
-            status: 'SENT' | 'FAILED' | 'SKIPPED';
-            reason?: string;
-            message_preview: string;
+            role: HierarchyTargetRole;
+            row_order: number;
+            channels: Array<{
+                channel: HierarchyBriefChannel;
+                status: ChannelDeliveryState;
+                reason?: string;
+            }>;
         }> = [];
 
-        let targetedHeads = 0;
-        let sentHeads = 0;
-        let failedHeads = 0;
-        let skippedHeads = 0;
-        let targetedSeniors = 0;
-        let sentSeniors = 0;
-        let failedSeniors = 0;
-        let skippedSeniors = 0;
-        let floorCount = 0;
+        for (const target of orderedTargets) {
+            const roleSummary = target.role === 'HEAD' ? summary.heads : summary.seniors;
+            let hasSent = false;
+            let hasFailure = false;
 
-        for (const [building, buildingRecipients] of byBuilding.entries()) {
-            const heads = this.deduplicateHierarchyRecipients(
-                buildingRecipients.filter((recipient) => this.resolveHierarchyRole(recipient.role) === 'HEAD'),
-            );
-            const seniors = this.deduplicateHierarchyRecipients(
-                buildingRecipients.filter((recipient) => this.resolveHierarchyRole(recipient.role) === 'SENIOR'),
-            );
-            const invigilators = buildingRecipients.filter((recipient) => this.resolveHierarchyRole(recipient.role) === 'INVIGILATOR');
+            const channelResults: Array<{
+                channel: HierarchyBriefChannel;
+                status: ChannelDeliveryState;
+                reason?: string;
+            }> = [];
 
-            const seniorsByFloor = new Map<string, typeof seniors>();
-            for (const senior of seniors) {
-                const floor = this.resolveHierarchyFloor(senior);
-                const list = seniorsByFloor.get(floor) ?? [];
-                list.push(senior);
-                seniorsByFloor.set(floor, list);
-            }
+            for (const channel of channels) {
+                if (channel === HierarchyBriefChannel.WHATSAPP) {
+                    if (!target.phone) {
+                        summary.channels.whatsapp.skipped += 1;
+                        channelResults.push({
+                            channel,
+                            status: 'SKIPPED',
+                            reason: 'Missing WhatsApp phone number',
+                        });
+                        continue;
+                    }
 
-            const invigilatorsByFloor = new Map<string, typeof invigilators>();
-            for (const invigilator of invigilators) {
-                const floor = this.resolveHierarchyFloor(invigilator);
-                const list = invigilatorsByFloor.get(floor) ?? [];
-                list.push(invigilator);
-                invigilatorsByFloor.set(floor, list);
-            }
+                    const result = await this.whatsAppService.sendWhatsApp(target.phone, target.whatsapp_message);
+                    if (result.ok) {
+                        hasSent = true;
+                        summary.channels.whatsapp.sent += 1;
+                        channelResults.push({ channel, status: 'SENT' });
+                    } else {
+                        hasFailure = true;
+                        summary.channels.whatsapp.failed += 1;
+                        channelResults.push({
+                            channel,
+                            status: 'FAILED',
+                            reason: result.error || 'Unknown WhatsApp error',
+                        });
+                    }
+                    continue;
+                }
 
-            floorCount += new Set<string>([
-                ...Array.from(seniorsByFloor.keys()),
-                ...Array.from(invigilatorsByFloor.keys()),
-            ]).size;
-
-            for (const head of heads) {
-                targetedHeads += 1;
-                const message = this.buildHeadBriefMessage(building, seniorsByFloor);
-
-                if (!head.phone) {
-                    skippedHeads += 1;
-                    details.push({
-                        recipient_id: head.id,
-                        recipient_name: head.name || 'Unknown',
-                        role: 'HEAD',
-                        phone: null,
-                        building,
-                        floor: null,
+                if (!target.email) {
+                    summary.channels.email.skipped += 1;
+                    channelResults.push({
+                        channel,
                         status: 'SKIPPED',
-                        reason: 'Missing phone number',
-                        message_preview: message,
+                        reason: 'Missing email address',
                     });
                     continue;
                 }
 
-                if (dryRun) {
-                    sentHeads += 1;
-                    details.push({
-                        recipient_id: head.id,
-                        recipient_name: head.name || 'Unknown',
-                        role: 'HEAD',
-                        phone: head.phone,
-                        building,
-                        floor: null,
-                        status: 'SENT',
-                        reason: 'Dry run preview',
-                        message_preview: message,
-                    });
-                    continue;
-                }
-
-                const delivery = await this.whatsAppService.sendWhatsApp(head.phone, message);
-                if (delivery.ok) {
-                    sentHeads += 1;
-                    details.push({
-                        recipient_id: head.id,
-                        recipient_name: head.name || 'Unknown',
-                        role: 'HEAD',
-                        phone: head.phone,
-                        building,
-                        floor: null,
-                        status: 'SENT',
-                        message_preview: message,
-                    });
-                    continue;
-                }
-
-                failedHeads += 1;
-                details.push({
-                    recipient_id: head.id,
-                    recipient_name: head.name || 'Unknown',
-                    role: 'HEAD',
-                    phone: head.phone,
-                    building,
-                    floor: null,
-                    status: 'FAILED',
-                    reason: delivery.error || 'Unknown WhatsApp delivery error',
-                    message_preview: message,
+                const result = await this.emailService.sendEmail({
+                    to: target.email,
+                    subject: target.email_subject,
+                    html: target.email_body_html,
                 });
+
+                if (result.ok) {
+                    hasSent = true;
+                    summary.channels.email.sent += 1;
+                    channelResults.push({ channel, status: 'SENT' });
+                } else {
+                    hasFailure = true;
+                    summary.channels.email.failed += 1;
+                    channelResults.push({
+                        channel,
+                        status: 'FAILED',
+                        reason: result.error || 'Unknown email error',
+                    });
+                }
             }
 
-            for (const senior of seniors) {
-                targetedSeniors += 1;
-                const floor = this.resolveHierarchyFloor(senior);
-                const floorInvigilators = this.deduplicateHierarchyRecipients(
-                    (invigilatorsByFloor.get(floor) ?? []).filter((item) => item.id !== senior.id),
-                );
-                const message = this.buildSeniorBriefMessage(building, floor, floorInvigilators);
-
-                if (!senior.phone) {
-                    skippedSeniors += 1;
-                    details.push({
-                        recipient_id: senior.id,
-                        recipient_name: senior.name || 'Unknown',
-                        role: 'SENIOR',
-                        phone: null,
-                        building,
-                        floor,
-                        status: 'SKIPPED',
-                        reason: 'Missing phone number',
-                        message_preview: message,
-                    });
-                    continue;
-                }
-
-                if (dryRun) {
-                    sentSeniors += 1;
-                    details.push({
-                        recipient_id: senior.id,
-                        recipient_name: senior.name || 'Unknown',
-                        role: 'SENIOR',
-                        phone: senior.phone,
-                        building,
-                        floor,
-                        status: 'SENT',
-                        reason: 'Dry run preview',
-                        message_preview: message,
-                    });
-                    continue;
-                }
-
-                const delivery = await this.whatsAppService.sendWhatsApp(senior.phone, message);
-                if (delivery.ok) {
-                    sentSeniors += 1;
-                    details.push({
-                        recipient_id: senior.id,
-                        recipient_name: senior.name || 'Unknown',
-                        role: 'SENIOR',
-                        phone: senior.phone,
-                        building,
-                        floor,
-                        status: 'SENT',
-                        message_preview: message,
-                    });
-                    continue;
-                }
-
-                failedSeniors += 1;
-                details.push({
-                    recipient_id: senior.id,
-                    recipient_name: senior.name || 'Unknown',
-                    role: 'SENIOR',
-                    phone: senior.phone,
-                    building,
-                    floor,
-                    status: 'FAILED',
-                    reason: delivery.error || 'Unknown WhatsApp delivery error',
-                    message_preview: message,
-                });
+            if (hasSent) {
+                roleSummary.sent += 1;
+            } else if (hasFailure) {
+                roleSummary.failed += 1;
+            } else {
+                roleSummary.skipped += 1;
             }
+
+            delivery.push({
+                recipient_id: target.recipient_id,
+                recipient_name: target.recipient_name,
+                role: target.role,
+                row_order: target.row_order,
+                channels: channelResults,
+            });
         }
 
         return {
-            dry_run: dryRun,
-            cycle_id: cycleId || null,
-            sheet: options?.sheet || null,
-            summary: {
-                buildings: byBuilding.size,
-                floors: floorCount,
-                heads: {
-                    targeted: targetedHeads,
-                    sent: sentHeads,
-                    failed: failedHeads,
-                    skipped: skippedHeads,
-                },
-                seniors: {
-                    targeted: targetedSeniors,
-                    sent: sentSeniors,
-                    failed: failedSeniors,
-                    skipped: skippedSeniors,
-                },
-            },
-            details,
+            ...responseBase,
+            delivery,
         };
     }
 
@@ -1430,85 +1577,269 @@ export class MessagingService {
             ?? 'Unassigned Building';
     }
 
-    private resolveHierarchyFloor(recipient: { division?: string | null }) {
-        return normalizeImportValue(recipient.division) ?? 'General';
-    }
+    private resolveHierarchyFloor(recipient: { room_est1?: string | null; division?: string | null }) {
+        const room = normalizeImportValue(recipient.room_est1);
+        const division = normalizeImportValue(recipient.division);
 
-    private deduplicateHierarchyRecipients<T extends { id: string; phone?: string | null; name?: string | null }>(items: T[]) {
-        const seen = new Set<string>();
-        const output: T[] = [];
-
-        for (const item of items) {
-            const key = normalizeImportValue(item.phone) || `${normalizeImportValue(item.name) || ''}:${item.id}`;
-            if (seen.has(key)) {
-                continue;
-            }
-            seen.add(key);
-            output.push(item);
+        if (room && /floor|دور/i.test(room)) {
+            return room;
         }
 
-        return output;
+        if (division && /floor|دور/i.test(division)) {
+            return division;
+        }
+
+        if (room && !/^\d+[a-z0-9-]*$/i.test(room)) {
+            return room;
+        }
+
+        return division ?? room ?? 'General';
     }
 
-    private buildHeadBriefMessage(
-        building: string,
-        seniorsByFloor: Map<string, Array<{ name: string | null; phone: string | null }>>,
-    ) {
+    private buildHeadTargetPreview(node: HierarchyHeadNode): HierarchyTargetPreview {
+        const headName = normalizeImportValue(node.target.name) || 'Unknown Head';
+        const seniors = node.seniors
+            .slice()
+            .sort((a, b) => a.target.row_order - b.target.row_order)
+            .map((senior) => ({
+                recipient_id: senior.target.id,
+                recipient_name: normalizeImportValue(senior.target.name) || 'Unknown Senior',
+                row_order: senior.target.row_order,
+                floor: senior.floor,
+                phone: normalizeImportValue(senior.target.phone),
+                email: normalizeImportValue(senior.target.email),
+                invigilators_count: senior.members.length,
+            }));
+
+        const whatsappMessage = this.buildHeadBriefMessage(node);
+        const emailSubject = `EST Head Brief | ${node.target.normalized_building} | ${headName}`;
+        const emailBodyHtml = this.buildHeadBriefEmailHtml(node, seniors);
+
+        return {
+            role: 'HEAD',
+            recipient_id: node.target.id,
+            recipient_name: headName,
+            row_order: node.target.row_order,
+            building: node.target.normalized_building,
+            floor: null,
+            phone: normalizeImportValue(node.target.phone),
+            email: normalizeImportValue(node.target.email),
+            whatsapp_message: whatsappMessage,
+            email_subject: emailSubject,
+            email_body_html: emailBodyHtml,
+            seniors,
+            members: [],
+        };
+    }
+
+    private buildSeniorTargetPreview(node: HierarchySeniorNode): HierarchyTargetPreview {
+        const seniorName = normalizeImportValue(node.target.name) || 'Unknown Senior';
+        const members = node.members
+            .slice()
+            .sort((a, b) => a.row_order - b.row_order)
+            .map((member) => ({
+                recipient_id: member.id,
+                recipient_name: normalizeImportValue(member.name) || 'Unknown Invigilator',
+                row_order: member.row_order,
+                role: normalizeImportValue(member.role),
+                room: normalizeImportValue(member.room_est1),
+                phone: normalizeImportValue(member.phone),
+                email: normalizeImportValue(member.email),
+            }));
+
+        const whatsappMessage = this.buildSeniorBriefMessage(node);
+        const emailSubject = `EST Senior Brief | ${node.floor} | ${node.target.normalized_building} | ${seniorName}`;
+        const emailBodyHtml = this.buildSeniorBriefEmailHtml(node, members);
+
+        return {
+            role: 'SENIOR',
+            recipient_id: node.target.id,
+            recipient_name: seniorName,
+            row_order: node.target.row_order,
+            building: node.target.normalized_building,
+            floor: node.floor,
+            phone: normalizeImportValue(node.target.phone),
+            email: normalizeImportValue(node.target.email),
+            whatsapp_message: whatsappMessage,
+            email_subject: emailSubject,
+            email_body_html: emailBodyHtml,
+            seniors: [],
+            members,
+        };
+    }
+
+    private buildHeadBriefMessage(node: HierarchyHeadNode) {
+        const headName = normalizeImportValue(node.target.name) || 'Unknown Head';
         const lines = [
             '*EST Building Brief*',
-            `Building: ${building}`,
+            `Head: ${headName}`,
+            `Building: ${node.target.normalized_building}`,
             '',
             '*Floors and assigned seniors*',
         ];
 
-        const floorEntries = Array.from(seniorsByFloor.entries()).sort(([floorA], [floorB]) => floorA.localeCompare(floorB));
-        if (!floorEntries.length) {
+        const seniors = node.seniors.slice().sort((a, b) => a.target.row_order - b.target.row_order);
+        if (!seniors.length) {
             lines.push('- No senior assignments available yet.');
         } else {
-            for (const [floor, seniors] of floorEntries) {
-                const people = seniors.length
-                    ? seniors.map((senior) => {
-                        const seniorName = normalizeImportValue(senior.name) ?? 'Unnamed Senior';
-                        const seniorPhone = normalizeImportValue(senior.phone) ?? 'No phone';
-                        return `${seniorName} (${seniorPhone})`;
-                    }).join(', ')
-                    : 'No senior assigned';
-                lines.push(`- Floor ${floor}: ${people}`);
+            for (const senior of seniors) {
+                const seniorName = normalizeImportValue(senior.target.name) ?? 'Unnamed Senior';
+                const seniorPhone = normalizeImportValue(senior.target.phone) ?? 'No phone';
+                const seniorEmail = normalizeImportValue(senior.target.email) ?? 'No email';
+                lines.push(`- [Row ${senior.target.row_order}] ${senior.floor}: ${seniorName} | ${seniorPhone} | ${seniorEmail}`);
             }
         }
 
-        lines.push('', 'Best regards,', 'EST Team');
+        lines.push(
+            '',
+            '*Coordination*',
+            'Please create WhatsApp groups with each assigned senior and share the final invigilator distribution.',
+            '',
+            'Best regards,',
+            'EST Team',
+        );
         return lines.join('\n');
     }
 
-    private buildSeniorBriefMessage(
-        building: string,
-        floor: string,
-        invigilators: Array<{ name: string | null; phone: string | null; room_est1: string | null }>,
-    ) {
+    private buildSeniorBriefMessage(node: HierarchySeniorNode) {
+        const seniorName = normalizeImportValue(node.target.name) || 'Unknown Senior';
         const lines = [
             '*EST Senior Brief*',
-            `Building: ${building}`,
-            `Floor: ${floor}`,
+            `Senior: ${seniorName}`,
+            `Building: ${node.target.normalized_building}`,
+            `Floor: ${node.floor}`,
             '',
             '*Invigilators in this floor*',
         ];
 
+        const invigilators = node.members.slice().sort((a, b) => a.row_order - b.row_order);
         if (!invigilators.length) {
             lines.push('No invigilators assigned to this floor yet.');
         } else {
             invigilators
-                .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
                 .forEach((invigilator, index) => {
                     const name = normalizeImportValue(invigilator.name) ?? 'Unnamed Invigilator';
                     const phone = normalizeImportValue(invigilator.phone) ?? 'No phone';
                     const room = normalizeImportValue(invigilator.room_est1) ?? 'No room';
-                    lines.push(`${index + 1}. ${name} | ${phone} | Room ${room}`);
+                    const role = normalizeImportValue(invigilator.role) ?? 'Invigilator';
+                    lines.push(`${index + 1}. [Row ${invigilator.row_order}] ${name} | ${role} | ${phone} | Room ${room}`);
                 });
         }
 
-        lines.push('', 'Best regards,', 'EST Team');
+        lines.push(
+            '',
+            '*Coordination*',
+            'Please create room-wise WhatsApp groups with the invigilators listed above and confirm room coverage.',
+            '',
+            'Best regards,',
+            'EST Team',
+        );
         return lines.join('\n');
+    }
+
+    private buildHeadBriefEmailHtml(
+        node: HierarchyHeadNode,
+        seniors: Array<{
+            recipient_name: string;
+            row_order: number;
+            floor: string;
+            phone: string | null;
+            email: string | null;
+            invigilators_count: number;
+        }>,
+    ) {
+        const rows = seniors.length
+            ? seniors.map((senior) => `
+                <tr>
+                    <td style="padding:8px;border:1px solid #dbe2ea;">${senior.row_order}</td>
+                    <td style="padding:8px;border:1px solid #dbe2ea;">${this.escapeHtml(senior.floor)}</td>
+                    <td style="padding:8px;border:1px solid #dbe2ea;">${this.escapeHtml(senior.recipient_name)}</td>
+                    <td style="padding:8px;border:1px solid #dbe2ea;">${this.escapeHtml(senior.phone || '-')}</td>
+                    <td style="padding:8px;border:1px solid #dbe2ea;">${this.escapeHtml(senior.email || '-')}</td>
+                    <td style="padding:8px;border:1px solid #dbe2ea;">${senior.invigilators_count}</td>
+                </tr>
+            `).join('')
+            : `
+                <tr>
+                    <td colspan="6" style="padding:10px;border:1px solid #dbe2ea;">No seniors assigned yet.</td>
+                </tr>
+            `;
+
+        return `
+            <div style="font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
+                <h2 style="margin:0 0 8px;">EST Head Brief</h2>
+                <p style="margin:0 0 4px;"><strong>Head:</strong> ${this.escapeHtml(normalizeImportValue(node.target.name) || 'Unknown Head')}</p>
+                <p style="margin:0 0 16px;"><strong>Building:</strong> ${this.escapeHtml(node.target.normalized_building)}</p>
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead>
+                        <tr style="background:#f8fafc;">
+                            <th style="padding:8px;border:1px solid #dbe2ea;">Row</th>
+                            <th style="padding:8px;border:1px solid #dbe2ea;">Floor</th>
+                            <th style="padding:8px;border:1px solid #dbe2ea;">Senior</th>
+                            <th style="padding:8px;border:1px solid #dbe2ea;">Phone</th>
+                            <th style="padding:8px;border:1px solid #dbe2ea;">Email</th>
+                            <th style="padding:8px;border:1px solid #dbe2ea;">Invigilators</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <p style="margin:16px 0 0;">Please create WhatsApp groups with each assigned senior and share final invigilator distribution.</p>
+                <p style="margin:14px 0 0;">Best regards,<br /><strong>EST Team</strong></p>
+            </div>
+        `.trim();
+    }
+
+    private buildSeniorBriefEmailHtml(
+        node: HierarchySeniorNode,
+        members: Array<{
+            recipient_name: string;
+            row_order: number;
+            role: string | null;
+            room: string | null;
+            phone: string | null;
+            email: string | null;
+        }>,
+    ) {
+        const rows = members.length
+            ? members.map((member) => `
+                <tr>
+                    <td style="padding:8px;border:1px solid #dbe2ea;">${member.row_order}</td>
+                    <td style="padding:8px;border:1px solid #dbe2ea;">${this.escapeHtml(member.room || '-')}</td>
+                    <td style="padding:8px;border:1px solid #dbe2ea;">${this.escapeHtml(member.recipient_name)}</td>
+                    <td style="padding:8px;border:1px solid #dbe2ea;">${this.escapeHtml(member.role || 'Invigilator')}</td>
+                    <td style="padding:8px;border:1px solid #dbe2ea;">${this.escapeHtml(member.phone || '-')}</td>
+                    <td style="padding:8px;border:1px solid #dbe2ea;">${this.escapeHtml(member.email || '-')}</td>
+                </tr>
+            `).join('')
+            : `
+                <tr>
+                    <td colspan="6" style="padding:10px;border:1px solid #dbe2ea;">No invigilators assigned yet.</td>
+                </tr>
+            `;
+
+        return `
+            <div style="font-family:Segoe UI,Arial,sans-serif;color:#0f172a;">
+                <h2 style="margin:0 0 8px;">EST Senior Brief</h2>
+                <p style="margin:0 0 4px;"><strong>Senior:</strong> ${this.escapeHtml(normalizeImportValue(node.target.name) || 'Unknown Senior')}</p>
+                <p style="margin:0 0 4px;"><strong>Building:</strong> ${this.escapeHtml(node.target.normalized_building)}</p>
+                <p style="margin:0 0 16px;"><strong>Floor:</strong> ${this.escapeHtml(node.floor)}</p>
+                <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <thead>
+                        <tr style="background:#f8fafc;">
+                            <th style="padding:8px;border:1px solid #dbe2ea;">Row</th>
+                            <th style="padding:8px;border:1px solid #dbe2ea;">Room</th>
+                            <th style="padding:8px;border:1px solid #dbe2ea;">Name</th>
+                            <th style="padding:8px;border:1px solid #dbe2ea;">Role</th>
+                            <th style="padding:8px;border:1px solid #dbe2ea;">Phone</th>
+                            <th style="padding:8px;border:1px solid #dbe2ea;">Email</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <p style="margin:16px 0 0;">Please create room-wise WhatsApp groups and confirm full invigilator coverage.</p>
+                <p style="margin:14px 0 0;">Best regards,<br /><strong>EST Team</strong></p>
+            </div>
+        `.trim();
     }
 
     private buildPhoneCandidates(normalizedLocalPhone: string) {

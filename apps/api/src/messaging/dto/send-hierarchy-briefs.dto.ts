@@ -1,6 +1,6 @@
 import { RecipientSheet } from '@prisma/client';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
 
 const toBoolean = (value: unknown) => {
     if (typeof value === 'boolean') {
@@ -23,6 +23,11 @@ const toBoolean = (value: unknown) => {
     return false;
 };
 
+export enum HierarchyBriefChannel {
+    WHATSAPP = 'WHATSAPP',
+    EMAIL = 'EMAIL',
+}
+
 export class SendHierarchyBriefsDto {
     @IsOptional()
     @IsString()
@@ -36,4 +41,29 @@ export class SendHierarchyBriefsDto {
     @IsOptional()
     @IsBoolean()
     dry_run?: boolean;
+
+    @Transform(({ value }) => toBoolean(value))
+    @IsOptional()
+    @IsBoolean()
+    include_heads?: boolean;
+
+    @Transform(({ value }) => toBoolean(value))
+    @IsOptional()
+    @IsBoolean()
+    include_seniors?: boolean;
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    head_ids?: string[];
+
+    @IsOptional()
+    @IsArray()
+    @IsString({ each: true })
+    senior_ids?: string[];
+
+    @IsOptional()
+    @IsArray()
+    @IsEnum(HierarchyBriefChannel, { each: true })
+    channels?: HierarchyBriefChannel[];
 }
