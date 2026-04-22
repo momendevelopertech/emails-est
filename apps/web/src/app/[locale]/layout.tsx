@@ -5,7 +5,6 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { Toaster } from 'react-hot-toast';
 import { locales } from '@/i18n/routing';
-import ClientCacheManager from '@/components/ClientCacheManager';
 import { AuthProvider } from '@/context/AuthContext';
 import SessionTimeoutManager from '@/components/SessionTimeoutManager';
 import ReactQueryProvider from '@/components/ReactQueryProvider';
@@ -27,7 +26,6 @@ const SITE_URL = normalizeSiteUrl(
     process.env.SITE_URL ||
     process.env.VERCEL_PROJECT_PRODUCTION_URL,
 );
-const APP_BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
 
 export const metadata = {
     metadataBase: new URL(SITE_URL),
@@ -79,7 +77,6 @@ export default async function LocaleLayout({
                 <NextIntlClientProvider messages={messages}>
                     <ReactQueryProvider>
                         <AuthProvider locale={locale}>
-                            <ClientCacheManager buildId={APP_BUILD_ID} />
                             <SessionTimeoutManager />
                             {children}
                             <Toaster position={locale === 'ar' ? 'top-left' : 'top-right'} />

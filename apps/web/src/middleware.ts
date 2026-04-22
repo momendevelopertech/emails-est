@@ -24,6 +24,13 @@ export default function middleware(req: NextRequest) {
     const segments = pathname.split('/').filter(Boolean);
     const locale = segments[0];
     const route = segments[1] || '';
+
+    if (locale && locales.includes(locale as any) && route === 'r') {
+        const target = new URL(`/r/${segments.slice(2).join('/')}`, req.url);
+        target.search = req.nextUrl.search;
+        return NextResponse.redirect(target);
+    }
+
     // e.g. "requests/print" from /ar/requests/print/leave/123
     const subPath = segments.slice(1).join('/');
 

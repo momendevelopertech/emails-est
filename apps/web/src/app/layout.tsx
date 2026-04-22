@@ -1,4 +1,7 @@
 import { ReactNode } from 'react';
+import ClientCacheManager from '@/components/ClientCacheManager';
+
+const APP_BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_APP_VERSION || 'dev';
 
 export const metadata = {
     title: 'Emails EST',
@@ -6,5 +9,10 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-    return children;
+    return (
+        <>
+            <ClientCacheManager buildId={APP_BUILD_ID} />
+            {children}
+        </>
+    );
 }
