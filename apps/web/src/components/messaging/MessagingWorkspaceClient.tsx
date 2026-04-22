@@ -45,6 +45,7 @@ import ConfirmDialog from '../ConfirmDialog';
 import FormSelect from '../FormSelect';
 
 type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
+type CampaignViewTab = 'send' | 'briefs' | 'logs';
 type TemplateType = 'BOTH' | 'EMAIL' | 'WHATSAPP';
 type SendScope = 'selected' | 'filtered' | 'all_pending' | 'failed';
 type TemplateEditorField = 'subject' | 'body';
@@ -864,6 +865,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [guidedTemplateForm, setGuidedTemplateForm] = useState<EstGuidedTemplateConfig | null>(null);
     const [isAdvancedTemplateEditorOpen, setIsAdvancedTemplateEditorOpen] = useState(false);
     const [campaignTemplateId, setCampaignTemplateId] = useState('');
+    const [campaignViewTab, setCampaignViewTab] = useState<CampaignViewTab>('send');
     const [sendScope, setSendScope] = useState<SendScope>('selected');
     const [logsExpanded, setLogsExpanded] = useState(false);
     const [emailSettingsForm, setEmailSettingsForm] = useState({
@@ -1574,7 +1576,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     ]);
 
     const compactSelectTriggerClass = '!min-h-[2.625rem] !rounded-xl !px-3 !py-2 text-sm shadow-none';
-    const compactInputClass = 'input w-full !min-h-[2.625rem] !rounded-xl !px-3 !py-2 text-sm';
+    const compactInputClass = 'input w-full !min-h-[2.375rem] !rounded-xl !px-3 !py-1.5 text-sm';
+    const compactSelectClass = '!min-h-[2.375rem] !rounded-xl !px-3 !py-1.5 text-sm shadow-none';
     const topStatPills = [
         { key: 'matching', label: copy.visibleCount, value: totalRecipients, valueClassName: 'text-slate-950' },
         { key: 'pending', label: copy.pendingCount, value: pageStats.pending, valueClassName: 'text-amber-700' },
@@ -2366,7 +2369,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             {advancedFiltersOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                         </span>
                     </button>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                         <label className="relative block">
                             <Search className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
                             <input
@@ -2377,7 +2380,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             />
                         </label>
 
-                        {textRecipientFilterFields.slice(0, 2).map((field) => (
+                        {textRecipientFilterFields.map((field) => (
                             <input
                                 key={field.key}
                                 value={filters[field.key]}
@@ -2389,23 +2392,14 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                     </div>
 
                     {advancedFiltersOpen ? (
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                        {textRecipientFilterFields.slice(2).map((field) => (
-                            <input
-                                key={field.key}
-                                value={filters[field.key]}
-                                onChange={(event) => updateFilter(field.key, event.target.value)}
-                                className={compactInputClass}
-                                placeholder={field.label}
-                            />
-                        ))}
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                         <FormSelect
                             value={filters.role}
                             onChange={(nextValue) => updateFilter('role', nextValue)}
                             options={roleFilterOptions}
                             placeholder={copy.role}
                             ariaLabel={copy.role}
-                            triggerClassName={compactSelectTriggerClass}
+                            triggerClassName={compactSelectClass}
                         />
                         <FormSelect
                             value={filters.governorate}
@@ -2413,7 +2407,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             options={governorateFilterOptions}
                             placeholder={copy.governorate}
                             ariaLabel={copy.governorate}
-                            triggerClassName={compactSelectTriggerClass}
+                            triggerClassName={compactSelectClass}
                         />
                         <FormSelect
                             value={filters.status}
@@ -2421,7 +2415,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             options={statusFilterOptions}
                             placeholder={copy.status}
                             ariaLabel={copy.status}
-                            triggerClassName={compactSelectTriggerClass}
+                            triggerClassName={compactSelectClass}
                         />
                         <FormSelect
                             value={filters.type}
@@ -2429,7 +2423,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             options={typeFilterOptions}
                             placeholder={copy.typeLabel}
                             ariaLabel={copy.typeLabel}
-                            triggerClassName={compactSelectTriggerClass}
+                            triggerClassName={compactSelectClass}
                         />
                     </div>
                     ) : null}
@@ -2450,13 +2444,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     return (
         <section className="space-y-4 py-4 md:space-y-5 md:py-5">
             <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-4 shadow-sm shadow-slate-900/5 md:p-5">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                     <div className="min-w-[220px]">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">Emails EST</div>
                         <h1 className="mt-1 text-xl font-semibold text-slate-950 md:text-2xl">{copy.recipientsSectionTitle}</h1>
-                        <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500 md:text-sm">
-                            {copy.heroSubtitle}
-                        </p>
                     </div>
 
                     <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto pb-1">
@@ -2477,6 +2468,55 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                         <span>{copy.refresh}</span>
                     </button>
                 </div>
+                <div className="mt-3 rounded-[1.1rem] border border-blue-100 bg-blue-50/70 p-3">
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="min-w-[220px]">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">
+                                {isArabic ? 'الدورة النشطة' : 'Active cycle'}
+                            </div>
+                            <FormSelect
+                                value={selectedCycleId}
+                                onChange={(nextValue) => {
+                                    setPage(1);
+                                    setSelectedRecipientIds([]);
+                                    setSelectedCycleId(nextValue);
+                                }}
+                                options={cycleSelectOptions}
+                                ariaLabel={isArabic ? 'الدورة النشطة' : 'Active cycle'}
+                                className="mt-2"
+                                triggerClassName={`${compactSelectTriggerClass} !border-blue-100`}
+                            />
+                        </div>
+                        <div className="grid flex-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2 text-xs text-slate-600">
+                                <div className="font-medium text-slate-500">{isArabic ? 'المستلمون' : 'Recipients'}</div>
+                                <div className="mt-1 font-semibold text-slate-950">{currentCycle ? currentCycle.recipients_count : totalRecipients}</div>
+                            </div>
+                            <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2 text-xs text-slate-600">
+                                <div className="font-medium text-slate-500">{isArabic ? 'الاستيراد' : 'Imported'}</div>
+                                <div className="mt-1 truncate font-semibold text-slate-950">
+                                    {currentCycle ? new Date(currentCycle.created_at).toLocaleDateString() : (isArabic ? 'كل الدورات' : 'All cycles')}
+                                </div>
+                            </div>
+                            <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2 text-xs text-slate-600 sm:col-span-2 xl:col-span-1">
+                                <div className="font-medium text-slate-500">{isArabic ? 'الملف' : 'File'}</div>
+                                <div className="mt-1 truncate font-semibold text-slate-950">
+                                    {currentCycle?.source_file_name || (isArabic ? 'عرض كل الملفات المستوردة' : 'Showing all imported files')}
+                                </div>
+                            </div>
+                        </div>
+                        {currentCycle ? (
+                            <button
+                                type="button"
+                                className="btn-danger w-full justify-center !rounded-xl !py-2.5 xl:w-auto"
+                                onClick={deleteCycle}
+                                disabled={deleteCycleMutation.isPending}
+                            >
+                                {copy.cycleDelete}
+                            </button>
+                        ) : null}
+                    </div>
+                </div>
             </div>
 
             {activeTab === 'recipients' && (
@@ -2495,56 +2535,6 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                         </div>
                     ) : null}
                     <div className="space-y-4">
-                        <div className="rounded-[1.5rem] border border-blue-100 bg-blue-50/70 p-4 shadow-sm shadow-slate-900/5">
-                            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                                <div className="min-w-[220px]">
-                                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">
-                                        {isArabic ? 'الدورة النشطة' : 'Active cycle'}
-                                    </div>
-                                    <FormSelect
-                                        value={selectedCycleId}
-                                        onChange={(nextValue) => {
-                                            setPage(1);
-                                            setSelectedRecipientIds([]);
-                                            setSelectedCycleId(nextValue);
-                                        }}
-                                        options={cycleSelectOptions}
-                                        ariaLabel={isArabic ? 'الدورة النشطة' : 'Active cycle'}
-                                        className="mt-2"
-                                        triggerClassName={`${compactSelectTriggerClass} !border-blue-100`}
-                                    />
-                                </div>
-                                <div className="grid flex-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                                    <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2 text-xs text-slate-600">
-                                        <div className="font-medium text-slate-500">{isArabic ? 'المستلمون' : 'Recipients'}</div>
-                                        <div className="mt-1 font-semibold text-slate-950">{currentCycle ? currentCycle.recipients_count : totalRecipients}</div>
-                                    </div>
-                                    <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2 text-xs text-slate-600">
-                                        <div className="font-medium text-slate-500">{isArabic ? 'الاستيراد' : 'Imported'}</div>
-                                        <div className="mt-1 truncate font-semibold text-slate-950">
-                                            {currentCycle ? new Date(currentCycle.created_at).toLocaleDateString() : (isArabic ? 'كل الدورات' : 'All cycles')}
-                                        </div>
-                                    </div>
-                                    <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2 text-xs text-slate-600 sm:col-span-2 xl:col-span-1">
-                                        <div className="font-medium text-slate-500">{isArabic ? 'الملف' : 'File'}</div>
-                                        <div className="mt-1 truncate font-semibold text-slate-950">
-                                            {currentCycle?.source_file_name || (isArabic ? 'عرض كل الملفات المستوردة' : 'Showing all imported files')}
-                                        </div>
-                                    </div>
-                                </div>
-                                {currentCycle ? (
-                                    <button
-                                        type="button"
-                                        className="btn-danger w-full justify-center !rounded-xl !py-2.5 xl:w-auto"
-                                        onClick={deleteCycle}
-                                        disabled={deleteCycleMutation.isPending}
-                                    >
-                                        {copy.cycleDelete}
-                                    </button>
-                                ) : null}
-                            </div>
-                        </div>
-
                         {renderRecipientFiltersPanel(false, false)}
 
                         <div className="min-w-0">
@@ -4078,6 +4068,34 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                     </div>
 
                     <div>
+                        <div className="mb-4 overflow-x-auto">
+                            <div className="inline-flex min-w-full gap-2 rounded-2xl border border-slate-200 bg-white p-1.5">
+                                {([
+                                    { key: 'send', label: `${copy.sendNow} / ${copy.retryFailed}` },
+                                    { key: 'briefs', label: 'Head/Senior Briefs' },
+                                    { key: 'logs', label: copy.recentLogs },
+                                ] as Array<{ key: CampaignViewTab; label: string }>).map((tabOption) => {
+                                    const active = campaignViewTab === tabOption.key;
+                                    return (
+                                        <button
+                                            key={tabOption.key}
+                                            type="button"
+                                            onClick={() => setCampaignViewTab(tabOption.key)}
+                                            className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                                                active
+                                                    ? 'bg-blue-600 text-white shadow-sm'
+                                                    : 'text-slate-600 hover:bg-slate-100'
+                                            }`}
+                                        >
+                                            {tabOption.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {campaignViewTab === 'send' ? (
+                        <>
                         <div className="flex items-start gap-3">
                             <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700">
                                 <SendHorizontal size={22} />
@@ -4250,7 +4268,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 {copy.retryFailed}
                             </button>
                         </div>
+                        </>
+                        ) : null}
 
+                        {campaignViewTab === 'briefs' ? (
                         <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
                             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                                 Head/Senior Briefs
@@ -4388,7 +4409,6 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     {sendHierarchyBriefsMutation.isPending ? 'Sending...' : 'Confirm and send'}
                                 </button>
                             </div>
-                        </div>
 
                         {hierarchyPreviewResult ? (
                             <div className="mt-5 rounded-[1.25rem] border border-slate-200 bg-slate-50 p-4">
@@ -4537,7 +4557,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 ) : null}
                             </div>
                         ) : null}
-
+                        </div>
+                        ) : null}
                     </div>
 
                     <ConfirmDialog
@@ -4551,6 +4572,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                         onConfirm={confirmSendHierarchyBriefs}
                     />
 
+                    {campaignViewTab === 'logs' ? (
                     <div className={cardClass}>
                         <button
                             type="button"
@@ -4616,6 +4638,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             </div>
                         )}
                     </div>
+                    ) : null}
                 </div>
             )}
             {activeTab === 'settings' && (
