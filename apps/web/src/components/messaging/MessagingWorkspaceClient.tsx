@@ -6,6 +6,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import {
+    ChevronLeft,
+    ChevronRight,
     ChevronDown,
     ChevronUp,
     FileSpreadsheet,
@@ -13,12 +15,14 @@ import {
     LayoutPanelTop,
     Mail,
     Phone,
-    RefreshCcw,
+    Plus,
     Search,
     SendHorizontal,
     Settings,
     Server,
     SquarePen,
+    Trash2,
+    X,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api, { fetchCsrfToken } from '@/lib/api';
@@ -848,6 +852,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState<number>(1500);
     const [filters, setFilters] = useState<RecipientFilters>(EMPTY_FILTERS);
+    const [desktopFiltersCollapsed, setDesktopFiltersCollapsed] = useState(false);
+    const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
     const [templateForm, setTemplateForm] = useState(EMPTY_TEMPLATE_FORM);
     const [templateSearch, setTemplateSearch] = useState('');
@@ -892,6 +898,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             setActiveTab(nextTab);
         }
     }, [activeTab, searchParams]);
+
+    useEffect(() => {
+        setMobileFiltersOpen(false);
+    }, [activeTab]);
 
     const updateTab = (nextTab: WorkspaceTab) => {
         setActiveTab(nextTab);
@@ -1556,20 +1566,28 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         { key: 'name', label: copy.name },
         { key: 'email', label: copy.emailLabel },
         { key: 'room_est1', label: copy.roomEst1 },
-        { key: 'address', label: copy.address },
-        { key: 'building', label: copy.building },
-        { key: 'location', label: copy.location },
     ] as Array<{ key: keyof RecipientFilters; label: string }>), [
-        copy.address,
-        copy.building,
         copy.emailLabel,
-        copy.location,
         copy.name,
         copy.roomEst1,
     ]);
 
+    const compactSelectTriggerClass = '!min-h-[2.625rem] !rounded-xl !px-3 !py-2 text-sm shadow-none';
+    const compactInputClass = 'input w-full !min-h-[2.625rem] !rounded-xl !px-3 !py-2 text-sm';
+    const topStatPills = [
+        { key: 'matching', label: copy.visibleCount, value: totalRecipients, valueClassName: 'text-slate-950' },
+        { key: 'pending', label: copy.pendingCount, value: pageStats.pending, valueClassName: 'text-amber-700' },
+        { key: 'sent', label: copy.sentCount, value: pageStats.sent, valueClassName: 'text-emerald-700' },
+        { key: 'responded', label: copy.respondedCount, value: pageStats.responded, valueClassName: 'text-violet-700' },
+        { key: 'confirmed', label: copy.confirmedCount, value: pageStats.confirmed, valueClassName: 'text-emerald-700' },
+        { key: 'apologized', label: copy.apologizedCount, value: pageStats.apologized, valueClassName: 'text-rose-700' },
+        { key: 'selected', label: copy.selectedCount, value: selectedRecipientIds.length, valueClassName: 'text-blue-700' },
+    ];
+
     const filterOptions = recipientFilterOptionsQuery.data ?? { roles: [], types: [], governorates: [], sheets: [] };
     const availableSheets = filterOptions.sheets;
+    const primarySheetTabs = availableSheets.filter((sheet) => sheet.value === 'EST1' || sheet.value === 'EST2');
+    const secondarySheetTabs = availableSheets.filter((sheet) => sheet.value !== 'EST1' && sheet.value !== 'EST2');
     const clearableOption = { value: '', label: isArabic ? 'بدون تحديد' : 'No selection' };
     const cycleSelectOptions = [
         { value: ALL_CYCLES_VALUE, label: isArabic ? 'كل الدورات' : 'All cycles' },
@@ -2250,63 +2268,501 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             </div>
         </div>
     );
+    const isDesktopFiltersVisible = !desktopFiltersCollapsed;
+    const switchSheet = (nextSheet: 'LEGACY' | 'EST1' | 'EST2') => {
+        setPage(1);
+        setSelectedRecipientIds([]);
+        setSelectedSheet(nextSheet);
+    };
+    const renderRecipientFiltersPanel = (isOverlay = false) => (
+        <div className={`flex h-full flex-col gap-3 rounded-[1.35rem] border border-slate-200 bg-white p-3 shadow-sm shadow-slate-900/5 ${isOverlay ? 'min-h-0' : ''}`}>
+            <div className="rounded-[1.1rem] border border-blue-100 bg-blue-50/80 p-3">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">
+                            {isArabic ? 'الدورة النشطة' : 'Active cycle'}
+                        </div>
+                        <div className="mt-1 text-sm font-semibold text-slate-950">{currentCycle?.name || (isArabic ? 'كل الدورات' : 'All cycles')}</div>
+                    </div>
+                    {isOverlay ? (
+                        <button
+                            type="button"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-blue-100 bg-white text-slate-500 transition hover:text-slate-900"
+                            onClick={() => setMobileFiltersOpen(false)}
+                            aria-label={isArabic ? 'إغلاق الفلاتر' : 'Close filters'}
+                        >
+                            <X size={16} />
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            className="hidden h-8 w-8 items-center justify-center rounded-xl border border-blue-100 bg-white text-slate-500 transition hover:text-slate-900 lg:inline-flex"
+                            onClick={() => setDesktopFiltersCollapsed(true)}
+                            aria-label={isArabic ? 'إخفاء الفلاتر' : 'Collapse filters'}
+                        >
+                            {isArabic ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+                        </button>
+                    )}
+                </div>
+
+                <FormSelect
+                    value={selectedCycleId}
+                    onChange={(nextValue) => {
+                        setPage(1);
+                        setSelectedRecipientIds([]);
+                        setSelectedCycleId(nextValue);
+                    }}
+                    options={cycleSelectOptions}
+                    ariaLabel={isArabic ? 'الدورة النشطة' : 'Active cycle'}
+                    className="mt-3"
+                    triggerClassName={`${compactSelectTriggerClass} !border-blue-100`}
+                />
+
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                    <div className="rounded-xl border border-white/70 bg-white/80 px-3 py-2">
+                        <div className="font-medium text-slate-500">{isArabic ? 'المستلمون' : 'Recipients'}</div>
+                        <div className="mt-1 font-semibold text-slate-950">{currentCycle ? currentCycle.recipients_count : totalRecipients}</div>
+                    </div>
+                    <div className="rounded-xl border border-white/70 bg-white/80 px-3 py-2">
+                        <div className="font-medium text-slate-500">{isArabic ? 'الاستيراد' : 'Imported'}</div>
+                        <div className="mt-1 truncate font-semibold text-slate-950">
+                            {currentCycle ? new Date(currentCycle.created_at).toLocaleDateString() : (isArabic ? 'كل الدورات' : 'All cycles')}
+                        </div>
+                    </div>
+                    <div className="col-span-2 rounded-xl border border-white/70 bg-white/80 px-3 py-2">
+                        <div className="font-medium text-slate-500">{isArabic ? 'الملف' : 'File'}</div>
+                        <div className="mt-1 truncate font-semibold text-slate-950">
+                            {currentCycle?.source_file_name || (isArabic ? 'عرض كل الملفات المستوردة' : 'Showing all imported files')}
+                        </div>
+                    </div>
+                </div>
+
+                {currentCycle ? (
+                    <button
+                        type="button"
+                        className="btn-danger mt-3 w-full justify-center !rounded-xl !py-2.5"
+                        onClick={deleteCycle}
+                        disabled={deleteCycleMutation.isPending}
+                    >
+                        {copy.cycleDelete}
+                    </button>
+                ) : null}
+            </div>
+
+            <div className="min-h-0 flex-1 rounded-[1.1rem] border border-slate-200 bg-white">
+                <div className="flex h-full min-h-0 flex-col p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        {isArabic ? 'فلاتر المستلمين' : 'Recipient filters'}
+                    </div>
+                    <div className="mt-3 flex-1 space-y-3 overflow-y-auto pr-1">
+                        <label className="relative block">
+                            <Search className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+                            <input
+                                value={filters.search}
+                                onChange={(event) => updateFilter('search', event.target.value)}
+                                className={`${compactInputClass} !ps-10`}
+                                placeholder={copy.searchPlaceholder}
+                            />
+                        </label>
+
+                        {textRecipientFilterFields.map((field) => (
+                            <input
+                                key={field.key}
+                                value={filters[field.key]}
+                                onChange={(event) => updateFilter(field.key, event.target.value)}
+                                className={compactInputClass}
+                                placeholder={field.label}
+                            />
+                        ))}
+
+                        <FormSelect
+                            value={filters.role}
+                            onChange={(nextValue) => updateFilter('role', nextValue)}
+                            options={roleFilterOptions}
+                            placeholder={copy.role}
+                            ariaLabel={copy.role}
+                            triggerClassName={compactSelectTriggerClass}
+                        />
+                        <FormSelect
+                            value={filters.governorate}
+                            onChange={(nextValue) => updateFilter('governorate', nextValue)}
+                            options={governorateFilterOptions}
+                            placeholder={copy.governorate}
+                            ariaLabel={copy.governorate}
+                            triggerClassName={compactSelectTriggerClass}
+                        />
+                        <FormSelect
+                            value={filters.status}
+                            onChange={(nextValue) => updateFilter('status', nextValue)}
+                            options={statusFilterOptions}
+                            placeholder={copy.status}
+                            ariaLabel={copy.status}
+                            triggerClassName={compactSelectTriggerClass}
+                        />
+                        <FormSelect
+                            value={filters.type}
+                            onChange={(nextValue) => updateFilter('type', nextValue)}
+                            options={typeFilterOptions}
+                            placeholder={copy.typeLabel}
+                            ariaLabel={copy.typeLabel}
+                            triggerClassName={compactSelectTriggerClass}
+                        />
+                    </div>
+
+                    <button
+                        type="button"
+                        className="btn-outline mt-3 w-full justify-center !rounded-xl !py-2.5"
+                        onClick={clearFilters}
+                    >
+                        <Filter size={16} />
+                        <span>{copy.clearFilters}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 
     return (
         <section className="space-y-4 py-4 md:space-y-5 md:py-5">
-            <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/95 p-4 shadow-sm shadow-slate-900/5 md:p-5">
+            <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-4 shadow-sm shadow-slate-900/5 md:p-5">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                    <div>
-                        <h1 className="text-2xl font-semibold text-slate-950 md:text-[2rem]">{copy.heroTitle}</h1>
-                        <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500 md:text-sm">
+                    <div className="min-w-[220px]">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">Emails EST</div>
+                        <h1 className="mt-1 text-xl font-semibold text-slate-950 md:text-2xl">{copy.recipientsSectionTitle}</h1>
+                        <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500 md:text-sm">
                             {copy.heroSubtitle}
                         </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                        <div className={statClass}>
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.visibleCount}</div>
-                            <div className="mt-2 text-2xl font-semibold text-slate-950">{totalRecipients}</div>
-                        </div>
-                        <div className={statClass}>
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.selectedCount}</div>
-                            <div className="mt-2 text-2xl font-semibold text-slate-950">{selectedRecipientIds.length}</div>
-                        </div>
-                        <div className={statClass}>
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.pendingCount}</div>
-                            <div className="mt-2 text-2xl font-semibold text-amber-700">{pageStats.pending}</div>
-                        </div>
-                        <div className={statClass}>
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.sentCount}</div>
-                            <div className="mt-2 text-2xl font-semibold text-emerald-700">{pageStats.sent}</div>
-                        </div>
-                        <div className={statClass}>
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.respondedCount}</div>
-                            <div className="mt-2 text-2xl font-semibold text-violet-700">{pageStats.responded}</div>
-                        </div>
-                        <div className={statClass}>
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.confirmedCount}</div>
-                            <div className="mt-2 text-2xl font-semibold text-emerald-700">{pageStats.confirmed}</div>
-                        </div>
-                        <div className={statClass}>
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.apologizedCount}</div>
-                            <div className="mt-2 text-2xl font-semibold text-rose-700">{pageStats.apologized}</div>
-                        </div>
-                        <button
-                            className="btn-outline shrink-0"
-                            type="button"
-                            onClick={() => void refreshAll()}
-                            disabled={recipientsQuery.isFetching || templatesQuery.isFetching || logsQuery.isFetching}
-                        >
-                            <RefreshCcw size={16} />
-                            <span>{copy.refresh}</span>
-                        </button>
+                    <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto pb-1">
+                        {topStatPills.map((pill) => (
+                            <div key={pill.key} className={`${statClass} min-w-[104px] shrink-0 !rounded-[1.1rem] !px-3 !py-2`}>
+                                <div className={`text-lg font-semibold ${pill.valueClassName}`}>{pill.value}</div>
+                                <div className="mt-1 text-[11px] font-medium text-slate-500">{pill.label}</div>
+                            </div>
+                        ))}
                     </div>
+
+                    <button
+                        className="btn-outline shrink-0 !rounded-xl !py-2.5"
+                        type="button"
+                        onClick={() => void refreshAll()}
+                        disabled={recipientsQuery.isFetching || templatesQuery.isFetching || logsQuery.isFetching}
+                    >
+                        <span>{copy.refresh}</span>
+                    </button>
                 </div>
             </div>
 
             {activeTab === 'recipients' && (
-                <div className="space-y-6">
-                    <div className={cardClass}>
+                <div className="space-y-4">
+                    {mobileFiltersOpen ? (
+                        <div className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-sm lg:hidden">
+                            <button
+                                type="button"
+                                className="absolute inset-0"
+                                aria-label={isArabic ? 'إغلاق الفلاتر' : 'Close filters'}
+                                onClick={() => setMobileFiltersOpen(false)}
+                            />
+                            <div className={`absolute inset-y-0 ${isArabic ? 'right-0' : 'left-0'} w-[min(90vw,320px)] p-3`}>
+                                {renderRecipientFiltersPanel(true)}
+                            </div>
+                        </div>
+                    ) : null}
+                    <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
+                        {isDesktopFiltersVisible ? (
+                            <aside className="hidden min-w-[240px] lg:block">
+                                {renderRecipientFiltersPanel()}
+                            </aside>
+                        ) : null}
+
+                        <div className="min-w-0">
+                            <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm shadow-slate-900/5">
+                                <div className="border-b border-slate-200 px-4 py-3">
+                                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                        <div className="flex min-w-0 items-center gap-3 overflow-x-auto pb-1">
+                                            <button
+                                                type="button"
+                                                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900 lg:hidden"
+                                                onClick={() => setMobileFiltersOpen(true)}
+                                            >
+                                                <Filter size={16} />
+                                                <span>{isArabic ? 'الفلاتر' : 'Filters'}</span>
+                                            </button>
+                                            {!isDesktopFiltersVisible ? (
+                                                <button
+                                                    type="button"
+                                                    className="hidden h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900 lg:inline-flex"
+                                                    onClick={() => setDesktopFiltersCollapsed(false)}
+                                                >
+                                                    {isArabic ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                                                    <span>{isArabic ? 'إظهار الفلاتر' : 'Show filters'}</span>
+                                                </button>
+                                            ) : null}
+
+                                            {primarySheetTabs.length ? primarySheetTabs.map((sheet) => {
+                                                const active = selectedSheet === sheet.value;
+                                                return (
+                                                    <button
+                                                        key={sheet.value}
+                                                        type="button"
+                                                        onClick={() => switchSheet(sheet.value)}
+                                                        className={`flex shrink-0 items-center gap-2 border-b-2 px-1 pb-3 pt-1 text-sm font-semibold transition ${
+                                                            active
+                                                                ? 'border-blue-600 text-blue-700'
+                                                                : 'border-transparent text-slate-500 hover:text-slate-900'
+                                                        }`}
+                                                    >
+                                                        <span>{sheet.value}</span>
+                                                        <span className={`rounded-full px-2 py-0.5 text-[11px] ${active ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                            {sheet.count}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            }) : (
+                                                <div className="text-sm text-slate-500">{copy.noSheets}</div>
+                                            )}
+
+                                            {secondarySheetTabs.map((sheet) => {
+                                                const active = selectedSheet === sheet.value;
+                                                const sheetLabel = sheet.value === 'LEGACY' ? copy.legacySheet : sheet.value;
+                                                return (
+                                                    <button
+                                                        key={sheet.value}
+                                                        type="button"
+                                                        onClick={() => switchSheet(sheet.value)}
+                                                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                                                            active
+                                                                ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                                                : 'border-slate-200 bg-white text-slate-500 hover:text-slate-900'
+                                                        }`}
+                                                    >
+                                                        {sheetLabel}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                                            <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
+                                                {selectedRecipientIds.length} {copy.selectedRowsSummary}
+                                            </div>
+                                            <button type="button" className="btn-outline !rounded-xl !py-2.5" onClick={() => void exportRecipientsToExcel()}>
+                                                <FileSpreadsheet size={16} />
+                                                <span>{copy.exportExcel}</span>
+                                            </button>
+                                            <button type="button" className="btn-primary !rounded-xl !py-2.5" onClick={openCreateRecipientForm}>
+                                                <Plus size={16} />
+                                                <span>{copy.addRecipient}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <div className="min-w-[1160px]">
+                                        <table className="w-full table-fixed divide-y divide-slate-200 text-left text-sm">
+                                            <thead className="bg-slate-50 text-slate-600">
+                                                <tr>
+                                                    <th className="sticky top-0 z-10 w-[44px] bg-slate-50 px-2.5 py-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={allVisibleSelected}
+                                                            onChange={() => toggleAllVisible()}
+                                                            onClick={stopRowToggle}
+                                                        />
+                                                    </th>
+                                                    <th className="sticky top-0 z-10 w-[180px] bg-slate-50 px-2.5 py-3">{copy.name}</th>
+                                                    <th className="sticky top-0 z-10 w-[180px] bg-slate-50 px-2.5 py-3">{copy.contact}</th>
+                                                    <th className="sticky top-0 z-10 w-[60px] bg-slate-50 px-2.5 py-3 text-center">{copy.roomEst1}</th>
+                                                    <th className="sticky top-0 z-10 w-[100px] bg-slate-50 px-2.5 py-3">{copy.role}</th>
+                                                    <th className="sticky top-0 z-10 w-[100px] bg-slate-50 px-2.5 py-3">{copy.governorate}</th>
+                                                    <th className="sticky top-0 z-10 w-[90px] bg-slate-50 px-2.5 py-3">{copy.status}</th>
+                                                    <th className="sticky top-0 z-10 w-[100px] bg-slate-50 px-2.5 py-3">{copy.confirmTitle}</th>
+                                                    <th className="sticky top-0 z-10 w-[60px] bg-slate-50 px-2.5 py-3 text-center">{copy.attempts}</th>
+                                                    <th className="sticky top-0 z-10 w-[110px] bg-slate-50 px-2.5 py-3">{copy.lastAttempt}</th>
+                                                    <th className="sticky top-0 z-10 w-[90px] bg-slate-50 px-2.5 py-3 text-center">{copy.actions}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 bg-white">
+                                                {recipientsQuery.isLoading ? (
+                                                    Array.from({ length: 8 }).map((_, index) => (
+                                                        <tr key={`recipient-skeleton-${index}`}>
+                                                            <td colSpan={11} className="px-3 py-3">
+                                                                <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : recipients.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={11} className="px-4 py-12 text-center text-slate-500">{copy.emptyRecipients}</td>
+                                                    </tr>
+                                                ) : recipients.map((recipient) => {
+                                                    const responseState = getRecipientResponseState(recipient);
+                                                    const parsedDelivery = parseRecipientDeliveryDetails(recipient.error_message);
+                                                    const deliveryChannels = parsedDelivery?.channels || [];
+                                                    const channelDeliveryRows = ([
+                                                        deliveryChannels.find((item) => item.channel === 'EMAIL') || null,
+                                                        deliveryChannels.find((item) => item.channel === 'WHATSAPP') || null,
+                                                    ].filter(Boolean) as ParsedRecipientDelivery['channels']);
+                                                    const failedChannelDetails = deliveryChannels
+                                                        .filter((item) => item.status === 'FAILED')
+                                                        .map((item) => `${getDeliveryChannelLabel(isArabic, item.channel)}: ${item.detail || (isArabic ? 'خطأ غير معروف' : 'Unknown error')}`);
+                                                    const statusTitle = failedChannelDetails.join(' | ')
+                                                        || channelDeliveryRows.map((item) => `${getDeliveryChannelLabel(isArabic, item.channel)}: ${getDeliveryStateLabel(isArabic, item.status)}`).join(' | ')
+                                                        || recipient.error_message
+                                                        || undefined;
+                                                    const lastAttemptDate = recipient.last_attempt_at ? new Date(recipient.last_attempt_at) : null;
+                                                    const responseLabel = responseState === 'confirmed'
+                                                        ? copy.confirmedLabels.confirmed
+                                                        : responseState === 'declined'
+                                                            ? copy.confirmedLabels.declined
+                                                            : copy.confirmedLabels.pending;
+
+                                                    return (
+                                                        <tr
+                                                            key={recipient.id}
+                                                            className="cursor-pointer transition hover:bg-blue-50/60"
+                                                            onClick={() => toggleRecipient(recipient.id)}
+                                                        >
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedRecipientIds.includes(recipient.id)}
+                                                                    onChange={() => toggleRecipient(recipient.id)}
+                                                                    onClick={stopRowToggle}
+                                                                />
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <div className="space-y-1">
+                                                                    <div className="truncate text-sm font-semibold text-slate-900">{recipient.name || EMPTY_VALUE_LABEL}</div>
+                                                                    <div className="truncate text-xs text-slate-500">{recipient.arabic_name || EMPTY_VALUE_LABEL}</div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <div className="space-y-1.5 text-xs text-slate-600">
+                                                                    <div className="flex items-start gap-2">
+                                                                        <Mail size={13} className="mt-0.5 shrink-0 text-slate-400" />
+                                                                        <span dir="ltr" className="break-all">{recipient.email || EMPTY_VALUE_LABEL}</span>
+                                                                    </div>
+                                                                    <div className="flex items-start gap-2">
+                                                                        <Phone size={13} className="mt-0.5 shrink-0 text-slate-400" />
+                                                                        <span dir="ltr">{recipient.phone || EMPTY_VALUE_LABEL}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top text-center text-sm font-medium text-slate-700">
+                                                                {recipient.room_est1 || recipient.room || EMPTY_VALUE_LABEL}
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <div className="space-y-1">
+                                                                    <div className="truncate text-sm font-medium text-slate-900">{recipient.role || EMPTY_VALUE_LABEL}</div>
+                                                                    <div className="truncate text-xs text-slate-500">{recipient.type || EMPTY_VALUE_LABEL}</div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top text-sm text-slate-700">
+                                                                <div className="truncate">{recipient.governorate || EMPTY_VALUE_LABEL}</div>
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <span
+                                                                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${STATUS_STYLES[recipient.status]}`}
+                                                                    title={statusTitle}
+                                                                >
+                                                                    <span className="h-2 w-2 rounded-full bg-current opacity-80" />
+                                                                    {copy.statusLabels[recipient.status]}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <div className="space-y-2" onClick={stopRowToggle}>
+                                                                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${CONFIRMATION_STYLES[responseState]}`}>
+                                                                        <span className="h-2 w-2 rounded-full bg-current opacity-80" />
+                                                                        {responseLabel}
+                                                                    </span>
+                                                                    {canManageResponses ? (
+                                                                        <FormSelect
+                                                                            value={responseState === 'confirmed' ? 'CONFIRMED' : responseState === 'declined' ? 'DECLINED' : 'PENDING'}
+                                                                            onChange={(nextValue) => updateRecipientResponseMutation.mutate({
+                                                                                recipientId: recipient.id,
+                                                                                status: nextValue as RecipientResponseValue,
+                                                                            })}
+                                                                            options={responseStatusOptions}
+                                                                            ariaLabel={`${copy.confirmTitle} ${recipient.name}`}
+                                                                            triggerClassName={compactSelectTriggerClass}
+                                                                        />
+                                                                    ) : null}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top text-center text-sm text-slate-700">{recipient.attempts_count ?? 0}</td>
+                                                            <td className="px-2.5 py-2 align-top text-xs text-slate-600">
+                                                                {lastAttemptDate ? (
+                                                                    <div className="space-y-1">
+                                                                        <div className="font-medium text-slate-900">{lastAttemptDate.toLocaleDateString()}</div>
+                                                                        <div>{lastAttemptDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                                    </div>
+                                                                ) : (
+                                                                    EMPTY_VALUE_LABEL
+                                                                )}
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <div className="flex items-center justify-center gap-2" onClick={stopRowToggle}>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                                                                        onClick={() => openEditRecipientForm(recipient)}
+                                                                        aria-label={copy.edit}
+                                                                        title={copy.edit}
+                                                                    >
+                                                                        <SquarePen size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 transition hover:bg-rose-50"
+                                                                        onClick={() => deleteRecipient(recipient.id)}
+                                                                        disabled={deleteRecipientMutation.isPending}
+                                                                        aria-label={copy.delete}
+                                                                        title={copy.delete}
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="text-sm text-slate-500">
+                                        {copy.showing} {visibleRangeStart}-{visibleRangeEnd} {copy.of} {totalRecipients}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                                        <div className="w-[132px]">
+                                            <FormSelect
+                                                value={String(pageSize)}
+                                                onChange={(nextValue) => {
+                                                    setPage(1);
+                                                    setPageSize(parseInt(nextValue, 10));
+                                                }}
+                                                options={pageSizeOptions}
+                                                ariaLabel={copy.recordsPerPage}
+                                                triggerClassName={compactSelectTriggerClass}
+                                            />
+                                        </div>
+                                        <button type="button" className="btn-outline !rounded-xl !py-2.5" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={page <= 1}>
+                                            {copy.previous}
+                                        </button>
+                                        <button type="button" className="btn-outline !rounded-xl !py-2.5" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={page >= totalPages}>
+                                            {copy.next}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="hidden">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                             <div>
                                 <h2 className="text-lg font-semibold text-slate-950 md:text-xl">{copy.recipientsSectionTitle}</h2>
@@ -2732,6 +3188,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             </div>
                             </div>
                         </div>
+                    </div>
 
                     <RecipientFormModal
                         isOpen={isRecipientFormOpen}
@@ -3088,7 +3545,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
                     
 
-                    <div className={cardClass}>
+                    <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                             <h2 className="text-xl font-semibold text-slate-950">{copy.templatesTitle}</h2>
                             <label className="relative block w-full lg:max-w-sm">
@@ -3248,8 +3705,315 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                 </div>
             )}
             {activeTab === 'campaign' && (
-                <div className="space-y-6">
-                    <div className={cardClass}>
+                <div className="space-y-4">
+                    {mobileFiltersOpen ? (
+                        <div className="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-sm lg:hidden">
+                            <button
+                                type="button"
+                                className="absolute inset-0"
+                                aria-label={isArabic ? 'إغلاق الفلاتر' : 'Close filters'}
+                                onClick={() => setMobileFiltersOpen(false)}
+                            />
+                            <div className={`absolute inset-y-0 ${isArabic ? 'right-0' : 'left-0'} w-[min(90vw,320px)] p-3`}>
+                                {renderRecipientFiltersPanel(true)}
+                            </div>
+                        </div>
+                    ) : null}
+                    <div className="hidden">
+                        {isDesktopFiltersVisible ? (
+                            <aside className="hidden min-w-[240px] lg:block">
+                                {renderRecipientFiltersPanel()}
+                            </aside>
+                        ) : null}
+
+                        <div className="min-w-0">
+                            <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm shadow-slate-900/5">
+                                <div className="border-b border-slate-200 px-4 py-3">
+                                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                        <div className="flex min-w-0 items-center gap-3 overflow-x-auto pb-1">
+                                            <button
+                                                type="button"
+                                                className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900 lg:hidden"
+                                                onClick={() => setMobileFiltersOpen(true)}
+                                            >
+                                                <Filter size={16} />
+                                                <span>{isArabic ? 'الفلاتر' : 'Filters'}</span>
+                                            </button>
+                                            {!isDesktopFiltersVisible ? (
+                                                <button
+                                                    type="button"
+                                                    className="hidden h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900 lg:inline-flex"
+                                                    onClick={() => setDesktopFiltersCollapsed(false)}
+                                                >
+                                                    {isArabic ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                                                    <span>{isArabic ? 'إظهار الفلاتر' : 'Show filters'}</span>
+                                                </button>
+                                            ) : null}
+
+                                            {primarySheetTabs.length ? primarySheetTabs.map((sheet) => {
+                                                const active = selectedSheet === sheet.value;
+                                                return (
+                                                    <button
+                                                        key={sheet.value}
+                                                        type="button"
+                                                        onClick={() => switchSheet(sheet.value)}
+                                                        className={`flex shrink-0 items-center gap-2 border-b-2 px-1 pb-3 pt-1 text-sm font-semibold transition ${
+                                                            active
+                                                                ? 'border-blue-600 text-blue-700'
+                                                                : 'border-transparent text-slate-500 hover:text-slate-900'
+                                                        }`}
+                                                    >
+                                                        <span>{sheet.value}</span>
+                                                        <span className={`rounded-full px-2 py-0.5 text-[11px] ${active ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                            {sheet.count}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            }) : (
+                                                <div className="text-sm text-slate-500">{copy.noSheets}</div>
+                                            )}
+
+                                            {secondarySheetTabs.map((sheet) => {
+                                                const active = selectedSheet === sheet.value;
+                                                const sheetLabel = sheet.value === 'LEGACY' ? copy.legacySheet : sheet.value;
+                                                return (
+                                                    <button
+                                                        key={sheet.value}
+                                                        type="button"
+                                                        onClick={() => switchSheet(sheet.value)}
+                                                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                                                            active
+                                                                ? 'border-blue-200 bg-blue-50 text-blue-700'
+                                                                : 'border-slate-200 bg-white text-slate-500 hover:text-slate-900'
+                                                        }`}
+                                                    >
+                                                        {sheetLabel}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                                            <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
+                                                {selectedRecipientIds.length} {copy.selectedRowsSummary}
+                                            </div>
+                                            <button type="button" className="btn-outline !rounded-xl !py-2.5" onClick={() => void exportRecipientsToExcel()}>
+                                                <FileSpreadsheet size={16} />
+                                                <span>{copy.exportExcel}</span>
+                                            </button>
+                                            <button type="button" className="btn-primary !rounded-xl !py-2.5" onClick={openCreateRecipientForm}>
+                                                <Plus size={16} />
+                                                <span>{copy.addRecipient}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <div className="min-w-[1160px]">
+                                        <table className="w-full table-fixed divide-y divide-slate-200 text-left text-sm">
+                                            <thead className="bg-slate-50 text-slate-600">
+                                                <tr>
+                                                    <th className="sticky top-0 z-10 w-[44px] bg-slate-50 px-2.5 py-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={allVisibleSelected}
+                                                            onChange={() => toggleAllVisible()}
+                                                            onClick={stopRowToggle}
+                                                        />
+                                                    </th>
+                                                    <th className="sticky top-0 z-10 w-[180px] bg-slate-50 px-2.5 py-3">{copy.name}</th>
+                                                    <th className="sticky top-0 z-10 w-[180px] bg-slate-50 px-2.5 py-3">{copy.contact}</th>
+                                                    <th className="sticky top-0 z-10 w-[60px] bg-slate-50 px-2.5 py-3 text-center">{copy.roomEst1}</th>
+                                                    <th className="sticky top-0 z-10 w-[100px] bg-slate-50 px-2.5 py-3">{copy.role}</th>
+                                                    <th className="sticky top-0 z-10 w-[100px] bg-slate-50 px-2.5 py-3">{copy.governorate}</th>
+                                                    <th className="sticky top-0 z-10 w-[90px] bg-slate-50 px-2.5 py-3">{copy.status}</th>
+                                                    <th className="sticky top-0 z-10 w-[100px] bg-slate-50 px-2.5 py-3">{copy.confirmTitle}</th>
+                                                    <th className="sticky top-0 z-10 w-[60px] bg-slate-50 px-2.5 py-3 text-center">{copy.attempts}</th>
+                                                    <th className="sticky top-0 z-10 w-[110px] bg-slate-50 px-2.5 py-3">{copy.lastAttempt}</th>
+                                                    <th className="sticky top-0 z-10 w-[90px] bg-slate-50 px-2.5 py-3 text-center">{copy.actions}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 bg-white">
+                                                {recipientsQuery.isLoading ? (
+                                                    Array.from({ length: 8 }).map((_, index) => (
+                                                        <tr key={`recipient-skeleton-${index}`}>
+                                                            <td colSpan={11} className="px-3 py-3">
+                                                                <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : recipients.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={11} className="px-4 py-12 text-center text-slate-500">{copy.emptyRecipients}</td>
+                                                    </tr>
+                                                ) : recipients.map((recipient) => {
+                                                    const responseState = getRecipientResponseState(recipient);
+                                                    const parsedDelivery = parseRecipientDeliveryDetails(recipient.error_message);
+                                                    const deliveryChannels = parsedDelivery?.channels || [];
+                                                    const channelDeliveryRows = ([
+                                                        deliveryChannels.find((item) => item.channel === 'EMAIL') || null,
+                                                        deliveryChannels.find((item) => item.channel === 'WHATSAPP') || null,
+                                                    ].filter(Boolean) as ParsedRecipientDelivery['channels']);
+                                                    const failedChannelDetails = deliveryChannels
+                                                        .filter((item) => item.status === 'FAILED')
+                                                        .map((item) => `${getDeliveryChannelLabel(isArabic, item.channel)}: ${item.detail || (isArabic ? 'خطأ غير معروف' : 'Unknown error')}`);
+                                                    const statusTitle = failedChannelDetails.join(' | ')
+                                                        || channelDeliveryRows.map((item) => `${getDeliveryChannelLabel(isArabic, item.channel)}: ${getDeliveryStateLabel(isArabic, item.status)}`).join(' | ')
+                                                        || recipient.error_message
+                                                        || undefined;
+                                                    const lastAttemptDate = recipient.last_attempt_at ? new Date(recipient.last_attempt_at) : null;
+                                                    const responseLabel = responseState === 'confirmed'
+                                                        ? copy.confirmedLabels.confirmed
+                                                        : responseState === 'declined'
+                                                            ? copy.confirmedLabels.declined
+                                                            : copy.confirmedLabels.pending;
+
+                                                    return (
+                                                        <tr
+                                                            key={recipient.id}
+                                                            className="cursor-pointer transition hover:bg-blue-50/60"
+                                                            onClick={() => toggleRecipient(recipient.id)}
+                                                        >
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selectedRecipientIds.includes(recipient.id)}
+                                                                    onChange={() => toggleRecipient(recipient.id)}
+                                                                    onClick={stopRowToggle}
+                                                                />
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <div className="space-y-1">
+                                                                    <div className="truncate text-sm font-semibold text-slate-900">{recipient.name || EMPTY_VALUE_LABEL}</div>
+                                                                    <div className="truncate text-xs text-slate-500">{recipient.arabic_name || EMPTY_VALUE_LABEL}</div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <div className="space-y-1.5 text-xs text-slate-600">
+                                                                    <div className="flex items-start gap-2">
+                                                                        <Mail size={13} className="mt-0.5 shrink-0 text-slate-400" />
+                                                                        <span dir="ltr" className="break-all">{recipient.email || EMPTY_VALUE_LABEL}</span>
+                                                                    </div>
+                                                                    <div className="flex items-start gap-2">
+                                                                        <Phone size={13} className="mt-0.5 shrink-0 text-slate-400" />
+                                                                        <span dir="ltr">{recipient.phone || EMPTY_VALUE_LABEL}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top text-center text-sm font-medium text-slate-700">
+                                                                {recipient.room_est1 || recipient.room || EMPTY_VALUE_LABEL}
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <div className="space-y-1">
+                                                                    <div className="truncate text-sm font-medium text-slate-900">{recipient.role || EMPTY_VALUE_LABEL}</div>
+                                                                    <div className="truncate text-xs text-slate-500">{recipient.type || EMPTY_VALUE_LABEL}</div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top text-sm text-slate-700">
+                                                                <div className="truncate">{recipient.governorate || EMPTY_VALUE_LABEL}</div>
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <span
+                                                                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${STATUS_STYLES[recipient.status]}`}
+                                                                    title={statusTitle}
+                                                                >
+                                                                    <span className="h-2 w-2 rounded-full bg-current opacity-80" />
+                                                                    {copy.statusLabels[recipient.status]}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <div className="space-y-2" onClick={stopRowToggle}>
+                                                                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${CONFIRMATION_STYLES[responseState]}`}>
+                                                                        <span className="h-2 w-2 rounded-full bg-current opacity-80" />
+                                                                        {responseLabel}
+                                                                    </span>
+                                                                    {canManageResponses ? (
+                                                                        <FormSelect
+                                                                            value={responseState === 'confirmed' ? 'CONFIRMED' : responseState === 'declined' ? 'DECLINED' : 'PENDING'}
+                                                                            onChange={(nextValue) => updateRecipientResponseMutation.mutate({
+                                                                                recipientId: recipient.id,
+                                                                                status: nextValue as RecipientResponseValue,
+                                                                            })}
+                                                                            options={responseStatusOptions}
+                                                                            ariaLabel={`${copy.confirmTitle} ${recipient.name}`}
+                                                                            triggerClassName={compactSelectTriggerClass}
+                                                                        />
+                                                                    ) : null}
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top text-center text-sm text-slate-700">{recipient.attempts_count ?? 0}</td>
+                                                            <td className="px-2.5 py-2 align-top text-xs text-slate-600">
+                                                                {lastAttemptDate ? (
+                                                                    <div className="space-y-1">
+                                                                        <div className="font-medium text-slate-900">{lastAttemptDate.toLocaleDateString()}</div>
+                                                                        <div>{lastAttemptDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                                    </div>
+                                                                ) : (
+                                                                    EMPTY_VALUE_LABEL
+                                                                )}
+                                                            </td>
+                                                            <td className="px-2.5 py-2 align-top">
+                                                                <div className="flex items-center justify-center gap-2" onClick={stopRowToggle}>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                                                                        onClick={() => openEditRecipientForm(recipient)}
+                                                                        aria-label={copy.edit}
+                                                                        title={copy.edit}
+                                                                    >
+                                                                        <SquarePen size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 transition hover:bg-rose-50"
+                                                                        onClick={() => deleteRecipient(recipient.id)}
+                                                                        disabled={deleteRecipientMutation.isPending}
+                                                                        aria-label={copy.delete}
+                                                                        title={copy.delete}
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="text-sm text-slate-500">
+                                        {copy.showing} {visibleRangeStart}-{visibleRangeEnd} {copy.of} {totalRecipients}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                                        <div className="w-[132px]">
+                                            <FormSelect
+                                                value={String(pageSize)}
+                                                onChange={(nextValue) => {
+                                                    setPage(1);
+                                                    setPageSize(parseInt(nextValue, 10));
+                                                }}
+                                                options={pageSizeOptions}
+                                                ariaLabel={copy.recordsPerPage}
+                                                triggerClassName={compactSelectTriggerClass}
+                                            />
+                                        </div>
+                                        <button type="button" className="btn-outline !rounded-xl !py-2.5" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={page <= 1}>
+                                            {copy.previous}
+                                        </button>
+                                        <button type="button" className="btn-outline !rounded-xl !py-2.5" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={page >= totalPages}>
+                                            {copy.next}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
                         <div className="flex items-start gap-3">
                             <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700">
                                 <SendHorizontal size={22} />

@@ -14,7 +14,8 @@ export default function AppShell({ locale, children }: { locale: string; childre
     const searchParams = useSearchParams();
     const { logout } = useAuthContext();
     const { user } = useAuthStore();
-    const [collapsed, setCollapsed] = useState(false);
+    const [collapsed, setCollapsed] = useState(true);
+    const [hoverExpanded, setHoverExpanded] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
     const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
     const activeTab = searchParams.get('tab') || 'recipients';
@@ -23,6 +24,7 @@ export default function AppShell({ locale, children }: { locale: string; childre
     const isTemplatesRoute = pathname?.includes('/messaging/templates');
     const isWorkspaceRoute = isMessagingRoute && !isUploadRoute && !isTemplatesRoute;
     const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+    const isSidebarCollapsed = !mobileOpen && collapsed && !hoverExpanded;
 
     const navItems = [
         {
@@ -88,15 +90,23 @@ export default function AppShell({ locale, children }: { locale: string; childre
                 />
             )}
 
-            <aside className={`app-sidebar ${collapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}>
+            <aside
+                className={`app-sidebar ${isSidebarCollapsed ? 'is-collapsed' : ''} ${mobileOpen ? 'is-mobile-open' : ''}`}
+                onMouseEnter={() => {
+                    if (collapsed && !mobileOpen) {
+                        setHoverExpanded(true);
+                    }
+                }}
+                onMouseLeave={() => setHoverExpanded(false)}
+            >
                 <TopNav
                     locale={locale}
-                    collapsed={collapsed}
+                    collapsed={isSidebarCollapsed}
                     onToggle={() => setCollapsed((value) => !value)}
-                    showToggle
+                    showToggle={!isSidebarCollapsed || mobileOpen}
                 />
 
-                <div className={`nav-scroll ${collapsed ? 'is-collapsed' : ''}`}>
+                <div className={`nav-scroll ${isSidebarCollapsed ? 'is-collapsed' : ''}`}>
                     <div className="nav-section-label">{locale === 'ar' ? 'لوحة الرسائل' : 'Messaging'}</div>
                     {navItems.map((item) => {
                         const Icon = item.icon;
@@ -105,7 +115,7 @@ export default function AppShell({ locale, children }: { locale: string; childre
                                 key={item.id}
                                 href={item.href}
                                 onClick={closeMobile}
-                                className={`nav-item ${collapsed ? 'is-collapsed' : ''} ${item.active ? 'active' : ''}`}
+                                className={`nav-item ${isSidebarCollapsed ? 'is-collapsed' : ''} ${item.active ? 'active' : ''}`}
                                 title={item.label}
                             >
                                 <Icon className="nav-ic" />
@@ -116,9 +126,14 @@ export default function AppShell({ locale, children }: { locale: string; childre
                 </div>
 
                 <div className="sidebar-footer">
-                    <button type="button" className="btn-outline w-full" onClick={() => setIsLogoutDialogOpen(true)}>
+                    <button
+                        type="button"
+                        className={`btn-outline w-full ${isSidebarCollapsed ? '!px-0 justify-center' : ''}`}
+                        onClick={() => setIsLogoutDialogOpen(true)}
+                        title={locale === 'ar' ? 'تسجيل الخروج' : 'Log out'}
+                    >
                         <LogOut size={16} />
-                        <span>{locale === 'ar' ? 'تسجيل الخروج' : 'Log out'}</span>
+                        {!isSidebarCollapsed ? <span>{locale === 'ar' ? 'تسجيل الخروج' : 'Log out'}</span> : null}
                     </button>
                 </div>
             </aside>
