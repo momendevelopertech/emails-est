@@ -69,21 +69,15 @@ export default async function LocaleLayout({
     }
 
     const locale = params.locale;
-    const messages = await getMessages();
-    const dir = locale === 'ar' ? 'rtl' : 'ltr';
     return (
-        <html lang={locale} dir={dir}>
-            <body className="bg-atmosphere text-ink font-base">
-                <NextIntlClientProvider messages={messages}>
-                    <ReactQueryProvider>
-                        <AuthProvider locale={locale}>
-                            <SessionTimeoutManager />
-                            {children}
-                            <Toaster position={locale === 'ar' ? 'top-left' : 'top-right'} />
-                        </AuthProvider>
-                    </ReactQueryProvider>
-                </NextIntlClientProvider>
-            </body>
-        </html>
+        <NextIntlClientProvider messages={await getMessages()}>
+            <ReactQueryProvider>
+                <AuthProvider locale={locale}>
+                    <SessionTimeoutManager />
+                    {children}
+                    <Toaster position={locale === 'ar' ? 'top-left' : 'top-right'} />
+                </AuthProvider>
+            </ReactQueryProvider>
+        </NextIntlClientProvider>
     );
 }
