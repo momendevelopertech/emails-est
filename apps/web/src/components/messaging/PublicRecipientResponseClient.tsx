@@ -210,6 +210,50 @@ export default function PublicRecipientResponseClient({ initialToken, initialAct
                     </div>
                 </div>
 
+                {!isFinalState ? (
+                    <div className="border-b border-slate-200 bg-[#f8fafc] px-6 py-6 md:px-8">
+                        <div className="rounded-[1.8rem] border border-emerald-200 bg-white px-5 py-5 shadow-sm shadow-emerald-100/40">
+                            <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="min-w-0 max-w-2xl">
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                                        <Clock3 size={13} />
+                                        <span>Action Required</span>
+                                    </div>
+                                    <h2 className="mt-4 text-2xl font-semibold leading-tight text-slate-950 sm:text-3xl">
+                                        Please confirm your attendance or send an apology.
+                                    </h2>
+                                    <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
+                                        This is the most important step. Open the response options below and choose the correct action for your assignment.
+                                    </p>
+                                </div>
+                                <div className="flex-shrink-0 rounded-[1.4rem] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                                    <div className="font-semibold text-slate-900">Open response page</div>
+                                    <div className="mt-1 leading-6">Use the buttons below to respond immediately.</div>
+                                </div>
+                            </div>
+
+                            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                                <button
+                                    type="button"
+                                    className="inline-flex min-h-12 flex-1 items-center justify-center rounded-[1.2rem] bg-emerald-600 px-6 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                                    onClick={() => void submitAction('confirm')}
+                                    disabled={viewState === 'loading' || viewState === 'submitting'}
+                                >
+                                    Confirm Attendance
+                                </button>
+                                <button
+                                    type="button"
+                                    className="inline-flex min-h-12 flex-1 items-center justify-center rounded-[1.2rem] border border-rose-200 bg-rose-50 px-6 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                    onClick={() => void submitAction('decline')}
+                                    disabled={viewState === 'loading' || viewState === 'submitting'}
+                                >
+                                    Send Apology
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
+
                 <div className="grid gap-6 p-6 md:p-8 xl:grid-cols-[minmax(0,1.2fr)_320px]">
                     <div className="space-y-6">
                         <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 p-5">
@@ -263,30 +307,6 @@ export default function PublicRecipientResponseClient({ initialToken, initialAct
                             <div className="text-sm font-semibold text-slate-900">Current message</div>
                             <p className="mt-2 break-words text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">{message}</p>
                         </div>
-
-                        {!isFinalState ? (
-                            <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 p-5">
-                                <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Choose your action</div>
-                                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                                    <button
-                                        type="button"
-                                        className="inline-flex min-h-12 flex-1 items-center justify-center rounded-[1.2rem] bg-emerald-600 px-6 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-                                        onClick={() => void submitAction('confirm')}
-                                        disabled={viewState === 'loading' || viewState === 'submitting'}
-                                    >
-                                        Confirm Attendance
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="inline-flex min-h-12 flex-1 items-center justify-center rounded-[1.2rem] border border-rose-200 bg-rose-50 px-6 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                                        onClick={() => void submitAction('decline')}
-                                        disabled={viewState === 'loading' || viewState === 'submitting'}
-                                    >
-                                        Send Apology
-                                    </button>
-                                </div>
-                            </div>
-                        ) : null}
                     </div>
 
                     <aside className="space-y-4">

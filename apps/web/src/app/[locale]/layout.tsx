@@ -1,4 +1,3 @@
-import '../globals.css';
 import { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { NextIntlClientProvider } from 'next-intl';

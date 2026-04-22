@@ -1,3 +1,4 @@
+import './globals.css';
 import { ReactNode } from 'react';
 import { cookies } from 'next/headers';
 import ClientCacheManager from '@/components/ClientCacheManager';
