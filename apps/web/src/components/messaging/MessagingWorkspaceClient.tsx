@@ -14,6 +14,8 @@ import {
     Filter,
     LayoutPanelTop,
     Mail,
+    MessageCircleMore,
+    Eye,
     Phone,
     Plus,
     Search,
@@ -52,6 +54,7 @@ type TemplateEditorField = 'subject' | 'body';
 type RecipientResponseValue = 'PENDING' | 'CONFIRMED' | 'DECLINED';
 type DeliveryChannelName = 'EMAIL' | 'WHATSAPP';
 type DeliveryChannelState = 'SENT' | 'FAILED' | 'SKIPPED';
+type CampaignPreviewModal = 'email' | 'whatsapp' | null;
 
 type Recipient = {
     id: string;
@@ -866,6 +869,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [isAdvancedTemplateEditorOpen, setIsAdvancedTemplateEditorOpen] = useState(false);
     const [campaignTemplateId, setCampaignTemplateId] = useState('');
     const [campaignViewTab, setCampaignViewTab] = useState<CampaignViewTab>('send');
+    const [campaignPreviewModal, setCampaignPreviewModal] = useState<CampaignPreviewModal>(null);
     const [sendScope, setSendScope] = useState<SendScope>('selected');
     const [logsExpanded, setLogsExpanded] = useState(false);
     const [emailSettingsForm, setEmailSettingsForm] = useState({
@@ -4123,66 +4127,48 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             </span>
                                         </div>
                                         <div className="mt-3 text-base font-semibold text-slate-900">{currentTemplateSubjectPreview}</div>
-                                        {isHtmlTemplateBody(currentTemplate.body) && currentTemplate.type !== 'WHATSAPP' ? (
-                                            <div className="mt-4 template-preview-shell rounded-[1.6rem] p-3">
-                                                <div className="template-preview-email-shell overflow-hidden rounded-[1.35rem]">
-                                                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 text-xs text-slate-500">
-                                                        <span>{isArabic ? 'معاينة الإيميل' : 'Email preview'}</span>
-                                                        <span>{TEMPLATE_PREVIEW_RECIPIENT.email}</span>
-                                                    </div>
-                                                    <iframe
-                                                        title="Campaign template email preview"
-                                                        className="h-[480px] w-full bg-white"
-                                                        sandbox=""
-                                                        srcDoc={currentTemplatePreviewDocument}
-                                                    />
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">
-                                                {renderTemplateTokens(currentTemplate.body, TEMPLATE_PREVIEW_RECIPIENT)}
-                                            </p>
-                                        )}
-                                        {currentTemplate.type !== 'EMAIL' ? (
-                                            <div className="mt-4 template-preview-shell rounded-[1.6rem] p-3">
-                                                <div className="rounded-[1.35rem] border border-emerald-200/60 bg-white/70 p-4">
-                                                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                                                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
-                                                            {isArabic ? 'Ù…Ø¹Ø§ÙŠÙ†Ø© ÙˆØ§ØªØ³Ø§Ø¨' : 'WhatsApp delivery preview'}
+                                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                            {currentTemplate.type !== 'WHATSAPP' ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCampaignPreviewModal('email')}
+                                                    className="group rounded-2xl border border-slate-200 bg-slate-50 p-4 text-start transition hover:border-blue-300 hover:bg-blue-50"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-700 transition group-hover:bg-blue-200">
+                                                            <Mail size={18} />
+                                                        </span>
+                                                        <div>
+                                                            <div className="text-sm font-semibold text-slate-900">{isArabic ? 'معاينة الإيميل' : 'Email preview'}</div>
+                                                            <div className="text-xs text-slate-500">{TEMPLATE_PREVIEW_RECIPIENT.email}</div>
                                                         </div>
-                                                        <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-800">
-                                                            <Phone size={12} />
-                                                            {TEMPLATE_PREVIEW_RECIPIENT.phone}
-                                                        </div>
+                                                        <span className="ms-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-500">
+                                                            <Eye size={14} />
+                                                        </span>
                                                     </div>
-                                                    <div className="template-preview-phone overflow-hidden rounded-[1.6rem] p-3">
-                                                        <div className="template-preview-phone-screen rounded-[1.2rem] px-3 py-4">
-                                                            <div className="template-preview-phone-detail mx-auto mb-4 h-1.5 w-16 rounded-full" />
-                                                            <div className="template-preview-phone-bubble rounded-[1.35rem] px-4 py-4 shadow-sm">
-                                                                <div className="whitespace-pre-wrap text-sm leading-6">
-                                                                    {currentTemplateWhatsAppModel.message || currentTemplateWhatsAppPreview}
-                                                                </div>
-                                                                {currentTemplateWhatsAppModel.links.length ? (
-                                                                    <div className="mt-4 flex flex-wrap gap-2">
-                                                                        {currentTemplateWhatsAppModel.links.map((link) => (
-                                                                            <a
-                                                                                key={`${link.label}-${link.href}`}
-                                                                                href={link.href}
-                                                                                target="_blank"
-                                                                                rel="noreferrer"
-                                                                                className="template-preview-phone-link inline-flex rounded-full px-3 py-2 text-xs font-semibold transition hover:opacity-90"
-                                                                            >
-                                                                                {link.label}
-                                                                            </a>
-                                                                        ))}
-                                                                    </div>
-                                                                ) : null}
-                                                            </div>
+                                                </button>
+                                            ) : null}
+                                            {currentTemplate.type !== 'EMAIL' ? (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCampaignPreviewModal('whatsapp')}
+                                                    className="group rounded-2xl border border-emerald-200/60 bg-emerald-50/50 p-4 text-start transition hover:border-emerald-300 hover:bg-emerald-50"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 transition group-hover:bg-emerald-200">
+                                                            <MessageCircleMore size={18} />
+                                                        </span>
+                                                        <div>
+                                                            <div className="text-sm font-semibold text-slate-900">{isArabic ? 'معاينة واتساب' : 'WhatsApp preview'}</div>
+                                                            <div className="text-xs text-slate-500">{TEMPLATE_PREVIEW_RECIPIENT.phone}</div>
                                                         </div>
+                                                        <span className="ms-auto inline-flex h-8 w-8 items-center justify-center rounded-full bg-white text-slate-500">
+                                                            <Eye size={14} />
+                                                        </span>
                                                     </div>
-                                                </div>
-                                            </div>
-                                        ) : null}
+                                                </button>
+                                            ) : null}
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
@@ -4196,6 +4182,79 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 </div>
                             )}
                         </div>
+
+                        {currentTemplate && campaignPreviewModal ? (
+                            <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
+                                <button type="button" className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" aria-label="Close preview modal" onClick={() => setCampaignPreviewModal(null)} />
+                                <div className="relative z-10 max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[1.8rem] border border-slate-200 bg-white shadow-2xl">
+                                    <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                                        <div>
+                                            <div className="text-sm font-semibold text-slate-900">
+                                                {campaignPreviewModal === 'email'
+                                                    ? isArabic
+                                                        ? 'معاينة الإيميل'
+                                                        : 'Email preview'
+                                                    : isArabic
+                                                      ? 'معاينة واتساب'
+                                                      : 'WhatsApp delivery preview'}
+                                            </div>
+                                            <div className="mt-1 text-xs text-slate-500">
+                                                {campaignPreviewModal === 'email' ? TEMPLATE_PREVIEW_RECIPIENT.email : TEMPLATE_PREVIEW_RECIPIENT.phone}
+                                            </div>
+                                        </div>
+                                        <button type="button" className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:bg-slate-100" onClick={() => setCampaignPreviewModal(null)}>
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+                                    <div className="max-h-[calc(90vh-84px)] overflow-y-auto p-4 md:p-5">
+                                        {campaignPreviewModal === 'email' ? (
+                                            isHtmlTemplateBody(currentTemplate.body) ? (
+                                                <div className="template-preview-email-shell overflow-hidden rounded-[1.35rem] border border-slate-200">
+                                                    <iframe
+                                                        title="Campaign template email preview"
+                                                        className="h-[62vh] min-h-[420px] w-full bg-white"
+                                                        sandbox=""
+                                                        srcDoc={currentTemplatePreviewDocument}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="rounded-[1.2rem] border border-slate-200 bg-slate-50 p-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                                                    {renderTemplateTokens(currentTemplate.body, TEMPLATE_PREVIEW_RECIPIENT)}
+                                                </div>
+                                            )
+                                        ) : (
+                                            <div className="template-preview-shell rounded-[1.6rem] p-3">
+                                                <div className="template-preview-phone overflow-hidden rounded-[1.6rem] p-3">
+                                                    <div className="template-preview-phone-screen rounded-[1.2rem] px-3 py-4">
+                                                        <div className="template-preview-phone-detail mx-auto mb-4 h-1.5 w-16 rounded-full" />
+                                                        <div className="template-preview-phone-bubble rounded-[1.35rem] px-4 py-4 shadow-sm">
+                                                            <div className="whitespace-pre-wrap text-sm leading-6">
+                                                                {currentTemplateWhatsAppModel.message || currentTemplateWhatsAppPreview}
+                                                            </div>
+                                                            {currentTemplateWhatsAppModel.links.length ? (
+                                                                <div className="mt-4 flex flex-wrap gap-2">
+                                                                    {currentTemplateWhatsAppModel.links.map((link) => (
+                                                                        <a
+                                                                            key={`${link.label}-${link.href}`}
+                                                                            href={link.href}
+                                                                            target="_blank"
+                                                                            rel="noreferrer"
+                                                                            className="template-preview-phone-link inline-flex rounded-full px-3 py-2 text-xs font-semibold transition hover:opacity-90"
+                                                                        >
+                                                                            {link.label}
+                                                                        </a>
+                                                                    ))}
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
 
                         <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
                             <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.sendScopeTitle}</div>
