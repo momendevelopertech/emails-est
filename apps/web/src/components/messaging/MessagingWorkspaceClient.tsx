@@ -48,6 +48,7 @@ import FormSelect from '../FormSelect';
 
 type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
 type CampaignViewTab = 'send' | 'briefs' | 'logs';
+type SettingsViewTab = 'email' | 'whatsapp';
 type TemplateType = 'BOTH' | 'EMAIL' | 'WHATSAPP';
 type SendScope = 'selected' | 'filtered' | 'all_pending' | 'failed';
 type TemplateEditorField = 'subject' | 'body';
@@ -844,6 +845,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                 description: isArabic ? 'أعد المحاولة لكل من فشل سابقًا.' : 'Retry all recipients that failed before.',
             },
         },
+        settingsTabs: {
+            email: isArabic ? 'إعدادات الإيميل' : 'Email settings',
+            whatsapp: isArabic ? 'إعدادات واتساب' : 'WhatsApp settings',
+        },
         readyCredentials: isArabic ? 'مسجل دخولك كأدمن، وتقدر تدير الرفع والقوالب والإرسال من هنا.' : 'You are signed in as admin and can manage upload, templates and delivery here.',
     }), [isArabic]);
 
@@ -869,6 +874,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [isAdvancedTemplateEditorOpen, setIsAdvancedTemplateEditorOpen] = useState(false);
     const [campaignTemplateId, setCampaignTemplateId] = useState('');
     const [campaignViewTab, setCampaignViewTab] = useState<CampaignViewTab>('send');
+    const [settingsViewTab, setSettingsViewTab] = useState<SettingsViewTab>('email');
     const [campaignPreviewModal, setCampaignPreviewModal] = useState<CampaignPreviewModal>(null);
     const [sendScope, setSendScope] = useState<SendScope>('selected');
     const [logsExpanded, setLogsExpanded] = useState(false);
@@ -2747,13 +2753,29 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                                 <div className="truncate">{recipient.governorate || EMPTY_VALUE_LABEL}</div>
                                                             </td>
                                                             <td className="px-2.5 py-2 align-top">
-                                                                <span
-                                                                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${STATUS_STYLES[recipient.status]}`}
-                                                                    title={statusTitle}
-                                                                >
-                                                                    <span className="h-2 w-2 rounded-full bg-current opacity-80" />
-                                                                    {copy.statusLabels[recipient.status]}
-                                                                </span>
+                                                                <div className="space-y-1.5">
+                                                                    <span
+                                                                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${STATUS_STYLES[recipient.status]}`}
+                                                                        title={statusTitle}
+                                                                    >
+                                                                        <span className="h-2 w-2 rounded-full bg-current opacity-80" />
+                                                                        {copy.statusLabels[recipient.status]}
+                                                                    </span>
+                                                                    {channelDeliveryRows.length ? (
+                                                                        <div className="space-y-1">
+                                                                            {channelDeliveryRows.map((item) => (
+                                                                                <div
+                                                                                    key={`${recipient.id}-${item.channel}`}
+                                                                                    className={`inline-flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-[10px] font-semibold ${DELIVERY_STATUS_STYLES[item.status]}`}
+                                                                                    title={item.detail}
+                                                                                >
+                                                                                    <span>{getDeliveryChannelLabel(isArabic, item.channel)}</span>
+                                                                                    <span>{getDeliveryStateLabel(isArabic, item.status)}</span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : null}
+                                                                </div>
                                                             </td>
                                                             <td className="px-2.5 py-2 align-top">
                                                                 <div className="space-y-2" onClick={stopRowToggle}>
@@ -3972,13 +3994,29 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                                 <div className="truncate">{recipient.governorate || EMPTY_VALUE_LABEL}</div>
                                                             </td>
                                                             <td className="px-2.5 py-2 align-top">
-                                                                <span
-                                                                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${STATUS_STYLES[recipient.status]}`}
-                                                                    title={statusTitle}
-                                                                >
-                                                                    <span className="h-2 w-2 rounded-full bg-current opacity-80" />
-                                                                    {copy.statusLabels[recipient.status]}
-                                                                </span>
+                                                                <div className="space-y-1.5">
+                                                                    <span
+                                                                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${STATUS_STYLES[recipient.status]}`}
+                                                                        title={statusTitle}
+                                                                    >
+                                                                        <span className="h-2 w-2 rounded-full bg-current opacity-80" />
+                                                                        {copy.statusLabels[recipient.status]}
+                                                                    </span>
+                                                                    {channelDeliveryRows.length ? (
+                                                                        <div className="space-y-1">
+                                                                            {channelDeliveryRows.map((item) => (
+                                                                                <div
+                                                                                    key={`${recipient.id}-${item.channel}`}
+                                                                                    className={`inline-flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1 text-[10px] font-semibold ${DELIVERY_STATUS_STYLES[item.status]}`}
+                                                                                    title={item.detail}
+                                                                                >
+                                                                                    <span>{getDeliveryChannelLabel(isArabic, item.channel)}</span>
+                                                                                    <span>{getDeliveryStateLabel(isArabic, item.status)}</span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : null}
+                                                                </div>
                                                             </td>
                                                             <td className="px-2.5 py-2 align-top">
                                                                 <div className="space-y-2" onClick={stopRowToggle}>
@@ -4702,7 +4740,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             )}
             {activeTab === 'settings' && (
                 canManageSettings ? (
-                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+                    <div className="grid gap-6">
                         <div className={cardClass}>
                             <div className="flex items-start gap-3">
                                 <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
@@ -4714,6 +4752,24 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 </div>
                             </div>
 
+                            <div className="mt-6 flex flex-wrap gap-2">
+                                {([
+                                    { key: 'email', label: copy.settingsTabs.email },
+                                    { key: 'whatsapp', label: copy.settingsTabs.whatsapp },
+                                ] as Array<{ key: SettingsViewTab; label: string }>).map((tabOption) => (
+                                    <button
+                                        key={tabOption.key}
+                                        type="button"
+                                        className={settingsViewTab === tabOption.key ? 'btn-primary' : 'btn-outline'}
+                                        onClick={() => setSettingsViewTab(tabOption.key)}
+                                    >
+                                        {tabOption.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {settingsViewTab === 'email' ? (
+                            <>
                             <div className="mt-6 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-5">
                                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{isArabic ? 'الحساب النشط للإرسال' : 'Active sender account'}</div>
                                 <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -4968,6 +5024,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     </div>
                                 </div>
                             </div>
+
+                            </>
+                            ) : null}
+
+                            {settingsViewTab === 'whatsapp' ? (
                             <div className="mt-6 rounded-[1.5rem] border border-emerald-200 bg-emerald-50/40 p-5">
                                 <div className="flex items-start gap-3">
                                     <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
@@ -5098,9 +5159,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     </div>
                                 ) : null}
                             </div>
+                            ) : null}
                         </div>
 
-                        <div className="space-y-6">
+                        <div className="hidden">
                             <div className={cardClass}>
                                 <div className="flex items-start gap-3">
                                     <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700">
