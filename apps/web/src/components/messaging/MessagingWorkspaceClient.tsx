@@ -2424,7 +2424,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
                             <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-slate-200">
                                 <div className="max-h-[34rem] overflow-auto">
-                                    <table className="min-w-full divide-y divide-slate-200 text-start text-sm">
+                                    <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
                                         <thead className="bg-slate-50 text-slate-600">
                                             <tr>
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">
@@ -3509,13 +3509,13 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
                                             {target.role === 'HEAD' ? (
                                                 <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
-                                                    <table className="min-w-full divide-y divide-slate-200 text-xs">
+                                                    <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
                                                         <thead className="bg-slate-50 text-slate-600">
                                                             <tr>
-                                                                <th className="px-2 py-2 text-start">Row</th>
-                                                                <th className="px-2 py-2 text-start">Floor</th>
-                                                                <th className="px-2 py-2 text-start">Senior</th>
-                                                                <th className="px-2 py-2 text-start">Invigilators</th>
+                                                                <th className="px-2 py-2 text-left">Row</th>
+                                                                <th className="px-2 py-2 text-left">Floor</th>
+                                                                <th className="px-2 py-2 text-left">Senior</th>
+                                                                <th className="px-2 py-2 text-left">Invigilators</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-slate-200 bg-white">
@@ -3536,13 +3536,13 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 </div>
                                             ) : (
                                                 <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
-                                                    <table className="min-w-full divide-y divide-slate-200 text-xs">
+                                                    <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
                                                         <thead className="bg-slate-50 text-slate-600">
                                                             <tr>
-                                                                <th className="px-2 py-2 text-start">Row</th>
-                                                                <th className="px-2 py-2 text-start">Room</th>
-                                                                <th className="px-2 py-2 text-start">Name</th>
-                                                                <th className="px-2 py-2 text-start">Role</th>
+                                                                <th className="px-2 py-2 text-left">Row</th>
+                                                                <th className="px-2 py-2 text-left">Room</th>
+                                                                <th className="px-2 py-2 text-left">Name</th>
+                                                                <th className="px-2 py-2 text-left">Role</th>
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-slate-200 bg-white">
@@ -3641,7 +3641,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                         {logsExpanded && (
                             <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-slate-200">
                                 <div className="overflow-x-auto">
-                                    <table className="min-w-full divide-y divide-slate-200 text-start text-sm">
+                                    <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
                                         <thead className="bg-slate-50 text-slate-600">
                                             <tr>
                                                 <th className="px-4 py-3">{copy.name}</th>
@@ -4189,3 +4189,4 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         </section>
     );
 }
+

@@ -193,30 +193,87 @@ export class WhatsAppService {
             || payload?.message
             || payload?.errorMessage
             || payload?.error
-            || fallback
-            || (status ? `WhatsApp send failed with status ${status}` : 'Unknown WhatsApp error');
+            || fallback;
 
         if (typeof candidate === 'string') {
-            return candidate;
+            const normalized = candidate.trim();
+            if (normalized) {
+                return this.appendStatusContext(normalized, status);
+            }
         }
 
         if (Array.isArray(candidate)) {
             const first = candidate[0] as any;
             if (first && typeof first === 'object' && first.exists === false) {
-                return `WhatsApp number is not registered (${first.number || 'unknown'}).`;
+                return this.appendStatusContext(`WhatsApp number is not registered (${first.number || 'unknown'}).`, status);
             }
-            return JSON.stringify(candidate);
+            return this.appendStatusContext(JSON.stringify(candidate), status);
         }
 
         if (typeof candidate === 'object' && candidate !== null) {
             const details = candidate as any;
             if (details.exists === false) {
-                return `WhatsApp number is not registered (${details.number || 'unknown'}).`;
+                return this.appendStatusContext(`WhatsApp number is not registered (${details.number || 'unknown'}).`, status);
             }
-            return JSON.stringify(candidate);
+            return this.appendStatusContext(JSON.stringify(candidate), status);
         }
 
-        return String(candidate);
+        if (typeof fallback === 'string' && fallback.trim()) {
+            return this.appendStatusContext(fallback.trim(), status);
+        }
+
+        if (status) {
+            return this.appendStatusContext(`WhatsApp send failed with status ${status}`, status);
+        }
+
+        return 'Unknown WhatsApp error';
+    }
+
+    private appendStatusContext(message: string, status?: number) {
+        const normalized = message.trim();
+        if (!normalized) {
+            return status
+                ? this.appendStatusContext(`WhatsApp send failed with status ${status}`, status)
+                : 'Unknown WhatsApp error';
+        }
+
+        if (!status) {
+            if (/timeout/i.test(normalized)) {
+                return `${normalized}. Check Green API reachability or increase GREEN_API_TIMEOUT_MS.`;
+            }
+            return normalized;
+        }
+
+        const lower = normalized.toLowerCase();
+        const hasStatusCode = lower.includes(`status ${status}`) || lower.includes(`http ${status}`) || lower.includes(`(${status})`);
+        const withStatus = hasStatusCode ? normalized : `${normalized} (status ${status})`;
+        const troubleshootingHint = this.getStatusTroubleshootingHint(status);
+        if (!troubleshootingHint || withStatus.toLowerCase().includes(troubleshootingHint.toLowerCase())) {
+            return withStatus;
+        }
+        return `${withStatus}. ${troubleshootingHint}`;
+    }
+
+    private getStatusTroubleshootingHint(status: number) {
+        if (status === 400) {
+            return 'Check the payload format and make sure chatId/message are valid.';
+        }
+        if (status === 401 || status === 403) {
+            return 'Verify Green API credentials (apiTokenInstance/idInstance) and make sure the instance is allowed to send.';
+        }
+        if (status === 404) {
+            return 'Verify apiUrl and idInstance; the Green API endpoint may be incorrect.';
+        }
+        if (status === 429) {
+            return 'Rate limit reached. Wait briefly, then retry with lower send concurrency.';
+        }
+        if (status === 466) {
+            return 'Green API rejected the request. Verify the sender instance is authorized in Green API (QR connected), API URL/idInstance/token are correct, and the recipient has an active WhatsApp account.';
+        }
+        if (status >= 500) {
+            return 'Green API is unavailable or unstable. Retry shortly and check Green API status/instance health.';
+        }
+        return 'Review the Green API response payload and instance state for more details.';
     }
 
     private waitBeforeRetry() {

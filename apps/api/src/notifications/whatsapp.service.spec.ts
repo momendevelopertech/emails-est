@@ -69,4 +69,19 @@ describe('WhatsAppService', () => {
         expect(result.error).toContain('valid Egyptian mobile number');
         expect(axios.post).not.toHaveBeenCalled();
     });
+
+    it('includes troubleshooting guidance when Green API returns status 466', async () => {
+        (axios.post as jest.Mock).mockResolvedValue({ status: 466, data: {} });
+
+        const service = new WhatsAppService(prisma as any);
+        (service as any).waitBeforeRetry = jest.fn().mockResolvedValue(undefined);
+
+        const result = await service.sendWhatsApp('01012345678', 'hello world');
+
+        expect(result.ok).toBe(false);
+        expect(result.status).toBe(466);
+        expect(result.attempts).toBe(3);
+        expect(result.error).toContain('status 466');
+        expect(result.error).toContain('sender instance is authorized');
+    });
 });
