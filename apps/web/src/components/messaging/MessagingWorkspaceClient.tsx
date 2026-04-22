@@ -2453,6 +2453,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     return (
         <section className="space-y-4 py-4 md:space-y-5 md:py-5">
+            {activeTab === 'recipients' || activeTab === 'campaign' ? (
             <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-4 shadow-sm shadow-slate-900/5 md:p-5">
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                     <div className="min-w-[220px]">
@@ -2528,6 +2529,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                     </div>
                 </div>
             </div>
+            ) : null}
 
             {activeTab === 'recipients' && (
                 <div className="space-y-4">
@@ -3625,7 +3627,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
                     
 
-                    <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
+                    <div className="space-y-4">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                             <h2 className="text-xl font-semibold text-slate-950">{copy.templatesTitle}</h2>
                             <label className="relative block w-full lg:max-w-sm">
@@ -3638,7 +3640,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 />
                             </label>
                         </div>
-                        <div className="mt-5 space-y-4">
+                        <div className="space-y-4">
                             {templatesQuery.isLoading ? (
                                 <div className="space-y-3">
                                     {Array.from({ length: 3 }).map((_, index) => (
