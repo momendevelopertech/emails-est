@@ -40,11 +40,11 @@ export const metadata = {
         type: 'website' as const,
         images: [
             {
-                url: '/brand/sphinx-logo.svg',
+                url: '/brand/est-og.jpg',
                 width: 1200,
                 height: 630,
                 alt: 'Emails EST',
-                type: 'image/svg+xml',
+                type: 'image/jpeg',
             },
         ],
     },
@@ -52,7 +52,7 @@ export const metadata = {
         card: 'summary_large_image' as const,
         title: 'Emails EST',
         description: 'Bulk email and messaging workspace',
-        images: ['/brand/sphinx-logo.svg'],
+        images: ['/brand/est-og.jpg'],
     },
 };
 

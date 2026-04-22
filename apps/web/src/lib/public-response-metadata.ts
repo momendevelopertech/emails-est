@@ -25,7 +25,7 @@ export const getPublicResponseMetadata = (params?: { token?: string; action?: st
         ? `/r/${encodeURIComponent(params.token)}${params?.action ? `/${encodeURIComponent(params.action)}` : ''}`
         : '/r';
     const pageUrl = new URL(routePath, siteUrl).toString();
-    const logoUrl = new URL('/brand/est-logo.jpg', siteUrl).toString();
+    const ogImageUrl = new URL('/brand/est-og.jpg', siteUrl).toString();
 
     return {
         metadataBase: baseUrl,
@@ -42,10 +42,11 @@ export const getPublicResponseMetadata = (params?: { token?: string; action?: st
             type: 'website',
             images: [
                 {
-                    url: logoUrl,
+                    url: ogImageUrl,
                     width: 1200,
                     height: 630,
                     alt: 'EST logo',
+                    type: 'image/jpeg',
                 },
             ],
         },
@@ -53,7 +54,7 @@ export const getPublicResponseMetadata = (params?: { token?: string; action?: st
             card: 'summary_large_image',
             title: 'EST Exam Response',
             description: 'Confirm your attendance or send an apology.',
-            images: [logoUrl],
+            images: [ogImageUrl],
         },
     };
 };
