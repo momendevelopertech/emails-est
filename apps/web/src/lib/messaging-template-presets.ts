@@ -74,13 +74,17 @@ const buildButtonsBlock = () => `
                                 </td>
                             </tr>
                             <tr>
-                                <td style="padding:0 0 12px;">
-                                    ${buildBulletproofButton('Confirm Attendance', '{{confirm_url}}', '#15803d')}
-                                </td>
-                            </tr>
-                            <tr>
                                 <td style="padding:0 0 14px;">
-                                    ${buildBulletproofButton('Send Apology', '{{decline_url}}', '#dc2626')}
+                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
+                                        <tr>
+                                            <td style="padding:0 6px 0 0;vertical-align:top;">
+                                                ${buildBulletproofButton('Confirm Attendance', '{{confirm_url}}', '#15803d')}
+                                            </td>
+                                            <td style="padding:0 0 0 6px;vertical-align:top;">
+                                                ${buildBulletproofButton('Send Apology', '{{decline_url}}', '#dc2626')}
+                                            </td>
+                                        </tr>
+                                    </table>
                                 </td>
                             </tr>
                             <tr>
