@@ -12,10 +12,15 @@ const intlMiddleware = createMiddleware({
 const publicPaths = new Set(['login', 'forgot-password', 'reset-password', 'unauthorized']);
 
 // Path prefixes (after locale) that are publicly accessible (no auth redirect).
-const publicPathPrefixes = ['requests/print', 'messaging/confirm'];
+const publicPathPrefixes = ['requests/print', 'messaging/confirm', 'r/'];
 
 export default function middleware(req: NextRequest) {
     const { pathname } = req.nextUrl;
+
+    if (pathname === '/r' || pathname.startsWith('/r/')) {
+        return NextResponse.next();
+    }
+
     const segments = pathname.split('/').filter(Boolean);
     const locale = segments[0];
     const route = segments[1] || '';
