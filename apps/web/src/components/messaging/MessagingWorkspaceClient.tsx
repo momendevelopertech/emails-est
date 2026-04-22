@@ -1736,10 +1736,67 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                     }),
                 })),
             );
+            const responseStatusStyles: Record<string, any> = {
+                Pending: {
+                    fill: { fgColor: { rgb: 'E2E8F0' } },
+                    font: { color: { rgb: '334155' }, bold: true },
+                    alignment: { horizontal: 'center', vertical: 'center' },
+                },
+                Confirmed: {
+                    fill: { fgColor: { rgb: 'DCFCE7' } },
+                    font: { color: { rgb: '166534' }, bold: true },
+                    alignment: { horizontal: 'center', vertical: 'center' },
+                },
+                Apologized: {
+                    fill: { fgColor: { rgb: 'FFE4E6' } },
+                    font: { color: { rgb: 'BE123C' }, bold: true },
+                    alignment: { horizontal: 'center', vertical: 'center' },
+                },
+            };
+
+            const headerStyle = {
+                fill: { fgColor: { rgb: '0F172A' } },
+                font: { color: { rgb: 'FFFFFF' }, bold: true },
+                alignment: { horizontal: 'center', vertical: 'center' },
+            };
+
+            const dataRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+            const headers = XLSX.utils.sheet_to_json<string[]>(worksheet, { header: 1, blankrows: false, defval: '' })[0] || [];
+            worksheet['!cols'] = headers.map((header) => {
+                const normalized = String(header || '').toLowerCase();
+                if (normalized === 'response status') return { wch: 18 };
+                if (normalized.includes('arabic')) return { wch: 24 };
+                if (normalized.includes('email')) return { wch: 28 };
+                if (normalized.includes('phone')) return { wch: 18 };
+                if (normalized.includes('address') || normalized.includes('location')) return { wch: 32 };
+                if (normalized.includes('name')) return { wch: 24 };
+                if (normalized.includes('photo') || normalized.includes('picture')) return { wch: 24 };
+                if (normalized.includes('role') || normalized.includes('type') || normalized.includes('governorate')) return { wch: 20 };
+                return { wch: 18 };
+            });
+            worksheet['!autofilter'] = { ref: XLSX.utils.encode_range(dataRange) };
+            worksheet['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+            worksheet['!rows'] = [{ hpt: 26 }];
+
+            for (let col = dataRange.s.c; col <= dataRange.e.c; col += 1) {
+                const headerCell = XLSX.utils.encode_cell({ r: 0, c: col });
+                if (worksheet[headerCell]) {
+                    worksheet[headerCell].s = headerStyle;
+                }
+            }
+
+            allItems.forEach((recipient, index) => {
+                const cellAddress = XLSX.utils.encode_cell({ r: index + 1, c: 0 });
+                const statusLabel = RESPONSE_STATUS_LABELS[getRecipientResponseState(recipient)];
+                if (worksheet[cellAddress]) {
+                    worksheet[cellAddress].s = responseStatusStyles[statusLabel] || responseStatusStyles.Pending;
+                }
+            });
+
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, 'Recipients');
             const fileName = selectedSheet ? `recipients_${selectedSheet.toLowerCase()}.xlsx` : 'recipients.xlsx';
-            XLSX.writeFile(workbook, fileName);
+            XLSX.writeFile(workbook, fileName, { cellStyles: true });
             toast.success(copy.exportSuccess);
         } catch (error: any) {
             toast.error(getImportErrorMessage(error, copy.exportError));
@@ -2748,7 +2805,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                             value={guidedTemplateForm.arrivalTime}
                                                             onChange={(event) => setGuidedTemplateForm((current) => current ? { ...current, arrivalTime: event.target.value } : current)}
                                                             className="input w-full bg-white"
-                                                            placeholder={isArabic ? 'مثال: 7:30 AM' : 'e.g. 7:30 AM'}
+                                                            placeholder={isArabic ? 'مثال: 8:00 AM' : 'e.g. 8:00 AM'}
                                                         />
                                                     </div>
                                                     <div>
@@ -4132,6 +4189,3 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         </section>
     );
 }
-
-
-

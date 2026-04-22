@@ -612,7 +612,10 @@ export class MessagingService {
 
         return {
             status: this.resolveRecipientResponseStatus(recipient),
-            recipient,
+            recipient: {
+                ...recipient,
+                assignment_role: this.resolveAssignmentRoleLabel(recipient.role),
+            },
         };
     }
 

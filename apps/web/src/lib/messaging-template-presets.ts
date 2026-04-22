@@ -86,7 +86,7 @@ const buildButtonsBlock = () => `
                             <tr>
                                 <td style="padding:14px 16px;border:1px solid #dbe2ea;background:#ffffff;font-size:12px;line-height:20px;color:#475569;mso-line-height-rule:exactly;">
                                     If the buttons do not open, use this page instead:
-                                    <a href="{{response_url}}" style="color:#0f172a;font-weight:800;text-decoration:underline;">Review your response options</a>
+                                    <a href="{{response_url}}" style="color:#0f172a;font-weight:800;text-decoration:underline;">Open response page</a>
                                 </td>
                             </tr>
                         </table>
@@ -288,7 +288,7 @@ ${config.variant === 'CONFIRMATION' ? `
 
 *Action required*
 Open the response page below, then choose either Confirm Attendance or Send Apology.
-Review your response options: {{response_url}}` : ''}
+Open response page: {{response_url}}` : ''}
 
 Best regards,
 The EST Team
@@ -309,7 +309,7 @@ const GUIDED_PRESET_DEFINITIONS: Array<{
             variant: 'STANDARD',
             examDay: 'Friday',
             examDate: '15th of May 2026',
-            arrivalTime: '7:30 AM',
+            arrivalTime: '8:00 AM',
         },
     },
     {
@@ -321,7 +321,7 @@ const GUIDED_PRESET_DEFINITIONS: Array<{
             variant: 'CONFIRMATION',
             examDay: 'Friday',
             examDate: '15th of May 2026',
-            arrivalTime: '7:30 AM',
+            arrivalTime: '8:00 AM',
         },
     },
     {
@@ -333,7 +333,7 @@ const GUIDED_PRESET_DEFINITIONS: Array<{
             variant: 'STANDARD',
             examDay: 'Saturday',
             examDate: '16th of May 2026',
-            arrivalTime: '7:30 AM',
+            arrivalTime: '8:00 AM',
         },
     },
     {
@@ -345,7 +345,7 @@ const GUIDED_PRESET_DEFINITIONS: Array<{
             variant: 'CONFIRMATION',
             examDay: 'Saturday',
             examDate: '16th of May 2026',
-            arrivalTime: '7:30 AM',
+            arrivalTime: '8:00 AM',
         },
     },
 ];
@@ -395,7 +395,7 @@ export const TEMPLATE_PREVIEW_RECIPIENT: TemplatePreviewRecipient = {
     arabic_name: 'محمد حسن',
     day: 'Friday',
     date: '15th of May 2026',
-    arrival_time: '7:30 AM',
+    arrival_time: '8:00 AM',
     test_center: 'Future University - New Cairo',
     room_est1: 'Hall A-214',
     role: 'Invigilator',

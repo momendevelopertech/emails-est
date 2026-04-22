@@ -69,7 +69,7 @@ const buildButtonsBlock = () => `
                             <tr>
                                 <td style="padding:14px 16px;border:1px solid #dbe2ea;background:#ffffff;font-size:12px;line-height:20px;color:#475569;mso-line-height-rule:exactly;">
                                     If the buttons do not open, use this page instead:
-                                    <a href="{{response_url}}" style="color:#0f172a;font-weight:800;text-decoration:underline;">Review your response options</a>
+                                    <a href="{{response_url}}" style="color:#0f172a;font-weight:800;text-decoration:underline;">Open response page</a>
                                 </td>
                             </tr>
                         </table>
@@ -317,7 +317,7 @@ export const buildExamAssignmentWhatsAppBody = (
             '',
             '*Action required*',
             'Open the response page below, then choose either Confirm Attendance or Send Apology.',
-            `Review your response options: ${String(recipient.response_url || '').trim() || '{{response_url}}'}`,
+        `Open response page: ${String(recipient.response_url || '').trim() || '{{response_url}}'}`,
         );
     }
 
@@ -333,7 +333,7 @@ const TEMPLATE_DEFINITIONS: EstTemplateDefinition[] = [
         variant: 'STANDARD',
         examDay: 'Friday',
         examDate: '15th of May 2026',
-        arrivalTime: '7:30 AM',
+        arrivalTime: '8:00 AM',
     },
     {
         key: 'est-i-confirmation',
@@ -341,7 +341,7 @@ const TEMPLATE_DEFINITIONS: EstTemplateDefinition[] = [
         variant: 'CONFIRMATION',
         examDay: 'Friday',
         examDate: '15th of May 2026',
-        arrivalTime: '7:30 AM',
+        arrivalTime: '8:00 AM',
     },
     {
         key: 'est-ii-standard',
@@ -349,7 +349,7 @@ const TEMPLATE_DEFINITIONS: EstTemplateDefinition[] = [
         variant: 'STANDARD',
         examDay: 'Saturday',
         examDate: '16th of May 2026',
-        arrivalTime: '7:30 AM',
+        arrivalTime: '8:00 AM',
     },
     {
         key: 'est-ii-confirmation',
@@ -357,7 +357,7 @@ const TEMPLATE_DEFINITIONS: EstTemplateDefinition[] = [
         variant: 'CONFIRMATION',
         examDay: 'Saturday',
         examDate: '16th of May 2026',
-        arrivalTime: '7:30 AM',
+        arrivalTime: '8:00 AM',
     },
 ];
 

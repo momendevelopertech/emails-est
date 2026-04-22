@@ -15,6 +15,7 @@ type PublicRecipientPayload = {
     email?: string | null;
     phone?: string | null;
     role?: string | null;
+    assignment_role?: string | null;
     type?: string | null;
     room_est1?: string | null;
     governorate?: string | null;
@@ -26,6 +27,11 @@ type PublicRecipientPayload = {
 type RouteParams = {
     token?: string;
     action?: string;
+};
+
+type PublicRecipientResponseClientProps = {
+    initialToken?: string;
+    initialAction?: string;
 };
 
 const STATUS_STYLES: Record<ResponseStatus, string> = {
@@ -71,18 +77,18 @@ const getStatusCopy = (status: ResponseStatus, roleLabel: string) => {
     };
 };
 
-export default function PublicRecipientResponseClient() {
+export default function PublicRecipientResponseClient({ initialToken, initialAction }: PublicRecipientResponseClientProps) {
     const searchParams = useSearchParams();
     const params = useParams<RouteParams>();
-    const token = searchParams.get('token') || (typeof params?.token === 'string' ? params.token : '');
-    const requestedAction = normalizeAction(searchParams.get('action')) || normalizeAction(typeof params?.action === 'string' ? params.action : null);
+    const token = initialToken || searchParams.get('token') || (typeof params?.token === 'string' ? params.token : '');
+    const requestedAction = normalizeAction(initialAction) || normalizeAction(searchParams.get('action')) || normalizeAction(typeof params?.action === 'string' ? params.action : null);
     const autoActionHandledRef = useRef(false);
     const [viewState, setViewState] = useState<'loading' | 'ready' | 'submitting' | 'error'>('loading');
     const [status, setStatus] = useState<ResponseStatus>('PENDING');
     const [message, setMessage] = useState('Checking your assignment...');
     const [recipient, setRecipient] = useState<PublicRecipientPayload | null>(null);
 
-    const roleLabel = recipient?.role?.trim() || 'your assigned role';
+    const roleLabel = recipient?.assignment_role?.trim() || recipient?.role?.trim() || 'your assigned role';
     const statusCopy = getStatusCopy(status, roleLabel);
     const isFinalState = viewState === 'ready' && status !== 'PENDING';
 
