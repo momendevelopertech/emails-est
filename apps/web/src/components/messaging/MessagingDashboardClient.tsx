@@ -13,6 +13,41 @@ const statusStyles: Record<string, string> = {
     FAILED: 'bg-rose-100 text-rose-800',
 };
 
+const DELIVERY_LINE_REGEX = /^(Email|WhatsApp):\s*(SENT|FAILED|SKIPPED)(?:\s*-\s*(.+))?$/i;
+
+const getFailureDetails = (value?: string | null) => {
+    const lines = String(value || '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+    if (!lines.length) {
+        return [];
+    }
+
+    const parsed = lines
+        .map((line) => {
+            const match = line.match(DELIVERY_LINE_REGEX);
+            if (!match) {
+                return null;
+            }
+
+            if (match[2].toUpperCase() !== 'FAILED') {
+                return null;
+            }
+
+            return `${match[1]}: ${match[3]?.trim() || 'Unknown error'}`;
+        })
+        .filter(Boolean) as string[];
+
+    if (parsed.length) {
+        return parsed;
+    }
+
+    const hasStructuredDelivery = lines.some((line) => DELIVERY_LINE_REGEX.test(line));
+    return hasStructuredDelivery ? [] : [String(value || '').trim()].filter(Boolean);
+};
+
 export default function MessagingDashboardClient({ locale }: { locale: string }) {
     const t = useTranslations('messaging');
 
@@ -75,19 +110,25 @@ export default function MessagingDashboardClient({ locale }: { locale: string })
                                     </td>
                                 </tr>
                             ) : (
-                                rows.map((recipient: any) => (
-                                    <tr key={recipient.id} className="hover:bg-slate-50">
-                                        <td className="px-4 py-4 text-sm text-slate-900">{recipient.name || '-'}</td>
-                                        <td className="px-4 py-4">
-                                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[recipient.status] || 'bg-slate-100 text-slate-700'}`}>
-                                                {recipient.status?.toLowerCase() || 'pending'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-4 text-slate-700">{recipient.attempts_count ?? 0}</td>
-                                        <td className="px-4 py-4 text-slate-700">{recipient.last_attempt_at ? new Date(recipient.last_attempt_at).toLocaleString() : '-'}</td>
-                                        <td className="px-4 py-4 text-rose-700">{recipient.error_message || '-'}</td>
-                                    </tr>
-                                ))
+                                rows.map((recipient: any) => {
+                                    const failureDetails = getFailureDetails(recipient.error_message);
+
+                                    return (
+                                        <tr key={recipient.id} className="hover:bg-slate-50">
+                                            <td className="px-4 py-4 text-sm text-slate-900">{recipient.name || '-'}</td>
+                                            <td className="px-4 py-4">
+                                                <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[recipient.status] || 'bg-slate-100 text-slate-700'}`}>
+                                                    {recipient.status?.toLowerCase() || 'pending'}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-4 text-slate-700">{recipient.attempts_count ?? 0}</td>
+                                            <td className="px-4 py-4 text-slate-700">{recipient.last_attempt_at ? new Date(recipient.last_attempt_at).toLocaleString() : '-'}</td>
+                                            <td className={`px-4 py-4 ${failureDetails.length ? 'text-rose-700' : 'text-slate-500'}`}>
+                                                {failureDetails.length ? failureDetails.join(' | ') : '-'}
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>

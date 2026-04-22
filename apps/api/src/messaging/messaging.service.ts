@@ -33,6 +33,7 @@ type RecipientResponseStatus = 'PENDING' | 'CONFIRMED' | 'DECLINED';
 type WhatsAppReplyAction = 'CONFIRM' | 'DECLINE' | 'UNKNOWN';
 type HierarchyRole = 'HEAD' | 'SENIOR' | 'INVIGILATOR';
 type HierarchyTargetRole = 'HEAD' | 'SENIOR';
+type RecipientDeliveryChannel = 'EMAIL' | 'WHATSAPP';
 
 type HierarchyRecipientRow = {
     id: string;
@@ -98,6 +99,11 @@ type HierarchyTargetPreview = {
 };
 
 type ChannelDeliveryState = 'SENT' | 'FAILED' | 'SKIPPED';
+type RecipientChannelDeliveryResult = {
+    channel: RecipientDeliveryChannel;
+    status: ChannelDeliveryState;
+    detail?: string;
+};
 
 @Injectable()
 export class MessagingService {
@@ -1195,7 +1201,7 @@ export class MessagingService {
             },
         });
 
-        const results = [] as Array<{ ok: boolean; error?: string }>;
+        const channelResults: RecipientChannelDeliveryResult[] = [];
 
         const recipientWithActionUrls = {
             ...recipient,
@@ -1215,31 +1221,88 @@ export class MessagingService {
                     subject,
                     html,
                 });
-                results.push({ ok: emailResult.ok, error: emailResult.ok ? undefined : emailResult.error });
+                if (emailResult.ok) {
+                    const details = [`Delivered successfully`];
+                    if (emailResult.attempts) {
+                        details.push(`attempts: ${emailResult.attempts}`);
+                    }
+                    channelResults.push({
+                        channel: 'EMAIL',
+                        status: 'SENT',
+                        detail: details.join(', '),
+                    });
+                } else {
+                    channelResults.push({
+                        channel: 'EMAIL',
+                        status: 'FAILED',
+                        detail: emailResult.error || 'Unknown email delivery failure',
+                    });
+                }
             } else {
-                results.push({ ok: false, error: 'Email address missing for recipient' });
+                channelResults.push({
+                    channel: 'EMAIL',
+                    status: 'FAILED',
+                    detail: 'Email address missing for recipient',
+                });
             }
+        } else {
+            channelResults.push({
+                channel: 'EMAIL',
+                status: 'SKIPPED',
+                detail: 'Template channel is WhatsApp only',
+            });
         }
 
         if (template.type !== TemplateType.EMAIL) {
             if (recipient.phone) {
                 const message = this.renderWhatsAppBody(template.body, recipientWithActionUrls);
                 const whatsAppResult = await this.whatsAppService.sendWhatsApp(recipient.phone, message);
-                results.push({ ok: whatsAppResult.ok, error: whatsAppResult.ok ? undefined : whatsAppResult.error });
+                if (whatsAppResult.ok) {
+                    const details = ['Delivered successfully'];
+                    if (whatsAppResult.attempts) {
+                        details.push(`attempts: ${whatsAppResult.attempts}`);
+                    }
+                    if (whatsAppResult.status) {
+                        details.push(`provider status: ${whatsAppResult.status}`);
+                    }
+                    channelResults.push({
+                        channel: 'WHATSAPP',
+                        status: 'SENT',
+                        detail: details.join(', '),
+                    });
+                } else {
+                    channelResults.push({
+                        channel: 'WHATSAPP',
+                        status: 'FAILED',
+                        detail: whatsAppResult.error || 'Unknown WhatsApp delivery failure',
+                    });
+                }
             } else {
-                results.push({ ok: false, error: 'WhatsApp phone number missing for recipient' });
+                channelResults.push({
+                    channel: 'WHATSAPP',
+                    status: 'FAILED',
+                    detail: 'WhatsApp phone number missing for recipient',
+                });
             }
+        } else {
+            channelResults.push({
+                channel: 'WHATSAPP',
+                status: 'SKIPPED',
+                detail: 'Template channel is Email only',
+            });
         }
 
-        const failedErrors = results.filter((item) => !item.ok).map((item) => item.error).filter(Boolean) as string[];
-        const status = failedErrors.length ? RecipientStatus.FAILED : RecipientStatus.SENT;
-        const errorMessage = failedErrors.length ? failedErrors.join(' | ') : null;
+        const hasFailure = channelResults.some((item) => item.status === 'FAILED');
+        const hasSent = channelResults.some((item) => item.status === 'SENT');
+        const status = hasFailure ? RecipientStatus.FAILED : hasSent ? RecipientStatus.SENT : RecipientStatus.FAILED;
+        const deliverySummary = this.buildRecipientChannelDeliverySummary(channelResults);
+        const logErrorMessage = this.buildRecipientFailureSummary(channelResults);
 
         await this.prisma.recipient.update({
             where: { id: recipient.id },
             data: {
                 status,
-                error_message: errorMessage,
+                error_message: deliverySummary,
             },
         });
 
@@ -1247,11 +1310,38 @@ export class MessagingService {
             data: {
                 recipientId: recipient.id,
                 status,
-                error: errorMessage,
+                error: logErrorMessage,
             },
         });
 
-        return { recipientId: recipient.id, status, error: errorMessage || undefined };
+        return { recipientId: recipient.id, status, error: logErrorMessage || undefined };
+    }
+
+    private buildRecipientChannelDeliverySummary(channelResults: RecipientChannelDeliveryResult[]) {
+        if (!channelResults.length) {
+            return null;
+        }
+
+        return channelResults.map((item) => {
+            const channelLabel = item.channel === 'EMAIL' ? 'Email' : 'WhatsApp';
+            const detail = normalizeImportValue(item.detail);
+            return detail
+                ? `${channelLabel}: ${item.status} - ${detail}`
+                : `${channelLabel}: ${item.status}`;
+        }).join('\n');
+    }
+
+    private buildRecipientFailureSummary(channelResults: RecipientChannelDeliveryResult[]) {
+        const failedChannels = channelResults.filter((item) => item.status === 'FAILED');
+        if (!failedChannels.length) {
+            return null;
+        }
+
+        return failedChannels.map((item) => {
+            const channelLabel = item.channel === 'EMAIL' ? 'Email' : 'WhatsApp';
+            const detail = normalizeImportValue(item.detail) || 'Unknown delivery error';
+            return `${channelLabel} failed: ${detail}`;
+        }).join(' | ');
     }
 
     private renderTemplate(template: string, data: Record<string, any>, options?: { escapeHtmlValues?: boolean }) {

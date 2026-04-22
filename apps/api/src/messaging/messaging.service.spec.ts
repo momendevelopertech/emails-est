@@ -251,8 +251,61 @@ describe('MessagingService', () => {
                 status: RecipientStatus.PENDING,
             },
         });
+        const finalUpdateCall = prisma.recipient.update.mock.calls.find(
+            (call: any[]) => call?.[0]?.data?.status === RecipientStatus.SENT,
+        );
+        expect(finalUpdateCall?.[0]?.data?.error_message).toContain('Email: SENT');
+        expect(finalUpdateCall?.[0]?.data?.error_message).toContain('WhatsApp: SENT');
+        expect(prisma.log.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                recipientId: 'r1',
+                status: RecipientStatus.SENT,
+                error: null,
+            }),
+        });
         expect(res.processed).toBe(1);
         expect(res.failed).toBe(0);
+    });
+
+    it('stores channel-level delivery details and failure reasons when one channel fails', async () => {
+        prisma.template.findUnique.mockResolvedValue({
+            id: 't1',
+            name: 'tmp',
+            type: TemplateType.BOTH,
+            subject: 'Hi {{name}}',
+            body: 'Body {{name}}',
+        });
+        prisma.recipient.findMany.mockResolvedValue([
+            {
+                id: 'r1',
+                name: 'Ali',
+                email: 'ali@mail.com',
+                phone: '201000',
+                status: RecipientStatus.PENDING,
+                cycleId: 'cycle-1',
+            },
+        ]);
+        prisma.recipient.update.mockResolvedValue({});
+        emailService.sendEmail.mockResolvedValue({ ok: true, attempts: 1 });
+        whatsAppService.sendWhatsApp.mockResolvedValue({ ok: false, error: 'WhatsApp send failed with status 466' });
+        prisma.log.create.mockResolvedValue({});
+
+        const res = await service.sendCampaign({ templateId: 't1', mode: 'all_pending', cycleId: 'cycle-1' } as any);
+
+        const finalUpdateCall = prisma.recipient.update.mock.calls.find(
+            (call: any[]) => call?.[0]?.data?.status === RecipientStatus.FAILED,
+        );
+        expect(finalUpdateCall?.[0]?.data?.error_message).toContain('Email: SENT');
+        expect(finalUpdateCall?.[0]?.data?.error_message).toContain('WhatsApp: FAILED - WhatsApp send failed with status 466');
+        expect(prisma.log.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                recipientId: 'r1',
+                status: RecipientStatus.FAILED,
+                error: 'WhatsApp failed: WhatsApp send failed with status 466',
+            }),
+        });
+        expect(res.processed).toBe(0);
+        expect(res.failed).toBe(1);
     });
 
     it('retryRecipients retries only failed recipients in the selected cycle', async () => {
@@ -314,9 +367,8 @@ describe('MessagingService', () => {
         expect(whatsAppService.sendWhatsApp.mock.calls[0][0]).toBe('01145495393');
         const whatsAppMessage = whatsAppService.sendWhatsApp.mock.calls[0][1];
         expect(whatsAppMessage).toContain('*Action required*');
-        expect(whatsAppMessage).toContain('Please reply directly in WhatsApp using one word:');
-        expect(whatsAppMessage).toContain('confirm = attendance confirmed');
-        expect(whatsAppMessage).toContain('apology = apology sent');
+        expect(whatsAppMessage).toContain('Open response page:');
+        expect(whatsAppMessage).toContain('/r/confirm-token');
         expect(whatsAppMessage).not.toContain('Room:');
         expect(whatsAppMessage).not.toContain('/messaging/confirm?token=confirm-token&action=confirm');
         expect(whatsAppMessage).not.toContain('Google Maps:');

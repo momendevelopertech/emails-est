@@ -45,6 +45,8 @@ type TemplateType = 'BOTH' | 'EMAIL' | 'WHATSAPP';
 type SendScope = 'selected' | 'filtered' | 'all_pending' | 'failed';
 type TemplateEditorField = 'subject' | 'body';
 type RecipientResponseValue = 'PENDING' | 'CONFIRMED' | 'DECLINED';
+type DeliveryChannelName = 'EMAIL' | 'WHATSAPP';
+type DeliveryChannelState = 'SENT' | 'FAILED' | 'SKIPPED';
 
 type Recipient = {
     id: string;
@@ -449,6 +451,20 @@ const CONFIRMATION_STYLES: Record<RecipientResponseState, string> = {
     declined: 'bg-rose-50 text-rose-800 border border-rose-200',
 };
 
+const DELIVERY_STATUS_STYLES: Record<DeliveryChannelState, string> = {
+    SENT: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+    FAILED: 'bg-rose-50 text-rose-800 border border-rose-200',
+    SKIPPED: 'bg-slate-100 text-slate-700 border border-slate-200',
+};
+
+type ParsedRecipientDelivery = {
+    channels: Array<{
+        channel: DeliveryChannelName;
+        status: DeliveryChannelState;
+        detail?: string;
+    }>;
+};
+
 type WhatsAppPreviewLink = {
     label: string;
     href: string;
@@ -460,6 +476,7 @@ type WhatsAppPreviewModel = {
 };
 
 const EMPTY_VALUE_LABEL = 'empty';
+const DELIVERY_LINE_REGEX = /^(Email|WhatsApp):\s*(SENT|FAILED|SKIPPED)(?:\s*-\s*(.+))?$/i;
 
 const RECIPIENT_DETAIL_FIELDS: Array<{ key: keyof Recipient; fallback: string }> = [
     { key: 'room_est1', fallback: 'ROOM EST' },
@@ -501,6 +518,54 @@ const getRecipientResponseState = (recipient: Pick<Recipient, 'confirmed_at' | '
     if (recipient.declined_at) return 'declined';
     if (recipient.confirmed_at) return 'confirmed';
     return 'pending';
+};
+
+const parseRecipientDeliveryDetails = (value?: string | null): ParsedRecipientDelivery | null => {
+    const lines = String(value || '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+    if (!lines.length) {
+        return null;
+    }
+
+    const channels = lines
+        .map((line) => {
+            const match = line.match(DELIVERY_LINE_REGEX);
+            if (!match) {
+                return null;
+            }
+
+            const rawChannel = match[1].toLowerCase();
+            const channel: DeliveryChannelName = rawChannel === 'email' ? 'EMAIL' : 'WHATSAPP';
+            const status = match[2].toUpperCase() as DeliveryChannelState;
+            const detail = match[3]?.trim() || undefined;
+
+            return {
+                channel,
+                status,
+                detail,
+            };
+        })
+        .filter(Boolean) as ParsedRecipientDelivery['channels'];
+
+    if (!channels.length) {
+        return null;
+    }
+
+    return { channels };
+};
+
+const getDeliveryChannelLabel = (isArabic: boolean, channel: DeliveryChannelName) =>
+    channel === 'EMAIL'
+        ? (isArabic ? 'إيميل' : 'Email')
+        : (isArabic ? 'واتساب' : 'WhatsApp');
+
+const getDeliveryStateLabel = (isArabic: boolean, status: DeliveryChannelState) => {
+    if (status === 'SENT') return isArabic ? 'تم الإرسال' : 'Sent';
+    if (status === 'FAILED') return isArabic ? 'فشل' : 'Failed';
+    return isArabic ? 'تم التخطي' : 'Skipped';
 };
 
 const buildWhatsAppPreviewModel = (value: string): WhatsAppPreviewModel => {
@@ -655,6 +720,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         attempts: isArabic ? 'المحاولات' : 'Attempts',
         lastAttempt: isArabic ? 'آخر محاولة' : 'Last attempt',
         errorLabel: isArabic ? 'الخطأ' : 'Error',
+        deliveryDetailsLabel: isArabic ? 'تفاصيل الإرسال' : 'Delivery details',
         emptyRecipients: isArabic ? 'لا يوجد مستلمين حتى الآن. ارفع ملف Excel للبدء.' : 'No recipients yet. Upload an Excel file to get started.',
         loading: isArabic ? 'جاري التحميل...' : 'Loading...',
         previous: isArabic ? 'السابق' : 'Previous',
@@ -2437,7 +2503,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.confirmTitle}</th>
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.attempts}</th>
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.lastAttempt}</th>
-                                                <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.errorLabel}</th>
+                                                <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.deliveryDetailsLabel}</th>
                                                 <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3">{copy.actions}</th>
                                             </tr>
                                         </thead>
@@ -2462,6 +2528,18 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 </tr>
                                             ) : recipients.map((recipient) => {
                                                 const responseState = getRecipientResponseState(recipient);
+                                                const parsedDelivery = parseRecipientDeliveryDetails(recipient.error_message);
+                                                const deliveryChannels = parsedDelivery?.channels || [];
+                                                const channelDeliveryRows = ([
+                                                    deliveryChannels.find((item) => item.channel === 'EMAIL') || null,
+                                                    deliveryChannels.find((item) => item.channel === 'WHATSAPP') || null,
+                                                ].filter(Boolean) as ParsedRecipientDelivery['channels']);
+                                                const failedChannelDetails = deliveryChannels
+                                                    .filter((item) => item.status === 'FAILED')
+                                                    .map((item) => `${getDeliveryChannelLabel(isArabic, item.channel)}: ${item.detail || (isArabic ? 'خطأ غير معروف' : 'Unknown error')}`);
+                                                const hasStructuredDelivery = channelDeliveryRows.length > 0;
+                                                const hasChannelFailures = failedChannelDetails.length > 0;
+                                                const fallbackErrorMessage = hasStructuredDelivery ? '' : (recipient.error_message || '');
                                                 const detailItems = RECIPIENT_DETAIL_FIELDS.map(({ key, fallback }) => ({
                                                     key,
                                                     label: fallback,
@@ -2539,10 +2617,26 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                             </div>
                                                         </td>
                                                         <td className="px-4 py-4 align-top">
-                                                            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[recipient.status]}`}>
-                                                                <span className="h-2.5 w-2.5 rounded-full bg-current opacity-80" />
-                                                                {copy.statusLabels[recipient.status]}
-                                                            </span>
+                                                            <div className="min-w-[190px] space-y-2">
+                                                                <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_STYLES[recipient.status]}`}>
+                                                                    <span className="h-2.5 w-2.5 rounded-full bg-current opacity-80" />
+                                                                    {copy.statusLabels[recipient.status]}
+                                                                </span>
+                                                                {channelDeliveryRows.length ? (
+                                                                    <div className="flex flex-col gap-1.5">
+                                                                        {channelDeliveryRows.map((item) => (
+                                                                            <span
+                                                                                key={item.channel}
+                                                                                className={`inline-flex items-center gap-2 self-start rounded-full px-2.5 py-1 text-[11px] font-semibold ${DELIVERY_STATUS_STYLES[item.status]}`}
+                                                                                title={item.detail || ''}
+                                                                            >
+                                                                                <span className="h-2 w-2 rounded-full bg-current opacity-80" />
+                                                                                {getDeliveryChannelLabel(isArabic, item.channel)}: {getDeliveryStateLabel(isArabic, item.status)}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                ) : null}
+                                                            </div>
                                                         </td>
                                                         <td className="px-4 py-4 align-top">
                                                             <div className="min-w-[170px] space-y-3">
@@ -2573,10 +2667,22 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                         <td className="px-4 py-4 align-top text-slate-700">
                                                             {recipient.last_attempt_at ? new Date(recipient.last_attempt_at).toLocaleString() : EMPTY_VALUE_LABEL}
                                                         </td>
-                                                        <td className="max-w-[220px] px-4 py-4 align-top text-xs text-rose-700">
-                                                            <div className="truncate" title={recipient.error_message || EMPTY_VALUE_LABEL}>
-                                                                {recipient.error_message || EMPTY_VALUE_LABEL}
-                                                            </div>
+                                                        <td className={`max-w-[320px] px-4 py-4 align-top text-xs leading-5 ${hasChannelFailures || fallbackErrorMessage ? 'text-rose-700' : 'text-slate-500'}`}>
+                                                            {hasChannelFailures ? (
+                                                                <div className="space-y-1">
+                                                                    {failedChannelDetails.map((line) => (
+                                                                        <div key={line} className="break-words [overflow-wrap:anywhere]">
+                                                                            {line}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : fallbackErrorMessage ? (
+                                                                <div className="break-words [overflow-wrap:anywhere]">{fallbackErrorMessage}</div>
+                                                            ) : hasStructuredDelivery ? (
+                                                                <div>{isArabic ? 'لا توجد أخطاء في القنوات.' : 'No channel errors.'}</div>
+                                                            ) : (
+                                                                <div>{EMPTY_VALUE_LABEL}</div>
+                                                            )}
                                                         </td>
                                                         <td className="px-4 py-4 align-top">
                                                             <div className="flex flex-col gap-2">
