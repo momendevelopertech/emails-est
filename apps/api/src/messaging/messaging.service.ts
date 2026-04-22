@@ -360,6 +360,34 @@ export class MessagingService {
         });
     }
 
+    async updateRecipientResponse(id: string, status: RecipientResponseStatus) {
+        const recipient = await this.prisma.recipient.findUnique({
+            where: { id },
+            select: { id: true },
+        });
+
+        if (!recipient) {
+            throw new BadRequestException('Recipient not found.');
+        }
+
+        const now = new Date();
+        const responseData = status === 'CONFIRMED'
+            ? { confirmed_at: now, declined_at: null }
+            : status === 'DECLINED'
+                ? { confirmed_at: null, declined_at: now }
+                : { confirmed_at: null, declined_at: null };
+
+        return this.prisma.recipient.update({
+            where: { id },
+            data: responseData,
+            select: {
+                id: true,
+                confirmed_at: true,
+                declined_at: true,
+            },
+        });
+    }
+
     async deleteRecipient(id: string) {
         return this.prisma.recipient.delete({ where: { id } });
     }
@@ -1114,18 +1142,22 @@ export class MessagingService {
         return String(process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
     }
 
+    private buildResponsePath(token: string, action?: 'confirm' | 'decline') {
+        const encodedToken = encodeURIComponent(token);
+        return action ? `/r/${encodedToken}/${action}` : `/r/${encodedToken}`;
+    }
+
     private buildResponseUrl(recipient: Record<string, any>, action?: 'confirm' | 'decline') {
         const token = recipient.confirmation_token;
         if (!token) {
             return '';
         }
 
-        const params = new URLSearchParams({ token: String(token) });
-        if (action) {
-            params.set('action', action);
-        }
+        return `${this.buildFrontendUrl()}${this.buildResponsePath(String(token), action)}`;
+    }
 
-        return `${this.buildFrontendUrl()}/messaging/confirm?${params.toString()}`;
+    private resolveAssignmentRoleLabel(role?: string | null) {
+        return normalizeImportValue(role) || 'team member';
     }
 
     private async processRecipients(recipients: Array<{ id: string }>, template: { subject: string; body: string; type: TemplateType }) {
@@ -1164,6 +1196,8 @@ export class MessagingService {
 
         const recipientWithActionUrls = {
             ...recipient,
+            assignment_role: this.resolveAssignmentRoleLabel(recipient.role),
+            brand_logo_url: `${this.buildFrontendUrl()}/brand/est-logo.jpg`,
             confirm_url: this.buildResponseUrl(recipient, 'confirm'),
             decline_url: this.buildResponseUrl(recipient, 'decline'),
             response_url: this.buildResponseUrl(recipient),

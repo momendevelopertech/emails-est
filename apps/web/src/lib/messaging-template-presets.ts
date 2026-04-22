@@ -27,7 +27,7 @@ export type TemplateEditorVariable = {
 
 export type TemplatePreviewRecipient = Record<string, string>;
 
-const EST_LOGO_URL = '/brand/est-logo-dark.svg';
+const EST_LOGO_URL = '{{brand_logo_url}}';
 const META_PREFIX = 'EST_TEMPLATE_META:';
 
 const escapeHtml = (value: string) => value
@@ -39,18 +39,62 @@ const escapeHtml = (value: string) => value
 
 const buildMetaComment = (config: EstGuidedTemplateConfig) => `<!-- ${META_PREFIX}${encodeURIComponent(JSON.stringify(config))} -->`;
 
+const buildBulletproofButton = (label: string, href: string, background: string) => `
+    <!--[if mso]>
+    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${href}" style="height:44px;v-text-anchor:middle;width:220px;" arcsize="50%" stroke="f" fillcolor="${background}">
+        <w:anchorlock/>
+        <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:700;">${label}</center>
+    </v:roundrect>
+    <![endif]-->
+    <!--[if !mso]><!-- -->
+    <a href="${href}" style="display:inline-block;background:${background};border-radius:999px;color:#ffffff;font-family:Segoe UI,Tahoma,Arial,sans-serif;font-size:14px;font-weight:800;line-height:44px;text-align:center;text-decoration:none;width:220px;-webkit-text-size-adjust:none;mso-hide:all;">${label}</a>
+    <!--<![endif]-->
+`.trim();
+
 const buildButtonsBlock = () => `
-    <div style="margin-top:28px;border-top:1px solid #e2e8f0;padding-top:28px;text-align:center;">
-        <div style="font-size:12px;line-height:1.5;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#0f172a;">Action Required</div>
-        <p style="margin:10px 0 18px;font-size:14px;line-height:1.7;color:#475569;">
-            Please confirm your attendance or send an apology using one of the buttons below.
-        </p>
-        <a href="{{confirm_url}}" style="display:inline-block;margin:0 8px 12px;padding:14px 24px;border-radius:999px;background:#111111;color:#ffe347;text-decoration:none;font-size:14px;font-weight:800;letter-spacing:0.02em;">Confirm Attendance</a>
-        <a href="{{decline_url}}" style="display:inline-block;margin:0 8px 12px;padding:14px 24px;border-radius:999px;background:#ef4444;color:#ffffff;text-decoration:none;font-size:14px;font-weight:800;letter-spacing:0.02em;">Send Apology</a>
-        <p style="margin:12px 0 0;font-size:12px;line-height:1.6;color:#64748b;">
-            If the buttons do not open, use this link: <a href="{{response_url}}" style="color:#111111;font-weight:700;">Open response page</a>
-        </p>
-    </div>
+    <tr>
+        <td style="padding:0 0 20px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;border:1px solid #d8e3da;background:#f6fbf7;">
+                <tr>
+                    <td style="padding:22px 24px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
+                            <tr>
+                                <td style="padding:0 0 8px;font-size:12px;line-height:18px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#166534;mso-line-height-rule:exactly;">
+                                    Action Required
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 0 10px;font-size:18px;line-height:28px;font-weight:800;color:#0f172a;mso-line-height-rule:exactly;">
+                                    Please confirm your attendance or send an apology.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 0 18px;font-size:14px;line-height:24px;color:#475569;mso-line-height-rule:exactly;">
+                                    This is the most important step. Open the response options below and choose the correct action.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 0 12px;">
+                                    ${buildBulletproofButton('Confirm Attendance', '{{confirm_url}}', '#15803d')}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 0 14px;">
+                                    ${buildBulletproofButton('Send Apology', '{{decline_url}}', '#dc2626')}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:14px 16px;border:1px solid #dbe2ea;background:#ffffff;font-size:12px;line-height:20px;color:#475569;mso-line-height-rule:exactly;">
+                                    If the buttons do not open, use this page instead:
+                                    <a href="{{response_url}}" style="color:#0f172a;font-weight:800;text-decoration:underline;">Review your response options</a>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
 `.trim();
 
 export const buildGuidedTemplateContent = (config: EstGuidedTemplateConfig) => {
@@ -60,7 +104,7 @@ export const buildGuidedTemplateContent = (config: EstGuidedTemplateConfig) => {
         : `
                                         <tr>
                                             <td style="padding:0 0 12px;">
-                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:20px;border:1px solid #e2e8f0;background:#f8fafc;">
+                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #dbe2ea;background:#f8fafc;">
                                                     <tr>
                                                         <td style="padding:16px 18px;">
                                                             <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Room #</div>
@@ -75,54 +119,76 @@ export const buildGuidedTemplateContent = (config: EstGuidedTemplateConfig) => {
 
     const body = `
 ${buildMetaComment(config)}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:0;padding:28px 0;background:#eef2f6;font-family:'Segoe UI',Tahoma,Arial,sans-serif;color:#0f172a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0;padding:0;border-collapse:collapse;background:#eef2f6;font-family:Segoe UI,Tahoma,Arial,sans-serif;color:#0f172a;">
     <tr>
-        <td align="center" style="padding:0 14px;">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:720px;margin:0 auto;">
+        <td align="center" style="padding:24px 12px;">
+            <table role="presentation" width="680" cellpadding="0" cellspacing="0" border="0" style="width:680px;max-width:680px;margin:0 auto;border-collapse:collapse;background:#ffffff;">
                 <tr>
-                    <td style="border-radius:30px;overflow:hidden;background:#ffffff;box-shadow:0 24px 48px rgba(15,23,42,0.12);">
-                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
+                    <td style="border:1px solid #dbe2ea;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;background:#ffffff;">
                             <tr>
-                                <td style="padding:28px 28px 24px;background:#111111;">
-                                    <img src="${EST_LOGO_URL}" alt="EST" style="display:block;width:168px;max-width:100%;height:auto;" />
-                                    <div style="margin-top:18px;display:inline-block;padding:8px 14px;border-radius:999px;background:#ffe347;color:#111111;font-size:12px;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;">
-                                        ${config.examCode} Exam Assignment
-                                    </div>
-                                    <p style="margin:16px 0 0;font-size:15px;line-height:1.8;color:rgba(255,255,255,0.86);">
-                                        Dear {{name}}, we look forward to welcoming you on <strong>${config.examDay}</strong> the <strong>${config.examDate}</strong> for the <strong>${config.examCode} Exam</strong> as an Invigilator.
+                                <td style="padding:28px 28px 22px;background:#171717;">
+                                    <img src="${EST_LOGO_URL}" alt="EST" width="200" style="display:block;width:200px;max-width:200px;height:auto;border:0;outline:none;text-decoration:none;" />
+                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;border-collapse:collapse;">
+                                        <tr>
+                                            <td style="padding:8px 14px;background:#ffe347;color:#111111;font-size:12px;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;">
+                                                ${config.examCode} Exam Assignment
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    <p style="margin:16px 0 0;font-size:15px;line-height:27px;color:#f8fafc;mso-line-height-rule:exactly;">
+                                        Dear {{name}}, we look forward to welcoming you on <strong>${config.examDay}</strong> the <strong>${config.examDate}</strong> for the <strong>${config.examCode} Exam</strong> as our <strong>{{assignment_role}}</strong>.
                                     </p>
                                 </td>
                             </tr>
                             <tr>
                                 <td style="padding:28px;">
-                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:24px;">
+                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                                        ${responseBlock}
                                         <tr>
-                                            <td width="33.333%" valign="top" style="padding:0 6px 12px 0;">
-                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:22px;background:#fff8cc;border:1px solid #f6e27f;">
+                                            <td style="padding:0 0 20px;">
+                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #dbe2ea;background:#f9fafb;">
                                                     <tr>
-                                                        <td style="padding:16px 18px;">
-                                                            <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#7c6500;">Day</div>
-                                                            <div style="margin-top:8px;font-size:18px;line-height:1.4;font-weight:900;color:#111111;">${config.examDay}</div>
+                                                        <td style="padding:18px 18px 6px;font-size:12px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">
+                                                            Assignment Snapshot
                                                         </td>
                                                     </tr>
-                                                </table>
-                                            </td>
-                                            <td width="33.333%" valign="top" style="padding:0 6px 12px;">
-                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:22px;background:#f8fafc;border:1px solid #e2e8f0;">
                                                     <tr>
-                                                        <td style="padding:16px 18px;">
-                                                            <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Date</div>
-                                                            <div style="margin-top:8px;font-size:18px;line-height:1.4;font-weight:900;color:#111111;">${config.examDate}</div>
-                                                        </td>
-                                                    </tr>
-                                                </table>
-                                            </td>
-                                            <td width="33.333%" valign="top" style="padding:0 0 12px 6px;">
-                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:22px;background:#111111;border:1px solid #111111;">
-                                                    <tr>
-                                                        <td style="padding:16px 18px;">
-                                                            <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#f8fafc;">Arrival Time</div>
-                                                            <div style="margin-top:8px;font-size:18px;line-height:1.4;font-weight:900;color:#ffe347;">${config.arrivalTime}</div>
+                                                        <td style="padding:0 18px 18px;">
+                                                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                                                                <tr>
+                                                                    <td width="33.333%" valign="top" style="padding:0 10px 0 0;">
+                                                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #f2dd7d;background:#fff8cc;">
+                                                                            <tr>
+                                                                                <td style="padding:14px 14px 12px;">
+                                                                                    <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#7c6500;">Day</div>
+                                                                                    <div style="margin-top:8px;font-size:18px;line-height:1.4;font-weight:900;color:#111111;">${config.examDay}</div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        </table>
+                                                                    </td>
+                                                                    <td width="33.333%" valign="top" style="padding:0 5px;">
+                                                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #dbe2ea;background:#ffffff;">
+                                                                            <tr>
+                                                                                <td style="padding:14px 14px 12px;">
+                                                                                    <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Date</div>
+                                                                                    <div style="margin-top:8px;font-size:18px;line-height:1.4;font-weight:900;color:#111111;">${config.examDate}</div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        </table>
+                                                                    </td>
+                                                                    <td width="33.333%" valign="top" style="padding:0 0 0 10px;">
+                                                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #171717;background:#171717;">
+                                                                            <tr>
+                                                                                <td style="padding:14px 14px 12px;">
+                                                                                    <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#f8fafc;">Arrival Time</div>
+                                                                                    <div style="margin-top:8px;font-size:18px;line-height:1.4;font-weight:900;color:#ffe347;">${config.arrivalTime}</div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        </table>
+                                                                    </td>
+                                                                </tr>
+                                                            </table>
                                                         </td>
                                                     </tr>
                                                 </table>
@@ -133,10 +199,10 @@ ${buildMetaComment(config)}
                                     <div style="margin-bottom:18px;font-size:12px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">
                                         Session Details
                                     </div>
-                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
+                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
                                         <tr>
                                             <td style="padding:0 0 12px;">
-                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:20px;border:1px solid #e2e8f0;background:#f8fafc;">
+                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #dbe2ea;background:#f8fafc;">
                                                     <tr>
                                                         <td style="padding:16px 18px;">
                                                             <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Test Center</div>
@@ -149,7 +215,7 @@ ${buildMetaComment(config)}
                                         ${roomBlock}
                                         <tr>
                                             <td style="padding:0 0 12px;">
-                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:20px;border:1px solid #e2e8f0;background:#f8fafc;">
+                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #dbe2ea;background:#f8fafc;">
                                                     <tr>
                                                         <td style="padding:16px 18px;">
                                                             <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Address</div>
@@ -161,7 +227,7 @@ ${buildMetaComment(config)}
                                         </tr>
                                         <tr>
                                             <td style="padding:0;">
-                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-radius:20px;border:1px solid #e2e8f0;background:#f8fafc;">
+                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #dbe2ea;background:#f8fafc;">
                                                     <tr>
                                                         <td style="padding:16px 18px;">
                                                             <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Google Maps</div>
@@ -175,17 +241,15 @@ ${buildMetaComment(config)}
                                         </tr>
                                     </table>
 
-                                    <div style="margin-top:24px;border-radius:22px;background:#fff8cc;border:1px solid #f6e27f;padding:18px 20px;">
+                                    <div style="margin-top:24px;background:#fff8cc;border:1px solid #f2dd7d;padding:18px 20px;">
                                         <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#7c6500;">Important</div>
-                                        <div style="margin-top:8px;font-size:14px;line-height:1.8;color:#4a5565;">
+                                        <div style="margin-top:8px;font-size:14px;line-height:25px;color:#4a5565;mso-line-height-rule:exactly;">
                                             You are required to be at the test center at <strong>${config.arrivalTime}</strong> sharp for briefing and preparation before the exam.
                                             Kindly ensure you follow all exam regulations and procedures.
                                         </div>
                                     </div>
 
-                                    ${responseBlock}
-
-                                    <p style="margin:28px 0 0;font-size:14px;line-height:1.8;color:#475569;">
+                                    <p style="margin:28px 0 0;font-size:14px;line-height:24px;color:#475569;mso-line-height-rule:exactly;">
                                         Best Regards,<br />
                                         <strong style="color:#111111;">The EST Team</strong>
                                     </p>
@@ -207,7 +271,7 @@ export const buildGuidedWhatsAppText = (config: EstGuidedTemplateConfig) => `
 *${config.examCode} Exam Assignment*
 
 Dear {{name}},
-We look forward to welcoming you on *${config.examDay}* the *${config.examDate}* for the *${config.examCode} Exam* as an Invigilator.
+We look forward to welcoming you on *${config.examDay}* the *${config.examDate}* for the *${config.examCode} Exam* as our *{{assignment_role}}*.
 
 *Session details*
 Day: ${config.examDay}
@@ -223,10 +287,8 @@ Kindly ensure you follow all exam regulations and procedures.
 ${config.variant === 'CONFIRMATION' ? `
 
 *Action required*
-Please reply directly in WhatsApp using one word:
-
-confirm = attendance confirmed
-apology = apology sent` : ''}
+Open the response page below, then choose either Confirm Attendance or Send Apology.
+Review your response options: {{response_url}}` : ''}
 
 Best regards,
 The EST Team
@@ -321,6 +383,8 @@ export const TEMPLATE_EDITOR_VARIABLES: TemplateEditorVariable[] = [
     { token: '{{sheet}}', label: 'Sheet' },
     { token: '{{email}}', label: 'Email' },
     { token: '{{phone}}', label: 'Phone' },
+    { token: '{{assignment_role}}', label: 'Assignment role label' },
+    { token: '{{brand_logo_url}}', label: 'Brand logo URL' },
     { token: '{{confirm_url}}', label: 'Confirm URL' },
     { token: '{{decline_url}}', label: 'Decline URL' },
     { token: '{{response_url}}', label: 'Response page URL' },
@@ -345,9 +409,11 @@ export const TEMPLATE_PREVIEW_RECIPIENT: TemplatePreviewRecipient = {
     sheet: 'EST1',
     email: 'mohamed.hassan@example.com',
     phone: '+201000000000',
-    confirm_url: 'https://emails-est-web.vercel.app/messaging/confirm?token=preview&action=confirm',
-    decline_url: 'https://emails-est-web.vercel.app/messaging/confirm?token=preview&action=decline',
-    response_url: 'https://emails-est-web.vercel.app/messaging/confirm?token=preview',
+    assignment_role: 'Chief Invigilator',
+    brand_logo_url: '/brand/est-logo.jpg',
+    confirm_url: 'https://emails-est-web.vercel.app/r/preview/confirm',
+    decline_url: 'https://emails-est-web.vercel.app/r/preview/decline',
+    response_url: 'https://emails-est-web.vercel.app/r/preview',
 };
 
 export const isHtmlTemplateBody = (body: string) => /<[a-z][\w:-]*\b[^>]*>/i.test(body);

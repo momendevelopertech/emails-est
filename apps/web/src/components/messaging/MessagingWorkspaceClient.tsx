@@ -44,6 +44,7 @@ type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
 type TemplateType = 'BOTH' | 'EMAIL' | 'WHATSAPP';
 type SendScope = 'selected' | 'filtered' | 'all_pending' | 'failed';
 type TemplateEditorField = 'subject' | 'body';
+type RecipientResponseValue = 'PENDING' | 'CONFIRMED' | 'DECLINED';
 
 type Recipient = {
     id: string;
@@ -436,6 +437,12 @@ const CHANNEL_STYLES: Record<TemplateType, string> = {
 
 type RecipientResponseState = 'pending' | 'confirmed' | 'declined';
 
+const RESPONSE_STATUS_LABELS: Record<RecipientResponseState, string> = {
+    pending: 'Pending',
+    confirmed: 'Confirmed',
+    declined: 'Apologized',
+};
+
 const CONFIRMATION_STYLES: Record<RecipientResponseState, string> = {
     pending: 'bg-slate-100 text-slate-700 border border-slate-200',
     confirmed: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
@@ -579,6 +586,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const queryClient = useQueryClient();
     const { user, ready, isChecking, error } = useRequireAuth(locale);
     const canManageSettings = user?.role === 'SUPER_ADMIN' || user?.role === 'HR_ADMIN';
+    const canManageResponses = canManageSettings;
 
     const copy = useMemo(() => ({
         tabs: {
@@ -1102,6 +1110,26 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         },
     });
 
+    const updateRecipientResponseMutation = useMutation({
+        mutationFn: async ({ recipientId, status }: { recipientId: string; status: RecipientResponseValue }) => {
+            await fetchCsrfToken();
+            const response = await api.put(`/messaging/recipients/${recipientId}/response`, { status });
+            return response.data;
+        },
+        onSuccess(_data, variables) {
+            const responseLabel = variables.status === 'CONFIRMED'
+                ? copy.confirmedLabels.confirmed
+                : variables.status === 'DECLINED'
+                    ? copy.confirmedLabels.declined
+                    : copy.confirmedLabels.pending;
+            toast.success(`${copy.confirmTitle}: ${responseLabel}`);
+            void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
+        },
+        onError(error: any) {
+            toast.error(getImportErrorMessage(error, isArabic ? 'تعذر تحديث حالة الرد.' : 'Unable to update the response status.'));
+        },
+    });
+
     const deleteCycleMutation = useMutation({
         mutationFn: async (cycleId: string) => {
             await fetchCsrfToken();
@@ -1506,6 +1534,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         value: template.id,
         label: template.name,
     }));
+    const responseStatusOptions = [
+        { value: 'PENDING', label: RESPONSE_STATUS_LABELS.pending },
+        { value: 'CONFIRMED', label: RESPONSE_STATUS_LABELS.confirmed },
+        { value: 'DECLINED', label: RESPONSE_STATUS_LABELS.declined },
+    ];
 
     const allVisibleSelected = recipients.length > 0 && recipients.every((recipient) => selectedRecipientIds.includes(recipient.id));
 
@@ -1667,37 +1700,40 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             }
 
             const worksheet = XLSX.utils.json_to_sheet(
-                allItems.map((recipient) => buildRecipientExcelRow({
-                    room_est1: recipient.room_est1 || recipient.room || '',
-                    division: recipient.division || '',
-                    name: recipient.name || '',
-                    arabic_name: recipient.arabic_name || '',
-                    email: recipient.email || '',
-                    phone: recipient.phone || '',
-                    employer: recipient.employer || '',
-                    kind_of_school: recipient.kind_of_school || '',
-                    title: recipient.title || '',
-                    insurance_number: recipient.insurance_number || '',
-                    institution_tax_number: recipient.institution_tax_number || '',
-                    national_id_number: recipient.national_id_number || '',
-                    national_id_picture: recipient.national_id_picture || '',
-                    personal_photo: recipient.personal_photo || '',
-                    preferred_proctoring_city: recipient.preferred_proctoring_city || '',
-                    preferred_test_center: recipient.preferred_test_center || '',
-                    bank_account_name: recipient.bank_account_name || '',
-                    bank_name: recipient.bank_name || '',
-                    bank_branch_name: recipient.bank_branch_name || '',
-                    account_number: recipient.account_number || '',
-                    iban_number: recipient.iban_number || '',
-                    role: recipient.role || '',
-                    type: recipient.type || '',
-                    governorate: recipient.governorate || '',
-                    address: recipient.address || '',
-                    building: recipient.building || '',
-                    location: recipient.location || '',
-                    bank_divid: recipient.bank_divid || '',
-                    additional_info_1: recipient.additional_info_1 || '',
-                    additional_info_2: recipient.additional_info_2 || '',
+                allItems.map((recipient) => ({
+                    'Response Status': RESPONSE_STATUS_LABELS[getRecipientResponseState(recipient)],
+                    ...buildRecipientExcelRow({
+                        room_est1: recipient.room_est1 || recipient.room || '',
+                        division: recipient.division || '',
+                        name: recipient.name || '',
+                        arabic_name: recipient.arabic_name || '',
+                        email: recipient.email || '',
+                        phone: recipient.phone || '',
+                        employer: recipient.employer || '',
+                        kind_of_school: recipient.kind_of_school || '',
+                        title: recipient.title || '',
+                        insurance_number: recipient.insurance_number || '',
+                        institution_tax_number: recipient.institution_tax_number || '',
+                        national_id_number: recipient.national_id_number || '',
+                        national_id_picture: recipient.national_id_picture || '',
+                        personal_photo: recipient.personal_photo || '',
+                        preferred_proctoring_city: recipient.preferred_proctoring_city || '',
+                        preferred_test_center: recipient.preferred_test_center || '',
+                        bank_account_name: recipient.bank_account_name || '',
+                        bank_name: recipient.bank_name || '',
+                        bank_branch_name: recipient.bank_branch_name || '',
+                        account_number: recipient.account_number || '',
+                        iban_number: recipient.iban_number || '',
+                        role: recipient.role || '',
+                        type: recipient.type || '',
+                        governorate: recipient.governorate || '',
+                        address: recipient.address || '',
+                        building: recipient.building || '',
+                        location: recipient.location || '',
+                        bank_divid: recipient.bank_divid || '',
+                        additional_info_1: recipient.additional_info_1 || '',
+                        additional_info_2: recipient.additional_info_2 || '',
+                    }),
                 })),
             );
             const workbook = XLSX.utils.book_new();
@@ -2452,14 +2488,29 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                             </span>
                                                         </td>
                                                         <td className="px-4 py-4 align-top">
-                                                            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${CONFIRMATION_STYLES[responseState]}`}>
-                                                                <span className="h-2.5 w-2.5 rounded-full bg-current opacity-80" />
-                                                                {responseState === 'confirmed'
-                                                                    ? copy.confirmedLabels.confirmed
-                                                                    : responseState === 'declined'
-                                                                        ? copy.confirmedLabels.declined
-                                                                        : copy.confirmedLabels.pending}
-                                                            </span>
+                                                            <div className="min-w-[170px] space-y-3">
+                                                                <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${CONFIRMATION_STYLES[responseState]}`}>
+                                                                    <span className="h-2.5 w-2.5 rounded-full bg-current opacity-80" />
+                                                                    {responseState === 'confirmed'
+                                                                        ? copy.confirmedLabels.confirmed
+                                                                        : responseState === 'declined'
+                                                                            ? copy.confirmedLabels.declined
+                                                                            : copy.confirmedLabels.pending}
+                                                                </span>
+                                                                {canManageResponses ? (
+                                                                    <div onClick={stopRowToggle}>
+                                                                        <FormSelect
+                                                                            value={responseState === 'confirmed' ? 'CONFIRMED' : responseState === 'declined' ? 'DECLINED' : 'PENDING'}
+                                                                            onChange={(nextValue) => updateRecipientResponseMutation.mutate({
+                                                                                recipientId: recipient.id,
+                                                                                status: nextValue as RecipientResponseValue,
+                                                                            })}
+                                                                            options={responseStatusOptions}
+                                                                            ariaLabel={`${copy.confirmTitle} ${recipient.name}`}
+                                                                        />
+                                                                    </div>
+                                                                ) : null}
+                                                            </div>
                                                         </td>
                                                         <td className="px-4 py-4 align-top text-slate-700">{recipient.attempts_count ?? 0}</td>
                                                         <td className="px-4 py-4 align-top text-slate-700">
@@ -2913,7 +2964,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     ? buildWhatsAppPreviewText(template.body, TEMPLATE_PREVIEW_RECIPIENT)
                                     : '';
                                 const whatsAppPreview = buildWhatsAppPreviewModel(whatsAppPreviewText);
-                                const hasResponseActions = whatsAppPreview.links.length >= 2;
+                                const hasResponseLink = whatsAppPreview.links.length >= 1;
 
                                 return (
                                     <div key={template.id} className="rounded-[1.75rem] border border-slate-200 bg-gradient-to-br from-white via-white to-slate-50/70 p-5 transition hover:border-slate-300 hover:shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
@@ -2929,9 +2980,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                             {isArabic ? 'HTML فاخر' : 'Luxury HTML'}
                                                         </span>
                                                     ) : null}
-                                                    {hasResponseActions ? (
+                                                    {hasResponseLink ? (
                                                         <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                                                            {isArabic ? 'رابطا رد جاهزان' : '2 response actions'}
+                                                            {isArabic ? 'رابط الرد جاهز' : 'Response link ready'}
                                                         </span>
                                                     ) : null}
                                                 </div>
@@ -4081,7 +4132,6 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         </section>
     );
 }
-
 
 
 

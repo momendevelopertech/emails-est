@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MessagingService } from './messaging.service';
 import { CreateRecipientDto } from './dto/create-recipient.dto';
@@ -9,6 +10,7 @@ import { SendCampaignDto } from './dto/send-campaign.dto';
 import { RetryRecipientsDto } from './dto/retry-recipients.dto';
 import { RecipientFilterDto } from './dto/recipient-filter.dto';
 import { SendHierarchyBriefsDto } from './dto/send-hierarchy-briefs.dto';
+import { UpdateRecipientResponseDto } from './dto/update-recipient-response.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('messaging')
@@ -48,6 +50,12 @@ export class MessagingController {
     @Put('recipients/:id')
     async updateRecipient(@Param('id') id: string, @Body() body: CreateRecipientDto) {
         return this.messagingService.updateRecipient(id, body);
+    }
+
+    @Put('recipients/:id/response')
+    async updateRecipientResponse(@Req() req: Request, @Param('id') id: string, @Body() body: UpdateRecipientResponseDto) {
+        this.ensureMessagingManager(req);
+        return this.messagingService.updateRecipientResponse(id, body.status);
     }
 
     @Delete('recipients/:id')
@@ -103,5 +111,12 @@ export class MessagingController {
     @Get('logs')
     async getLogs(@Query('page') page = '1', @Query('limit') limit = '100', @Query('cycleId') cycleId?: string) {
         return this.messagingService.getLogs(parseInt(page, 10), parseInt(limit, 10), cycleId);
+    }
+
+    private ensureMessagingManager(req: Request) {
+        const role = (req as Request & { user?: { role?: string } }).user?.role;
+        if (role !== 'SUPER_ADMIN' && role !== 'HR_ADMIN') {
+            throw new ForbiddenException('Only super admins and HR admins can update recipient responses.');
+        }
     }
 }
