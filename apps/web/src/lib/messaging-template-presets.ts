@@ -41,15 +41,15 @@ const escapeHtml = (value: string) => value
 
 const buildMetaComment = (config: EstGuidedTemplateConfig) => `<!-- ${META_PREFIX}${encodeURIComponent(JSON.stringify(config))} -->`;
 
-const buildBulletproofButton = (label: string, href: string, background: string) => `
+const buildBulletproofButton = (label: string, href: string, background: string, width = 220) => `
     <!--[if mso]>
-    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${href}" style="height:44px;v-text-anchor:middle;width:220px;" arcsize="50%" stroke="f" fillcolor="${background}">
+    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${href}" style="height:44px;v-text-anchor:middle;width:${width}px;" arcsize="50%" stroke="f" fillcolor="${background}">
         <w:anchorlock/>
         <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:700;">${label}</center>
     </v:roundrect>
     <![endif]-->
     <!--[if !mso]><!-- -->
-    <a href="${href}" role="button" aria-label="${label}" style="display:inline-block;background:${background};border-radius:999px;color:#ffffff;font-family:Segoe UI,Tahoma,Arial,sans-serif;font-size:14px;font-weight:800;line-height:44px;text-align:center;text-decoration:none;width:220px;-webkit-text-size-adjust:none;mso-hide:all;">${label}</a>
+    <a href="${href}" role="button" aria-label="${label}" style="display:block;background:${background};border-radius:999px;color:#ffffff;font-family:Segoe UI,Tahoma,Arial,sans-serif;font-size:14px;font-weight:800;line-height:44px;text-align:center;text-decoration:none;width:${width}px;-webkit-text-size-adjust:none;mso-hide:all;">${label}</a>
     <!--<![endif]-->
 `.trim();
 
@@ -109,13 +109,11 @@ const buildButtonsBlock = () => `
                                 <td style="padding:0 0 14px;">
                                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
                                         <tr>
-                                            <td style="padding:0 0 12px;vertical-align:top;" align="left">
-                                                ${buildBulletproofButton('Confirm Attendance', '{{confirm_url}}', '#15803d')}
+                                            <td width="50%" style="padding:0 6px 0 0;vertical-align:top;" align="left">
+                                                ${buildBulletproofButton('Confirm Attendance', '{{confirm_url}}', '#15803d', 248)}
                                             </td>
-                                        </tr>
-                                        <tr>
-                                            <td style="padding:0;vertical-align:top;" align="left">
-                                                ${buildBulletproofButton('Send Apology', '{{decline_url}}', '#dc2626')}
+                                            <td width="50%" style="padding:0 0 0 6px;vertical-align:top;" align="left">
+                                                ${buildBulletproofButton('Send Apology', '{{decline_url}}', '#dc2626', 248)}
                                             </td>
                                         </tr>
                                     </table>

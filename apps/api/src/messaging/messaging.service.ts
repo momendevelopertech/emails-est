@@ -27,6 +27,7 @@ import {
     parseExamAssignmentTemplateMeta,
 } from './exam-assignment-template-presets';
 import { normalizeEgyptMobilePhone } from '../shared/egypt-phone';
+import { getFrontendOrigin } from '../shared/cookie-settings';
 
 type SendResult = { recipientId: string; status: RecipientStatus; error?: string };
 type RecipientResponseStatus = 'PENDING' | 'CONFIRMED' | 'DECLINED';
@@ -1148,7 +1149,7 @@ export class MessagingService {
     }
 
     private buildFrontendUrl() {
-        return String(process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+        return getFrontendOrigin().replace(/\/$/, '');
     }
 
     private buildResponsePath(token: string, action?: 'confirm' | 'decline') {
