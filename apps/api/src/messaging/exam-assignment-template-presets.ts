@@ -153,7 +153,7 @@ ${buildMetaComment(definition)}
                         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
                             <tr>
                                 <td style="padding:28px 28px 22px;background:#171717;">
-                                    <img src="${EST_LOGO_URL}" alt="EST logo" width="200" style="display:block;width:200px;max-width:200px;height:auto;border:0;outline:none;text-decoration:none;" />
+                                    <img src="${EST_LOGO_URL}" alt="EST" width="200" style="display:block;width:200px;max-width:200px;height:auto;border:0;outline:none;text-decoration:none;" />
                                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;border-collapse:collapse;">
                                         <tr>
                                             <td style="padding:8px 14px;background:#ffe347;color:#111111;font-size:12px;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;">
