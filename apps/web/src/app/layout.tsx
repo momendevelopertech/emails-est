@@ -29,6 +29,10 @@ export const metadata: Metadata = {
     metadataBase: new URL(SITE_URL),
     title: 'Emails EST',
     description: 'Bulk email and messaging workspace',
+    icons: {
+        icon: '/icons/icon.svg',
+        apple: '/icons/icon.svg',
+    },
     openGraph: {
         title: 'Emails EST',
         description: 'Bulk email and messaging workspace',

@@ -31,6 +31,10 @@ export const getPublicResponseMetadata = (params?: { token?: string; action?: st
         metadataBase: baseUrl,
         title: 'EST Exam Response',
         description: 'Confirm your attendance or send an apology.',
+        icons: {
+            icon: '/icons/icon.svg',
+            apple: '/icons/icon.svg',
+        },
         alternates: {
             canonical: pageUrl,
         },
