@@ -2651,7 +2651,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                 </div>
 
                                 <div className="overflow-x-auto">
-                                    <div className="min-w-[1160px]">
+                                    <div className="min-w-[1120px]">
                                         <table className="w-full table-fixed divide-y divide-slate-200 text-left text-sm">
                                             <thead className="bg-slate-50 text-slate-600">
                                                 <tr>
@@ -2665,9 +2665,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                     </th>
                                                     <th className="sticky top-0 z-10 w-[180px] bg-slate-50 px-2.5 py-3">{copy.name}</th>
                                                     <th className="sticky top-0 z-10 w-[180px] bg-slate-50 px-2.5 py-3">{copy.contact}</th>
-                                                    <th className="sticky top-0 z-10 w-[60px] bg-slate-50 px-2.5 py-3 text-center">{copy.roomEst1}</th>
-                                                    <th className="sticky top-0 z-10 w-[100px] bg-slate-50 px-2.5 py-3">{copy.role}</th>
-                                                    <th className="sticky top-0 z-10 w-[100px] bg-slate-50 px-2.5 py-3">{copy.governorate}</th>
+                                                    <th className="sticky top-0 z-10 w-[260px] bg-slate-50 px-2.5 py-3">{copy.details}</th>
                                                     <th className="sticky top-0 z-10 w-[90px] bg-slate-50 px-2.5 py-3">{copy.status}</th>
                                                     <th className="sticky top-0 z-10 w-[100px] bg-slate-50 px-2.5 py-3">{copy.confirmTitle}</th>
                                                     <th className="sticky top-0 z-10 w-[60px] bg-slate-50 px-2.5 py-3 text-center">{copy.attempts}</th>
@@ -2679,14 +2677,14 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 {recipientsQuery.isLoading ? (
                                                     Array.from({ length: 8 }).map((_, index) => (
                                                         <tr key={`recipient-skeleton-${index}`}>
-                                                            <td colSpan={11} className="px-3 py-3">
+                                                            <td colSpan={9} className="px-3 py-3">
                                                                 <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
                                                             </td>
                                                         </tr>
                                                     ))
                                                 ) : recipients.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan={11} className="px-4 py-12 text-center text-slate-500">{copy.emptyRecipients}</td>
+                                                        <td colSpan={9} className="px-4 py-12 text-center text-slate-500">{copy.emptyRecipients}</td>
                                                     </tr>
                                                 ) : recipients.map((recipient) => {
                                                     const responseState = getRecipientResponseState(recipient);
@@ -2709,6 +2707,26 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                         : responseState === 'declined'
                                                             ? copy.confirmedLabels.declined
                                                             : copy.confirmedLabels.pending;
+                                                    const detailsExpanded = expandedRecipientDetailsId === recipient.id;
+                                                    const detailItems = RECIPIENT_DETAIL_FIELDS.map(({ key, fallback }) => ({
+                                                        key,
+                                                        label: fallback,
+                                                        value: key === 'room_est1'
+                                                            ? (recipient.room_est1 || recipient.room)
+                                                            : key === 'preferred_test_center'
+                                                                ? (recipient.preferred_test_center || recipient.test_center)
+                                                                : recipient[key],
+                                                    }));
+                                                    const expandedDetailItems = detailItems.filter((item) => (
+                                                        item.value
+                                                        && item.key !== 'room_est1'
+                                                        && item.key !== 'role'
+                                                        && item.key !== 'governorate'
+                                                        && item.key !== 'name'
+                                                        && item.key !== 'arabic_name'
+                                                        && item.key !== 'email'
+                                                        && item.key !== 'phone'
+                                                    ));
 
                                                     return (
                                                         <tr
@@ -2742,17 +2760,54 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                                     </div>
                                                                 </div>
                                                             </td>
-                                                            <td className="px-2.5 py-2 align-top text-center text-sm font-medium text-slate-700">
-                                                                {recipient.room_est1 || recipient.room || EMPTY_VALUE_LABEL}
-                                                            </td>
                                                             <td className="px-2.5 py-2 align-top">
-                                                                <div className="space-y-1">
-                                                                    <div className="truncate text-sm font-medium text-slate-900">{recipient.role || EMPTY_VALUE_LABEL}</div>
-                                                                    <div className="truncate text-xs text-slate-500">{recipient.type || EMPTY_VALUE_LABEL}</div>
+                                                                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                                                    <div className="grid gap-2 sm:grid-cols-3">
+                                                                        <div className="rounded-lg bg-white/80 px-2.5 py-2">
+                                                                            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">{copy.roomEst1}</div>
+                                                                            <div className="mt-1 truncate text-sm font-medium text-slate-900">{recipient.room_est1 || recipient.room || EMPTY_VALUE_LABEL}</div>
+                                                                        </div>
+                                                                        <div className="rounded-lg bg-white/80 px-2.5 py-2">
+                                                                            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">{copy.role}</div>
+                                                                            <div className="mt-1 truncate text-sm font-medium text-slate-900">{recipient.role || EMPTY_VALUE_LABEL}</div>
+                                                                        </div>
+                                                                        <div className="rounded-lg bg-white/80 px-2.5 py-2">
+                                                                            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">{copy.governorate}</div>
+                                                                            <div className="mt-1 truncate text-sm font-medium text-slate-900">{recipient.governorate || EMPTY_VALUE_LABEL}</div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="mt-2 flex items-center justify-between gap-2" onClick={stopRowToggle}>
+                                                                        <div className="truncate text-[11px] text-slate-500">
+                                                                            {recipient.type || EMPTY_VALUE_LABEL}
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-50"
+                                                                            onClick={() => setExpandedRecipientDetailsId((current) => current === recipient.id ? null : recipient.id)}
+                                                                        >
+                                                                            {detailsExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                                                            <span>{detailsExpanded ? copy.detailsHideMore : copy.detailsSeeMore}</span>
+                                                                        </button>
+                                                                    </div>
+
+                                                                    {detailsExpanded ? (
+                                                                        <div className="mt-3 grid gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600 sm:grid-cols-2">
+                                                                            {expandedDetailItems.length ? expandedDetailItems.map((item) => (
+                                                                                <div key={`${recipient.id}-${String(item.key)}`} className="min-w-0">
+                                                                                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                                                                        {item.label}
+                                                                                    </div>
+                                                                                    <div className="mt-1 break-words text-slate-700 [overflow-wrap:anywhere]">
+                                                                                        {String(item.value)}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )) : (
+                                                                                <div className="sm:col-span-2">{EMPTY_VALUE_LABEL}</div>
+                                                                            )}
+                                                                        </div>
+                                                                    ) : null}
                                                                 </div>
-                                                            </td>
-                                                            <td className="px-2.5 py-2 align-top text-sm text-slate-700">
-                                                                <div className="truncate">{recipient.governorate || EMPTY_VALUE_LABEL}</div>
                                                             </td>
                                                             <td className="px-2.5 py-2 align-top">
                                                                 <div className="space-y-1.5">
