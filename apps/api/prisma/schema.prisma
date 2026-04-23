@@ -32,6 +32,8 @@ enum RecipientSheet {
   LEGACY
   EST1
   EST2
+  SPARE
+  BLACKLIST
 }
 
 enum TemplateType {

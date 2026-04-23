@@ -31,7 +31,7 @@ type RecipientExcelFormState = {
     bank_divid: string;
     additional_info_1: string;
     additional_info_2: string;
-    sheet: 'EST1' | 'EST2' | '';
+    sheet: 'EST1' | 'EST2' | 'SPARE' | 'BLACKLIST' | '';
 };
 
 type RecipientFormErrors = Partial<Record<keyof RecipientExcelFormState, string>>;
@@ -177,6 +177,8 @@ export default function RecipientFormModal({
                                                         { value: '', label: 'No selection' },
                                                         { value: 'EST1', label: 'EST1' },
                                                         { value: 'EST2', label: 'EST2' },
+                                                        { value: 'SPARE', label: 'Spare' },
+                                                        { value: 'BLACKLIST', label: 'Blacklist' },
                                                     ]}
                                                 />
                                                 {errors.sheet ? <p className="mt-1 text-xs text-rose-600">{errors.sheet}</p> : null}

@@ -193,7 +193,17 @@ export function isValidEmail(value?: string | null) {
 }
 
 export function normalizeRecipientSheet(value: unknown): RecipientSheet {
-    const normalized = normalizeImportValue(value)?.toUpperCase();
+    const normalized = normalizeImportValue(value)
+        ?.toUpperCase()
+        .replace(/[\s_-]+/g, '');
+
+    if (normalized?.includes('BLACKLIST')) {
+        return RecipientSheet.BLACKLIST;
+    }
+
+    if (normalized?.includes('SPARE')) {
+        return RecipientSheet.SPARE;
+    }
 
     if (normalized?.includes('EST2')) {
         return RecipientSheet.EST2;

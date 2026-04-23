@@ -323,7 +323,7 @@ export class MessagingService {
             throw new BadRequestException('Recipient email is required.');
         }
         if (normalized.sheet === RecipientSheet.LEGACY) {
-            throw new BadRequestException('Recipient sheet must be EST1 or EST2.');
+            throw new BadRequestException('Recipient sheet must be EST1, EST2, SPARE, or BLACKLIST.');
         }
 
         if (!isValidEmail(normalized.email)) {
@@ -351,7 +351,7 @@ export class MessagingService {
             throw new BadRequestException('Recipient email is required.');
         }
         if (normalized.sheet === RecipientSheet.LEGACY) {
-            throw new BadRequestException('Recipient sheet must be EST1 or EST2.');
+            throw new BadRequestException('Recipient sheet must be EST1, EST2, SPARE, or BLACKLIST.');
         }
 
         if (!isValidEmail(normalized.email)) {
@@ -364,6 +364,27 @@ export class MessagingService {
                 ...normalized,
                 cycleId: normalized.cycleId ?? undefined,
             },
+        });
+    }
+
+    async swapRecipientSheet(id: string, sheet: RecipientSheet) {
+        if (sheet === RecipientSheet.LEGACY) {
+            throw new BadRequestException('Cannot move recipient to LEGACY sheet.');
+        }
+
+        const recipient = await this.prisma.recipient.findUnique({
+            where: { id },
+            select: { id: true, sheet: true },
+        });
+
+        if (!recipient) {
+            throw new BadRequestException('Recipient not found.');
+        }
+
+        return this.prisma.recipient.update({
+            where: { id },
+            data: { sheet },
+            select: { id: true, sheet: true, name: true },
         });
     }
 

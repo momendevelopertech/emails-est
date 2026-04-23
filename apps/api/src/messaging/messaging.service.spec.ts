@@ -73,6 +73,36 @@ describe('MessagingService', () => {
         expect(res.cycle).toEqual(expect.objectContaining({ id: 'cycle-1' }));
     });
 
+    it('importRecipients preserves spare and blacklist sheet rows', async () => {
+        prisma.recipientCycle.create.mockResolvedValue({
+            id: 'cycle-2',
+            name: 'May Cycle',
+            slug: 'may-cycle-20260423110000',
+        });
+        prisma.recipientCycle.findUniqueOrThrow.mockResolvedValue({
+            id: 'cycle-2',
+            name: 'May Cycle',
+            slug: 'may-cycle-20260423110000',
+        });
+        prisma.recipient.createMany.mockResolvedValue({ count: 2 });
+
+        await service.importRecipients({
+            source_file_name: 'test.xlsx',
+            recipients: [
+                { name: 'Spare One', email: 'spare@example.com', room_est1: '206', sheet: RecipientSheet.SPARE } as any,
+                { name: 'Blocked One', email: 'blocked@example.com', room_est1: '1st floor', sheet: RecipientSheet.BLACKLIST } as any,
+            ],
+        });
+
+        const createdCycleId = prisma.recipientCycle.create.mock.calls[0][0].data.id;
+        expect(prisma.recipient.createMany).toHaveBeenCalledWith({
+            data: expect.arrayContaining([
+                expect.objectContaining({ cycleId: createdCycleId, name: 'Spare One', sheet: RecipientSheet.SPARE }),
+                expect.objectContaining({ cycleId: createdCycleId, name: 'Blocked One', sheet: RecipientSheet.BLACKLIST }),
+            ]),
+        });
+    });
+
     it('createRecipient normalizes EST-specific fields', async () => {
         prisma.recipient.create.mockResolvedValue({ id: 'r1' });
 
@@ -146,7 +176,7 @@ describe('MessagingService', () => {
             room_est1: 'EST-12',
             email: 'ali@example.com',
             sheet: RecipientSheet.LEGACY,
-        } as any)).rejects.toThrow('Recipient sheet must be EST1 or EST2.');
+        } as any)).rejects.toThrow('Recipient sheet must be EST1, EST2, SPARE, or BLACKLIST.');
     });
 
     it('updateRecipient rejects invalid or missing required fields', async () => {
@@ -162,7 +192,20 @@ describe('MessagingService', () => {
             room_est1: 'EST-15',
             email: 'mona@example.com',
             sheet: RecipientSheet.LEGACY,
-        } as any)).rejects.toThrow('Recipient sheet must be EST1 or EST2.');
+        } as any)).rejects.toThrow('Recipient sheet must be EST1, EST2, SPARE, or BLACKLIST.');
+    });
+
+    it('swapRecipientSheet moves a recipient between operational sheets', async () => {
+        prisma.recipient.findUnique.mockResolvedValue({ id: 'r1', sheet: RecipientSheet.EST1 });
+        prisma.recipient.update.mockResolvedValue({ id: 'r1', sheet: RecipientSheet.SPARE, name: 'Ali Hassan' });
+
+        await service.swapRecipientSheet('r1', RecipientSheet.SPARE);
+
+        expect(prisma.recipient.update).toHaveBeenCalledWith({
+            where: { id: 'r1' },
+            data: { sheet: RecipientSheet.SPARE },
+            select: { id: true, sheet: true, name: true },
+        });
     });
 
     it('deleteRecipient removes the selected row', async () => {
@@ -174,12 +217,14 @@ describe('MessagingService', () => {
     });
 
     it('getTemplates syncs the managed EST assignment templates to the latest preset definitions', async () => {
+        const [firstPreset] = EXAM_ASSIGNMENT_TEMPLATE_PRESETS;
+
         prisma.template.findMany
             .mockResolvedValueOnce([
                 {
                     id: 'preset-est1',
-                    name: 'EST I Exam Assignment',
-                    type: TemplateType.BOTH,
+                    name: firstPreset.name,
+                    type: firstPreset.type,
                     subject: 'Old subject',
                     body: '<table><tr><td>outdated</td></tr></table>',
                     include_confirmation_button: false,
@@ -188,8 +233,8 @@ describe('MessagingService', () => {
             .mockResolvedValueOnce([
                 {
                     id: 'preset-est1',
-                    name: 'EST I Exam Assignment',
-                    type: TemplateType.BOTH,
+                    name: firstPreset.name,
+                    type: firstPreset.type,
                     subject: 'Old subject',
                     body: '<table><tr><td>outdated</td></tr></table>',
                 },
@@ -201,22 +246,22 @@ describe('MessagingService', () => {
         expect(prisma.template.update).toHaveBeenCalledWith({
             where: { id: 'preset-est1' },
             data: expect.objectContaining({
-                type: TemplateType.BOTH,
-                subject: 'EST I Exam Assignment | {{name}}',
-                body: expect.stringContaining('EST_TEMPLATE_META:'),
+                type: firstPreset.type,
+                subject: firstPreset.subject,
+                body: firstPreset.body,
             }),
         });
-        expect(prisma.template.create).toHaveBeenCalledTimes(3);
+        expect(prisma.template.create).toHaveBeenCalledTimes(EXAM_ASSIGNMENT_TEMPLATE_PRESETS.length - 1);
         expect(prisma.template.create).toHaveBeenNthCalledWith(1, {
             data: expect.objectContaining({
-                name: 'EST I Exam Assignment (With Confirmation)',
-                type: TemplateType.BOTH,
+                name: EXAM_ASSIGNMENT_TEMPLATE_PRESETS[1].name,
+                type: EXAM_ASSIGNMENT_TEMPLATE_PRESETS[1].type,
             }),
         });
         expect(templates).toEqual([
             expect.objectContaining({
-                name: 'EST I Exam Assignment',
-                type: TemplateType.BOTH,
+                name: firstPreset.name,
+                type: firstPreset.type,
             }),
         ]);
     });

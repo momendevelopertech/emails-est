@@ -43,6 +43,16 @@ import {
 import { useRequireAuth } from '@/lib/use-auth';
 import { buildRecipientExcelRow, getImportErrorMessage } from './upload-utils';
 import RecipientFormModal, { RecipientExcelFormState, RecipientFormErrors } from './RecipientFormModal';
+import {
+    type BlacklistConflictInfo,
+    buildBlacklistConflictMap,
+    getRecipientSheetLabel,
+    isManagedRecipientSheet,
+    MANAGED_SHEET_DISPLAY_ORDER,
+    SHEET_DISPLAY_ORDER,
+    SHEET_META,
+    type RecipientSheetValue,
+} from './recipient-sheet-utils';
 import ConfirmDialog from '../ConfirmDialog';
 import FormSelect from '../FormSelect';
 
@@ -100,7 +110,7 @@ type Recipient = {
     arrival_time?: string | null;
     confirmed_at?: string | null;
     declined_at?: string | null;
-    sheet?: 'LEGACY' | 'EST1' | 'EST2';
+    sheet?: RecipientSheetValue;
     status: 'PENDING' | 'PROCESSING' | 'SENT' | 'FAILED';
     error_message?: string | null;
     attempts_count?: number;
@@ -146,7 +156,7 @@ type RecipientFilterOptions = {
     types: string[];
     governorates: string[];
     sheets: Array<{
-        value: 'LEGACY' | 'EST1' | 'EST2';
+        value: RecipientSheetValue;
         count: number;
     }>;
 };
@@ -173,7 +183,7 @@ type LogRow = {
             id: string;
             name: string;
         } | null;
-        sheet?: 'LEGACY' | 'EST1' | 'EST2';
+        sheet?: RecipientSheetValue;
     };
 };
 
@@ -241,7 +251,7 @@ type HierarchyBriefChannel = 'WHATSAPP' | 'EMAIL';
 type HierarchyBriefResult = {
     dry_run: boolean;
     cycle_id: string | null;
-    sheet: 'LEGACY' | 'EST1' | 'EST2' | null;
+    sheet: RecipientSheetValue | null;
     channels: HierarchyBriefChannel[];
     filters: {
         include_heads: boolean;
@@ -857,7 +867,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     ));
     const [selectedCycleId, setSelectedCycleId] = useState('');
     const [cycleSelectionReady, setCycleSelectionReady] = useState(false);
-    const [selectedSheet, setSelectedSheet] = useState<'LEGACY' | 'EST1' | 'EST2' | ''>('');
+    const [selectedSheet, setSelectedSheet] = useState<RecipientSheetValue | ''>('');
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState<number>(1500);
     const [filters, setFilters] = useState<RecipientFilters>(EMPTY_FILTERS);
@@ -1000,7 +1010,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             return;
         }
 
-        const preferred = (['EST1', 'EST2', 'LEGACY'] as const).find((sheet) => availableSheets.includes(sheet));
+        const preferred = (['EST1', 'EST2', 'SPARE', 'BLACKLIST', 'LEGACY'] as const).find((sheet) => availableSheets.includes(sheet));
         setSelectedSheet(preferred ?? availableSheets[0]);
         setPage(1);
     }, [recipientFilterOptionsQuery.data?.sheets, selectedSheet]);
@@ -1600,8 +1610,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const filterOptions = recipientFilterOptionsQuery.data ?? { roles: [], types: [], governorates: [], sheets: [] };
     const availableSheets = filterOptions.sheets;
-    const primarySheetTabs = availableSheets.filter((sheet) => sheet.value === 'EST1' || sheet.value === 'EST2');
-    const secondarySheetTabs = availableSheets.filter((sheet) => sheet.value !== 'EST1' && sheet.value !== 'EST2');
+    const orderedSheetTabs = SHEET_DISPLAY_ORDER
+        .map((sheetValue) => availableSheets.find((sheet) => sheet.value === sheetValue))
+        .filter((sheet): sheet is RecipientFilterOptions['sheets'][number] => Boolean(sheet));
     const clearableOption = { value: '', label: isArabic ? 'بدون تحديد' : 'No selection' };
     const cycleSelectOptions = [
         { value: ALL_CYCLES_VALUE, label: isArabic ? 'كل الدورات' : 'All cycles' },
@@ -1677,7 +1688,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const openCreateRecipientForm = () => {
         setEditingRecipientId(null);
         setEditingRecipientCycleId(null);
-        setRecipientForm(EMPTY_RECIPIENT_FORM);
+        setRecipientForm({
+            ...EMPTY_RECIPIENT_FORM,
+            sheet: isManagedRecipientSheet(selectedSheet) ? selectedSheet : '',
+        });
         setRecipientFormErrors({});
         setIsRecipientFormOpen(true);
     };
@@ -1716,7 +1730,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             bank_divid: recipient.bank_divid || '',
             additional_info_1: recipient.additional_info_1 || '',
             additional_info_2: recipient.additional_info_2 || '',
-            sheet: recipient.sheet === 'EST1' || recipient.sheet === 'EST2' ? recipient.sheet : '',
+            sheet: isManagedRecipientSheet(recipient.sheet) ? recipient.sheet : '',
         });
         setRecipientFormErrors({});
         setIsRecipientFormOpen(true);
@@ -1767,72 +1781,117 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
     const exportRecipientsToExcel = async () => {
         try {
-            const firstResponse = await api.get('/messaging/recipients', {
-                params: {
-                    ...filters,
-                    cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
-                    sheet: selectedSheet || undefined,
-                    status: filters.status || undefined,
-                    page: 1,
-                    limit: 1000,
-                },
-            });
+            const fetchRecipientsForExport = async ({
+                sheet = selectedSheet,
+                applyCurrentFilters = true,
+            }: {
+                sheet?: RecipientSheetValue | '';
+                applyCurrentFilters?: boolean;
+            } = {}) => {
+                const params: Record<string, string | number | undefined> = applyCurrentFilters
+                    ? buildFilterPayload(false)
+                    : {};
 
-            const firstPage = firstResponse.data as { items: Recipient[]; total: number };
-            let allItems = [...(firstPage.items ?? [])];
-            const total = firstPage.total ?? allItems.length;
-            const pages = Math.ceil(total / 1000);
+                if (selectedCycleId !== ALL_CYCLES_VALUE) {
+                    params.cycleId = selectedCycleId;
+                }
 
-            for (let currentPage = 2; currentPage <= pages; currentPage += 1) {
-                const response = await api.get('/messaging/recipients', {
-                    params: {
-                        ...filters,
-                        cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
-                        sheet: selectedSheet || undefined,
-                        status: filters.status || undefined,
-                        page: currentPage,
-                        limit: 1000,
-                    },
-                });
-                allItems = allItems.concat(response.data?.items ?? []);
-            }
+                params.sheet = sheet || undefined;
+                params.status = applyCurrentFilters ? filters.status || undefined : undefined;
+                params.page = 1;
+                params.limit = 1000;
+
+                const firstResponse = await api.get('/messaging/recipients', { params });
+                const firstPage = firstResponse.data as { items: Recipient[]; total: number };
+                let items = [...(firstPage.items ?? [])];
+                const total = firstPage.total ?? items.length;
+                const pages = Math.ceil(total / 1000);
+
+                for (let currentPage = 2; currentPage <= pages; currentPage += 1) {
+                    const response = await api.get('/messaging/recipients', {
+                        params: {
+                            ...params,
+                            page: currentPage,
+                        },
+                    });
+                    items = items.concat(response.data?.items ?? []);
+                }
+
+                return items;
+            };
+
+            const allItems = await fetchRecipientsForExport();
+            const blacklistConflictMap: Map<string, BlacklistConflictInfo> = selectedSheet === 'BLACKLIST'
+                ? buildBlacklistConflictMap(
+                    allItems,
+                    (await Promise.all(
+                        MANAGED_SHEET_DISPLAY_ORDER
+                            .filter((sheet) => sheet !== 'BLACKLIST')
+                            .map((sheet) => fetchRecipientsForExport({ sheet, applyCurrentFilters: false })),
+                    )).flat(),
+                )
+                : new Map<string, BlacklistConflictInfo>();
+
+            const blacklistConflictHeader = isArabic ? 'حالة تعارض البلاك ليست' : 'Blacklist Conflict';
+            const blacklistFoundInHeader = isArabic ? 'موجود في الشيتات' : 'Found In Sheets';
+            const blacklistMatchByHeader = isArabic ? 'التطابق بواسطة' : 'Matched By';
+            const blacklistConflictLabel = isArabic ? 'موجود في شيتات أخرى' : 'Found in other sheets';
+            const blacklistClearLabel = isArabic ? 'سليم' : 'Clear';
 
             const worksheet = XLSX.utils.json_to_sheet(
-                allItems.map((recipient) => ({
-                    'Response Status': RESPONSE_STATUS_LABELS[getRecipientResponseState(recipient)],
-                    ...buildRecipientExcelRow({
-                        room_est1: recipient.room_est1 || recipient.room || '',
-                        division: recipient.division || '',
-                        name: recipient.name || '',
-                        arabic_name: recipient.arabic_name || '',
-                        email: recipient.email || '',
-                        phone: recipient.phone || '',
-                        employer: recipient.employer || '',
-                        kind_of_school: recipient.kind_of_school || '',
-                        title: recipient.title || '',
-                        insurance_number: recipient.insurance_number || '',
-                        institution_tax_number: recipient.institution_tax_number || '',
-                        national_id_number: recipient.national_id_number || '',
-                        national_id_picture: recipient.national_id_picture || '',
-                        personal_photo: recipient.personal_photo || '',
-                        preferred_proctoring_city: recipient.preferred_proctoring_city || '',
-                        preferred_test_center: recipient.preferred_test_center || '',
-                        bank_account_name: recipient.bank_account_name || '',
-                        bank_name: recipient.bank_name || '',
-                        bank_branch_name: recipient.bank_branch_name || '',
-                        account_number: recipient.account_number || '',
-                        iban_number: recipient.iban_number || '',
-                        role: recipient.role || '',
-                        type: recipient.type || '',
-                        governorate: recipient.governorate || '',
-                        address: recipient.address || '',
-                        building: recipient.building || '',
-                        location: recipient.location || '',
-                        bank_divid: recipient.bank_divid || '',
-                        additional_info_1: recipient.additional_info_1 || '',
-                        additional_info_2: recipient.additional_info_2 || '',
-                    }),
-                })),
+                allItems.map((recipient) => {
+                    const blacklistConflict = selectedSheet === 'BLACKLIST'
+                        ? blacklistConflictMap.get(recipient.id)
+                        : null;
+
+                    return {
+                        'Response Status': RESPONSE_STATUS_LABELS[getRecipientResponseState(recipient)],
+                        ...(selectedSheet === 'BLACKLIST' ? {
+                            [blacklistConflictHeader]: blacklistConflict ? blacklistConflictLabel : blacklistClearLabel,
+                            [blacklistFoundInHeader]: blacklistConflict
+                                ? blacklistConflict.foundIn.map((sheet) => getRecipientSheetLabel(sheet, isArabic)).join(', ')
+                                : '',
+                            [blacklistMatchByHeader]: blacklistConflict
+                                ? [
+                                    blacklistConflict.matchedByName ? (isArabic ? 'الاسم' : 'Name') : null,
+                                    blacklistConflict.matchedByPhone ? (isArabic ? 'رقم الهاتف' : 'Phone') : null,
+                                ].filter(Boolean).join(', ')
+                                : '',
+                        } : {}),
+                        ...buildRecipientExcelRow({
+                            room_est1: recipient.room_est1 || recipient.room || '',
+                            division: recipient.division || '',
+                            name: recipient.name || '',
+                            arabic_name: recipient.arabic_name || '',
+                            email: recipient.email || '',
+                            phone: recipient.phone || '',
+                            employer: recipient.employer || '',
+                            kind_of_school: recipient.kind_of_school || '',
+                            title: recipient.title || '',
+                            insurance_number: recipient.insurance_number || '',
+                            institution_tax_number: recipient.institution_tax_number || '',
+                            national_id_number: recipient.national_id_number || '',
+                            national_id_picture: recipient.national_id_picture || '',
+                            personal_photo: recipient.personal_photo || '',
+                            preferred_proctoring_city: recipient.preferred_proctoring_city || '',
+                            preferred_test_center: recipient.preferred_test_center || '',
+                            bank_account_name: recipient.bank_account_name || '',
+                            bank_name: recipient.bank_name || '',
+                            bank_branch_name: recipient.bank_branch_name || '',
+                            account_number: recipient.account_number || '',
+                            iban_number: recipient.iban_number || '',
+                            role: recipient.role || '',
+                            type: recipient.type || '',
+                            governorate: recipient.governorate || '',
+                            address: recipient.address || '',
+                            building: recipient.building || '',
+                            location: recipient.location || '',
+                            bank_divid: recipient.bank_divid || '',
+                            additional_info_1: recipient.additional_info_1 || '',
+                            additional_info_2: recipient.additional_info_2 || '',
+                        }),
+                    };
+                }),
             );
             const responseStatusStyles: Record<string, any> = {
                 Pending: {
@@ -1851,6 +1910,20 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                     alignment: { horizontal: 'center', vertical: 'center' },
                 },
             };
+            const blacklistConflictCellStyle = {
+                fill: { fgColor: { rgb: 'FFE4E6' } },
+                font: { color: { rgb: '9F1239' }, bold: true },
+                alignment: { horizontal: 'center', vertical: 'center' },
+            };
+            const blacklistConflictRowStyle = {
+                fill: { fgColor: { rgb: 'FFF1F2' } },
+                font: { color: { rgb: '881337' } },
+            };
+            const blacklistClearCellStyle = {
+                fill: { fgColor: { rgb: 'ECFDF5' } },
+                font: { color: { rgb: '166534' }, bold: true },
+                alignment: { horizontal: 'center', vertical: 'center' },
+            };
 
             const headerStyle = {
                 fill: { fgColor: { rgb: '0F172A' } },
@@ -1863,6 +1936,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             worksheet['!cols'] = headers.map((header) => {
                 const normalized = String(header || '').toLowerCase();
                 if (normalized === 'response status') return { wch: 18 };
+                if (normalized.includes('blacklist')) return { wch: 22 };
+                if (normalized.includes('found in')) return { wch: 22 };
+                if (normalized.includes('matched by')) return { wch: 16 };
                 if (normalized.includes('arabic')) return { wch: 24 };
                 if (normalized.includes('email')) return { wch: 28 };
                 if (normalized.includes('phone')) return { wch: 18 };
@@ -1891,9 +1967,49 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                 }
             });
 
+            if (selectedSheet === 'BLACKLIST') {
+                const conflictColumnIndex = headers.indexOf(blacklistConflictHeader);
+
+                allItems.forEach((recipient, index) => {
+                    const conflict = blacklistConflictMap.get(recipient.id);
+
+                    if (!conflict && conflictColumnIndex >= 0) {
+                        const conflictCellAddress = XLSX.utils.encode_cell({ r: index + 1, c: conflictColumnIndex });
+                        if (worksheet[conflictCellAddress]) {
+                            worksheet[conflictCellAddress].s = blacklistClearCellStyle;
+                        }
+                        return;
+                    }
+
+                    if (!conflict) {
+                        return;
+                    }
+
+                    for (let col = dataRange.s.c; col <= dataRange.e.c; col += 1) {
+                        const cellAddress = XLSX.utils.encode_cell({ r: index + 1, c: col });
+                        if (!worksheet[cellAddress]) {
+                            continue;
+                        }
+
+                        worksheet[cellAddress].s = col === conflictColumnIndex
+                            ? blacklistConflictCellStyle
+                            : blacklistConflictRowStyle;
+                    }
+                });
+            }
+
             const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Recipients');
-            const fileName = selectedSheet ? `recipients_${selectedSheet.toLowerCase()}.xlsx` : 'recipients.xlsx';
+            const worksheetName = selectedSheet === 'BLACKLIST'
+                ? 'Blacklist Review'
+                : selectedSheet
+                    ? getRecipientSheetLabel(selectedSheet, false)
+                    : 'Recipients';
+            XLSX.utils.book_append_sheet(workbook, worksheet, worksheetName);
+            const fileName = selectedSheet === 'BLACKLIST'
+                ? 'recipients_blacklist_review.xlsx'
+                : selectedSheet
+                    ? `recipients_${selectedSheet.toLowerCase()}.xlsx`
+                    : 'recipients.xlsx';
             XLSX.writeFile(workbook, fileName, { cellStyles: true });
             toast.success(copy.exportSuccess);
         } catch (error: any) {
@@ -1976,7 +2092,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             subject: preset.subject,
             body: preset.body,
         });
-        setGuidedTemplateForm(preset.guidedConfig);
+        setGuidedTemplateForm(preset.guidedConfig ?? null);
         setIsAdvancedTemplateEditorOpen(false);
         setActiveTemplateField('body');
     };
@@ -2283,11 +2399,45 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         </div>
     );
     const isDesktopFiltersVisible = !desktopFiltersCollapsed;
-    const switchSheet = (nextSheet: 'LEGACY' | 'EST1' | 'EST2') => {
+    const switchSheet = (nextSheet: RecipientSheetValue) => {
         setPage(1);
         setSelectedRecipientIds([]);
         setSelectedSheet(nextSheet);
     };
+    const renderRecipientSheetTabs = () => (
+        orderedSheetTabs.length ? orderedSheetTabs.map((sheet) => {
+            const active = selectedSheet === sheet.value;
+            const meta = SHEET_META[sheet.value];
+            const label = getRecipientSheetLabel(sheet.value, isArabic);
+
+            return (
+                <button
+                    key={sheet.value}
+                    type="button"
+                    onClick={() => switchSheet(sheet.value)}
+                    className={`flex shrink-0 items-center gap-2 rounded-full border px-3 py-2 text-sm font-semibold transition ${
+                        active
+                            ? `${meta.border} ${meta.bg} ${meta.color} shadow-sm`
+                            : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                    }`}
+                >
+                    <span className={`h-2 w-2 rounded-full ${active ? meta.dot : 'bg-slate-300'}`} />
+                    <span>{label}</span>
+                    <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] leading-none ${
+                            active
+                                ? `${meta.bg} ${meta.color} border ${meta.border}`
+                                : 'bg-slate-100 text-slate-500'
+                        }`}
+                    >
+                        {sheet.count}
+                    </span>
+                </button>
+            );
+        }) : (
+            <div className="text-sm text-slate-500">{copy.noSheets}</div>
+        )
+    );
     const renderRecipientFiltersPanel = (isOverlay = false, includeCycleDetails = true) => (
         <div className={`flex h-full flex-col gap-3 rounded-[1.35rem] border border-slate-200 bg-white p-3 shadow-sm shadow-slate-900/5 ${isOverlay ? 'min-h-0' : ''}`}>
             {includeCycleDetails ? (
@@ -2563,47 +2713,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 <span>{isArabic ? 'الفلاتر' : 'Filters'}</span>
                                             </button>
 
-                                            {primarySheetTabs.length ? primarySheetTabs.map((sheet) => {
-                                                const active = selectedSheet === sheet.value;
-                                                return (
-                                                    <button
-                                                        key={sheet.value}
-                                                        type="button"
-                                                        onClick={() => switchSheet(sheet.value)}
-                                                        className={`flex shrink-0 items-center gap-2 border-b-2 px-1 pb-3 pt-1 text-sm font-semibold transition ${
-                                                            active
-                                                                ? 'border-blue-600 text-blue-700'
-                                                                : 'border-transparent text-slate-500 hover:text-slate-900'
-                                                        }`}
-                                                    >
-                                                        <span>{sheet.value}</span>
-                                                        <span className={`rounded-full px-2 py-0.5 text-[11px] ${active ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
-                                                            {sheet.count}
-                                                        </span>
-                                                    </button>
-                                                );
-                                            }) : (
-                                                <div className="text-sm text-slate-500">{copy.noSheets}</div>
-                                            )}
-
-                                            {secondarySheetTabs.map((sheet) => {
-                                                const active = selectedSheet === sheet.value;
-                                                const sheetLabel = sheet.value === 'LEGACY' ? copy.legacySheet : sheet.value;
-                                                return (
-                                                    <button
-                                                        key={sheet.value}
-                                                        type="button"
-                                                        onClick={() => switchSheet(sheet.value)}
-                                                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                                                            active
-                                                                ? 'border-blue-200 bg-blue-50 text-blue-700'
-                                                                : 'border-slate-200 bg-white text-slate-500 hover:text-slate-900'
-                                                        }`}
-                                                    >
-                                                        {sheetLabel}
-                                                    </button>
-                                                );
-                                            })}
+                                            {renderRecipientSheetTabs()}
                                         </div>
 
                                         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
@@ -3036,35 +3146,12 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             <div className="min-w-0">
                             <div className="mt-5 flex flex-col gap-4 rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                                    <div>
-                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.sheetTabsTitle}</div>
-                                        <div className="mt-2 flex flex-wrap gap-2">
-                                            {availableSheets.length ? availableSheets.map((sheet) => {
-                                                const active = selectedSheet === sheet.value;
-                                                const sheetLabel = sheet.value === 'LEGACY' ? copy.legacySheet : sheet.value;
-                                                return (
-                                                    <button
-                                                        key={sheet.value}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            setPage(1);
-                                                            setSelectedRecipientIds([]);
-                                                            setSelectedSheet(sheet.value);
-                                                        }}
-                                                        className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                                                            active
-                                                                ? 'border-emerald-200 bg-emerald-50 text-emerald-800 shadow-sm'
-                                                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
-                                                        }`}
-                                                    >
-                                                        {sheetLabel} ({sheet.count})
-                                                    </button>
-                                                );
-                                            }) : (
-                                                <div className="text-sm text-slate-500">{copy.noSheets}</div>
-                                            )}
+                                        <div>
+                                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.sheetTabsTitle}</div>
+                                            <div className="mt-2 flex flex-wrap gap-2">
+                                                {renderRecipientSheetTabs()}
+                                            </div>
                                         </div>
-                                    </div>
 
                                     <div className="min-w-[220px]">
                                         <label className="mb-2 block text-sm font-medium text-slate-700">{copy.recordsPerPage}</label>
@@ -3485,7 +3572,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                         <label className="mb-2 block text-sm font-medium text-amber-950">{isArabic ? 'يوم الامتحان' : 'Exam day'}</label>
                                                         <input
                                                             value={guidedTemplateForm.examDay}
-                                                            onChange={(event) => setGuidedTemplateForm((current) => current ? { ...current, examDay: event.target.value } : current)}
+                                                            onChange={(event) => setGuidedTemplateForm((current: EstGuidedTemplateConfig | null) => current ? { ...current, examDay: event.target.value } : current)}
                                                             className="input w-full bg-white"
                                                             placeholder={isArabic ? 'مثال: Friday' : 'e.g. Friday'}
                                                         />
@@ -3494,7 +3581,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                         <label className="mb-2 block text-sm font-medium text-amber-950">{isArabic ? 'التاريخ الكامل' : 'Full date'}</label>
                                                         <input
                                                             value={guidedTemplateForm.examDate}
-                                                            onChange={(event) => setGuidedTemplateForm((current) => current ? { ...current, examDate: event.target.value } : current)}
+                                                            onChange={(event) => setGuidedTemplateForm((current: EstGuidedTemplateConfig | null) => current ? { ...current, examDate: event.target.value } : current)}
                                                             className="input w-full bg-white"
                                                             placeholder={isArabic ? 'مثال: 15th of May 2026' : 'e.g. 15th of May 2026'}
                                                         />
@@ -3503,7 +3590,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                         <label className="mb-2 block text-sm font-medium text-amber-950">{isArabic ? 'وقت الحضور' : 'Arrival time'}</label>
                                                         <input
                                                             value={guidedTemplateForm.arrivalTime}
-                                                            onChange={(event) => setGuidedTemplateForm((current) => current ? { ...current, arrivalTime: event.target.value } : current)}
+                                                            onChange={(event) => setGuidedTemplateForm((current: EstGuidedTemplateConfig | null) => current ? { ...current, arrivalTime: event.target.value } : current)}
                                                             className="input w-full bg-white"
                                                             placeholder={isArabic ? 'مثال: 8:00 AM' : 'e.g. 8:00 AM'}
                                                         />
@@ -3887,47 +3974,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 </button>
                                             ) : null}
 
-                                            {primarySheetTabs.length ? primarySheetTabs.map((sheet) => {
-                                                const active = selectedSheet === sheet.value;
-                                                return (
-                                                    <button
-                                                        key={sheet.value}
-                                                        type="button"
-                                                        onClick={() => switchSheet(sheet.value)}
-                                                        className={`flex shrink-0 items-center gap-2 border-b-2 px-1 pb-3 pt-1 text-sm font-semibold transition ${
-                                                            active
-                                                                ? 'border-blue-600 text-blue-700'
-                                                                : 'border-transparent text-slate-500 hover:text-slate-900'
-                                                        }`}
-                                                    >
-                                                        <span>{sheet.value}</span>
-                                                        <span className={`rounded-full px-2 py-0.5 text-[11px] ${active ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
-                                                            {sheet.count}
-                                                        </span>
-                                                    </button>
-                                                );
-                                            }) : (
-                                                <div className="text-sm text-slate-500">{copy.noSheets}</div>
-                                            )}
-
-                                            {secondarySheetTabs.map((sheet) => {
-                                                const active = selectedSheet === sheet.value;
-                                                const sheetLabel = sheet.value === 'LEGACY' ? copy.legacySheet : sheet.value;
-                                                return (
-                                                    <button
-                                                        key={sheet.value}
-                                                        type="button"
-                                                        onClick={() => switchSheet(sheet.value)}
-                                                        className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                                                            active
-                                                                ? 'border-blue-200 bg-blue-50 text-blue-700'
-                                                                : 'border-slate-200 bg-white text-slate-500 hover:text-slate-900'
-                                                        }`}
-                                                    >
-                                                        {sheetLabel}
-                                                    </button>
-                                                );
-                                            })}
+                                            {renderRecipientSheetTabs()}
                                         </div>
 
                                         <div className="flex flex-wrap items-center gap-2 lg:justify-end">

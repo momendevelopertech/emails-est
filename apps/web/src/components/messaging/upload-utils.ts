@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 
-export const EXCEL_SHEET_NAMES = ['EST1', 'EST2'] as const;
+export const EXCEL_SHEET_NAMES = ['EST1', 'EST2', 'SPARE', 'BLACKLIST'] as const;
 export type ExcelSheetName = typeof EXCEL_SHEET_NAMES[number];
 
 export const EXCEL_UPLOAD_HEADERS = [
@@ -151,9 +151,11 @@ const normalizeHeader = (value: unknown) => String(value || '')
     .replace(/[^a-z0-9]/g, '');
 
 const detectSheetName = (value: string): ExcelSheetName | null => {
-    const normalized = value.trim().toUpperCase();
-    if (normalized.startsWith('EST1')) return 'EST1';
+    const normalized = value.trim().toUpperCase().replace(/[\s_-]+/g, '');
+    if (normalized.startsWith('BLACKLIST')) return 'BLACKLIST';
+    if (normalized.startsWith('SPARE')) return 'SPARE';
     if (normalized.startsWith('EST2')) return 'EST2';
+    if (normalized.startsWith('EST1')) return 'EST1';
     return null;
 };
 
@@ -239,7 +241,7 @@ function buildSheetRows(rows: unknown[][], sheet: ExcelSheetName, isArabic: bool
 }
 
 const getSheetHeaderRow = (sheet: ExcelSheetName) => [
-    sheet === 'EST2' ? 'ROOM EST2' : 'ROOM EST1',
+    sheet === 'EST1' ? 'ROOM EST1' : 'ROOM EST2',
     ...EXCEL_UPLOAD_HEADERS.slice(1),
 ];
 
@@ -309,10 +311,10 @@ export function downloadWorkbook(kind: DownloadKind) {
 
 export function getUploadHint(locale?: string | boolean) {
     if (isArabicInput(locale)) {
-        return 'ارفع ملف EST الرسمي مباشرة. النظام يقرأ EST1 وEST2، يحفظ كل أعمدة المراقب كما هي، وينشئ دورة مستقلة لكل عملية رفع.';
+        return 'ارفع ملف EST الرسمي مباشرة. النظام يقرأ EST1 وEST2 والـ spare والـ blacklist، يحفظ كل أعمدة المراقب كما هي، وينشئ دورة مستقلة لكل عملية رفع.';
     }
 
-    return 'Upload the official EST workbook directly. EST1 and EST2 are parsed automatically, all proctor profile columns are preserved, and every upload is stored as a separate cycle.';
+    return 'Upload the official EST workbook directly. EST1, EST2, Spare and Blacklist sheets are all parsed automatically, all proctor profile columns are preserved, and every upload is stored as a separate cycle.';
 }
 
 export function getImportErrorMessage(error: any, fallback: string) {
@@ -329,8 +331,8 @@ export async function parseRecipientWorkbook(file: File, localeOrArabic: string 
 
     if (!matchingSheets.length) {
         throw new Error(isArabic
-            ? 'الملف يجب أن يحتوي على شيت EST1 أو EST2 على الأقل.'
-            : 'The workbook must contain at least one EST1 or EST2 sheet.');
+            ? 'الملف يجب أن يحتوي على شيت مدعوم واحد على الأقل مثل EST1 أو EST2 أو Spare أو Blacklist.'
+            : 'The workbook must contain at least one supported sheet such as EST1, EST2, Spare, or Blacklist.');
     }
 
     const recipients = matchingSheets.flatMap(({ sheetName, normalized }) => {

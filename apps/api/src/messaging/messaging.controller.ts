@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, ForbiddenException, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Param, Patch, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MessagingService } from './messaging.service';
@@ -11,6 +11,7 @@ import { RetryRecipientsDto } from './dto/retry-recipients.dto';
 import { RecipientFilterDto } from './dto/recipient-filter.dto';
 import { SendHierarchyBriefsDto } from './dto/send-hierarchy-briefs.dto';
 import { UpdateRecipientResponseDto } from './dto/update-recipient-response.dto';
+import { RecipientSheet } from '@prisma/client';
 
 @UseGuards(JwtAuthGuard)
 @Controller('messaging')
@@ -50,6 +51,11 @@ export class MessagingController {
     @Put('recipients/:id')
     async updateRecipient(@Param('id') id: string, @Body() body: CreateRecipientDto) {
         return this.messagingService.updateRecipient(id, body);
+    }
+
+    @Patch('recipients/:id/sheet')
+    async swapRecipientSheet(@Param('id') id: string, @Body() body: { sheet: RecipientSheet }) {
+        return this.messagingService.swapRecipientSheet(id, body.sheet);
     }
 
     @Put('recipients/:id/response')
