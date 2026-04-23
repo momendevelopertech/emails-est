@@ -29,6 +29,8 @@ export type TemplatePreviewRecipient = Record<string, string>;
 
 const EST_LOGO_URL = '{{brand_logo_url}}';
 const META_PREFIX = 'EST_TEMPLATE_META:';
+const FOOTER_CONTACT_EMAIL = 'noreply@est.com';
+const FOOTER_PHYSICAL_ADDRESS = 'EST Operations Office, Cairo, Egypt';
 
 const escapeHtml = (value: string) => value
     .replace(/&/g, '&amp;')
@@ -47,8 +49,38 @@ const buildBulletproofButton = (label: string, href: string, background: string)
     </v:roundrect>
     <![endif]-->
     <!--[if !mso]><!-- -->
-    <a href="${href}" style="display:inline-block;background:${background};border-radius:999px;color:#ffffff;font-family:Segoe UI,Tahoma,Arial,sans-serif;font-size:14px;font-weight:800;line-height:44px;text-align:center;text-decoration:none;width:220px;-webkit-text-size-adjust:none;mso-hide:all;">${label}</a>
+    <a href="${href}" role="button" aria-label="${label}" style="display:inline-block;background:${background};border-radius:999px;color:#ffffff;font-family:Segoe UI,Tahoma,Arial,sans-serif;font-size:14px;font-weight:800;line-height:44px;text-align:center;text-decoration:none;width:220px;-webkit-text-size-adjust:none;mso-hide:all;">${label}</a>
     <!--<![endif]-->
+`.trim();
+
+const buildFooterBlock = () => `
+    <tr>
+        <td style="padding:24px 28px 30px;border-top:1px solid #dbe2ea;background:#f8fafc;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                <tr>
+                    <td style="padding:0 0 8px;font-size:12px;line-height:18px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#475569;mso-line-height-rule:exactly;">
+                        EST
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:0 0 4px;font-size:13px;line-height:20px;color:#475569;mso-line-height-rule:exactly;">
+                        Contact email:
+                        <a href="mailto:${FOOTER_CONTACT_EMAIL}" style="color:#0f172a;text-decoration:underline;">${FOOTER_CONTACT_EMAIL}</a>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:0 0 4px;font-size:13px;line-height:20px;color:#475569;mso-line-height-rule:exactly;">
+                        Physical address: ${FOOTER_PHYSICAL_ADDRESS}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:0;font-size:12px;line-height:20px;color:#64748b;mso-line-height-rule:exactly;">
+                        Unsubscribe: If you no longer wish to receive these emails, please reply to this message.
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
 `.trim();
 
 const buildButtonsBlock = () => `
@@ -77,10 +109,12 @@ const buildButtonsBlock = () => `
                                 <td style="padding:0 0 14px;">
                                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">
                                         <tr>
-                                            <td style="padding:0 6px 0 0;vertical-align:top;">
+                                            <td style="padding:0 0 12px;vertical-align:top;" align="left">
                                                 ${buildBulletproofButton('Confirm Attendance', '{{confirm_url}}', '#15803d')}
                                             </td>
-                                            <td style="padding:0 0 0 6px;vertical-align:top;">
+                                        </tr>
+                                        <tr>
+                                            <td style="padding:0;vertical-align:top;" align="left">
                                                 ${buildBulletproofButton('Send Apology', '{{decline_url}}', '#dc2626')}
                                             </td>
                                         </tr>
@@ -90,7 +124,7 @@ const buildButtonsBlock = () => `
                             <tr>
                                 <td style="padding:14px 16px;border:1px solid #dbe2ea;background:#ffffff;font-size:12px;line-height:20px;color:#475569;mso-line-height-rule:exactly;">
                                     If the buttons do not open, use this page instead:
-                                    <a href="{{response_url}}" style="color:#0f172a;font-weight:800;text-decoration:underline;">Open response page</a>
+                                    <a href="{{response_url}}" style="color:#0f172a;font-weight:800;text-decoration:underline;word-break:break-word;">Open response page</a>
                                 </td>
                             </tr>
                         </table>
@@ -123,16 +157,16 @@ export const buildGuidedTemplateContent = (config: EstGuidedTemplateConfig) => {
 
     const body = `
 ${buildMetaComment(config)}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0;padding:0;border-collapse:collapse;background:#eef2f6;font-family:Segoe UI,Tahoma,Arial,sans-serif;color:#0f172a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0;padding:0;border-collapse:collapse;table-layout:fixed;background:#eef2f6;font-family:Segoe UI,Tahoma,Arial,sans-serif;color:#0f172a;mso-table-lspace:0pt;mso-table-rspace:0pt;">
     <tr>
         <td align="center" style="padding:24px 12px;">
-            <table role="presentation" width="680" cellpadding="0" cellspacing="0" border="0" style="width:680px;max-width:680px;margin:0 auto;border-collapse:collapse;background:#ffffff;">
+            <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="width:640px;max-width:640px;margin:0 auto;border-collapse:collapse;background:#ffffff;">
                 <tr>
                     <td style="border:1px solid #dbe2ea;">
                         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;background:#ffffff;">
                             <tr>
                                 <td style="padding:28px 28px 22px;background:#171717;">
-                                    <img src="${EST_LOGO_URL}" alt="EST" width="200" style="display:block;width:200px;max-width:200px;height:auto;border:0;outline:none;text-decoration:none;" />
+                                    <img src="${EST_LOGO_URL}" alt="EST logo" width="200" style="display:block;width:200px;max-width:200px;height:auto;border:0;outline:none;text-decoration:none;" />
                                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;border-collapse:collapse;">
                                         <tr>
                                             <td style="padding:8px 14px;background:#ffe347;color:#111111;font-size:12px;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;">
@@ -259,6 +293,7 @@ ${buildMetaComment(config)}
                                     </p>
                                 </td>
                             </tr>
+                            ${buildFooterBlock()}
                         </table>
                     </td>
                 </tr>

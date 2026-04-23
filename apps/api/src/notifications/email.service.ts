@@ -17,6 +17,7 @@ type SendEmailOptions = {
     to: string;
     subject: string;
     html: string;
+    text?: string;
 };
 
 type ResolvedSenderConfig = {
@@ -85,6 +86,7 @@ export class EmailService {
                     to: options.to,
                     subject: options.subject,
                     html: options.html,
+                    text: options.text?.trim() || undefined,
                 });
 
                 this.logger.log(`Email sent to ${options.to} on attempt ${attempt}`);

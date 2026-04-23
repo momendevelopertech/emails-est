@@ -1216,10 +1216,14 @@ export class MessagingService {
             if (recipient.email) {
                 const subject = this.renderTemplate(template.subject, recipientWithActionUrls);
                 const html = this.renderEmailBody(template.body, recipientWithActionUrls);
+                const text = isRichHtmlEmailTemplate(template.body)
+                    ? this.htmlToPlainText(html)
+                    : this.renderTemplate(template.body, recipientWithActionUrls);
                 const emailResult = await this.emailService.sendEmail({
                     to: recipient.email,
                     subject,
                     html,
+                    text,
                 });
                 if (emailResult.ok) {
                     const details = [`Delivered successfully`];
