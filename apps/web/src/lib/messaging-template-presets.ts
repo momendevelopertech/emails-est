@@ -505,7 +505,8 @@ export const buildEmailPreviewDocument = (body: string) => `<!DOCTYPE html>
   </body>
 </html>`;
 
-const buildBulletproofButton = (label: string, href: string, background: string, width = 232) => `
+function buildBulletproofButton(label: string, href: string, background: string, width = 232) {
+    return `
     <!--[if mso]>
     <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${href}" style="height:44px;v-text-anchor:middle;width:${width}px;" arcsize="50%" stroke="f" fillcolor="${background}">
         <w:anchorlock/>
@@ -516,8 +517,10 @@ const buildBulletproofButton = (label: string, href: string, background: string,
     <a href="${href}" role="button" aria-label="${label}" style="display:block;background:${background};border-radius:999px;color:#ffffff;font-family:Segoe UI,Tahoma,Arial,sans-serif;font-size:14px;font-weight:800;line-height:44px;text-align:center;text-decoration:none;width:${width}px;-webkit-text-size-adjust:none;mso-hide:all;">${label}</a>
     <!--<![endif]-->
 `.trim();
+}
 
-const buildGuidedFooterBlock = () => `
+function buildGuidedFooterBlock() {
+    return `
     <tr>
         <td style="padding:24px 28px 30px;border-top:1px solid #dbe2ea;background:#f8fafc;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
@@ -546,8 +549,10 @@ const buildGuidedFooterBlock = () => `
         </td>
     </tr>
 `.trim();
+}
 
-const buildGuidedButtonsBlock = () => `
+function buildGuidedButtonsBlock() {
+    return `
     <tr>
         <td style="padding:0 0 20px;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #d8e3da;background:#f6fbf7;">
@@ -596,6 +601,7 @@ const buildGuidedButtonsBlock = () => `
         </td>
     </tr>
 `.trim();
+}
 
 function normalizeGuidedTemplateConfig(config: EstGuidedTemplateConfig): EstGuidedTemplateConfig {
     return {
