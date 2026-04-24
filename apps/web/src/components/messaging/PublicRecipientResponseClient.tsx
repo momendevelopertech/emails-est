@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { CheckCircle2, Clock3, HeartHandshake, MapPin, Sparkles, XCircle } from 'lucide-react';
 import api from '@/lib/api';
@@ -17,7 +18,6 @@ type PublicRecipientPayload = {
     role?: string | null;
     assignment_role?: string | null;
     type?: string | null;
-    room_est1?: string | null;
     governorate?: string | null;
     building?: string | null;
     address?: string | null;
@@ -92,7 +92,7 @@ export default function PublicRecipientResponseClient({ initialToken, initialAct
     const statusCopy = getStatusCopy(status, roleLabel);
     const isFinalState = viewState === 'ready' && status !== 'PENDING';
 
-    const submitAction = async (action: ResponseAction) => {
+    const submitAction = useCallback(async (action: ResponseAction) => {
         if (!token) {
             setViewState('error');
             setMessage('Invalid confirmation link.');
@@ -130,7 +130,7 @@ export default function PublicRecipientResponseClient({ initialToken, initialAct
                 || 'Unable to process your request right now. Please try again.',
             );
         }
-    };
+    }, [status, token]);
 
     useEffect(() => {
         if (!token) {
@@ -185,13 +185,13 @@ export default function PublicRecipientResponseClient({ initialToken, initialAct
             autoActionHandledRef.current = true;
             void submitAction(requestedAction);
         }
-    }, [requestedAction, status, viewState]);
+    }, [requestedAction, status, submitAction, viewState]);
 
     return (
         <section className="min-h-screen bg-atmosphere px-4 py-8 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-5xl overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-900/5">
                 <div className="bg-[#171717] px-6 py-8 text-white md:px-8">
-                    <img src="/brand/est-logo.jpg" alt="EST" className="h-auto w-[170px] max-w-full rounded-xl" />
+                    <Image src="/brand/est-logo.jpg" alt="EST" width={170} height={62} className="h-auto w-[170px] max-w-full rounded-xl" priority />
                     <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                         <div className="min-w-0">
                             <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white/80">
@@ -270,11 +270,7 @@ export default function PublicRecipientResponseClient({ initialToken, initialAct
                                 </div>
                             </div>
 
-                            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                                <div className="rounded-[1.2rem] border border-slate-200 bg-white p-4">
-                                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Room</div>
-                                    <div className="mt-2 text-sm font-semibold text-slate-900">{recipient?.room_est1 || EMPTY_VALUE_LABEL}</div>
-                                </div>
+                            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                                 <div className="rounded-[1.2rem] border border-slate-200 bg-white p-4">
                                     <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Role</div>
                                     <div className="mt-2 text-sm font-semibold text-slate-900">{recipient?.role || EMPTY_VALUE_LABEL}</div>

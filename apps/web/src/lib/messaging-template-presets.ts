@@ -814,7 +814,7 @@ export const buildWhatsAppPreviewText = (
             `🕗 Arrival time: ${guidedConfig.arrivalTime}`,
             `👤 Role: ${recipient.role || '{{role}}'}`,
             `🏢 Test center: ${recipient.building || '{{building}}'}`,
-            `🚪 Room: ${recipient.room_est1 || '{{room_est1}}'}`,
+            guidedConfig.variant === 'CONFIRMATION' ? null : `🚪 Room: ${recipient.room_est1 || '{{room_est1}}'}`,
             '',
             'Please review your assignment details carefully and arrive 30 minutes early.',
             guidedConfig.variant === 'CONFIRMATION' ? '' : null,

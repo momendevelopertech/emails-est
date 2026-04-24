@@ -949,7 +949,6 @@ export class MessagingService {
                 phone: true,
                 role: true,
                 type: true,
-                room_est1: true,
                 governorate: true,
                 building: true,
                 address: true,

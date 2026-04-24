@@ -1009,13 +1009,18 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     };
 
+    const isRecipientsTab = activeTab === 'recipients';
+    const isTemplatesTab = activeTab === 'templates';
+    const isCampaignTab = activeTab === 'campaign';
+    const isSettingsTab = activeTab === 'settings';
+
     const cyclesQuery = useQuery<CycleSummary[]>({
         queryKey: ['messaging-cycles'],
         queryFn: async () => {
             const response = await api.get('/messaging/cycles');
             return response.data;
         },
-        enabled: ready,
+        enabled: ready && (isRecipientsTab || isCampaignTab),
     });
 
     useEffect(() => {
@@ -1070,7 +1075,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         return items;
     }, []);
 
-    const sheetReferenceQueryEnabled = ready && activeTab === 'recipients' && (
+    const sheetReferenceQueryEnabled = ready && isRecipientsTab && (
         selectedSheet === 'BLACKLIST'
         || selectedSheet === 'SPARE'
         || Boolean(spareAssignmentRecipient)
@@ -1103,7 +1108,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
             sheet: 'SPARE',
         }),
-        enabled: ready && activeTab === 'recipients' && (
+        enabled: ready && isRecipientsTab && (
             selectedSheet === 'BLACKLIST'
             || Boolean(spareSwapRecipient)
         ),
@@ -1125,7 +1130,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             });
             return response.data;
         },
-        enabled: ready && cycleSelectionReady,
+        enabled: ready && cycleSelectionReady && isRecipientsTab,
         placeholderData: keepPreviousData,
     });
 
@@ -1139,7 +1144,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             });
             return response.data;
         },
-        enabled: ready && cycleSelectionReady,
+        enabled: ready && cycleSelectionReady && isRecipientsTab,
     });
 
     useEffect(() => {
@@ -1195,7 +1200,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             const response = await api.get('/messaging/templates');
             return response.data;
         },
-        enabled: ready,
+        enabled: ready && (isTemplatesTab || isCampaignTab),
     });
 
     const logsQuery = useQuery<{ items: LogRow[] }>({
@@ -1209,7 +1214,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             });
             return response.data;
         },
-        enabled: ready && cycleSelectionReady,
+        enabled: ready && cycleSelectionReady && isCampaignTab && campaignViewTab === 'logs',
     });
 
     const emailSettingsQuery = useQuery<EmailSettingsRecord>({
@@ -1218,7 +1223,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             const response = await api.get('/settings/email');
             return response.data;
         },
-        enabled: ready && canManageSettings,
+        enabled: ready && canManageSettings && isSettingsTab && settingsViewTab === 'email',
     });
 
     const whatsAppSettingsQuery = useQuery<WhatsAppSettingsRecord>({
@@ -1227,7 +1232,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             const response = await api.get('/settings/whatsapp');
             return response.data;
         },
-        enabled: ready && canManageSettings,
+        enabled: ready && canManageSettings && isSettingsTab && settingsViewTab === 'whatsapp',
     });
 
     useEffect(() => {

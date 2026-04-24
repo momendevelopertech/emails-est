@@ -711,7 +711,7 @@ describe('MessagingService', () => {
         expect(whatsAppMessage).toContain('*Action Required*');
         expect(whatsAppMessage).toContain('Please open the response page to confirm attendance or send an apology.');
         expect(whatsAppMessage).toContain('/r/confirm-token');
-        expect(whatsAppMessage).toContain('🚪 Room: 201');
+        expect(whatsAppMessage).not.toContain('🚪 Room: 201');
         expect(whatsAppMessage).not.toContain('/messaging/confirm?token=confirm-token&action=confirm');
         expect(whatsAppMessage).not.toContain('Google Maps:');
     });
