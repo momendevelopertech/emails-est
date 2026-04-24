@@ -539,6 +539,23 @@ const RECIPIENT_DETAIL_FIELDS: Array<{ key: keyof Recipient; fallback: string }>
 const isWorkspaceTab = (value?: string | null): value is WorkspaceTab =>
     value === 'recipients' || value === 'templates' || value === 'campaign' || value === 'settings';
 
+const isCampaignViewTab = (value?: string | null): value is CampaignViewTab =>
+    value === 'send' || value === 'briefs' || value === 'logs';
+
+const isSettingsViewTab = (value?: string | null): value is SettingsViewTab =>
+    value === 'email' || value === 'whatsapp';
+
+const parseWorkspaceCycleParam = (value?: string | null) => value === 'all' ? ALL_CYCLES_VALUE : (value || '');
+
+const parseWorkspaceSheetParam = (value?: string | null): RecipientSheetValue | '' => (
+    SHEET_DISPLAY_ORDER.includes(value as RecipientSheetValue) ? (value as RecipientSheetValue) : ''
+);
+
+const parseWorkspacePageSizeParam = (value?: string | null) => {
+    const parsed = Number(value);
+    return PAGE_SIZE_OPTIONS.includes(parsed as typeof PAGE_SIZE_OPTIONS[number]) ? parsed : 1500;
+};
+
 const getRecipientResponseState = (recipient: Pick<Recipient, 'confirmed_at' | 'declined_at'>): RecipientResponseState => {
     if (recipient.declined_at) return 'declined';
     if (recipient.confirmed_at) return 'confirmed';
@@ -933,11 +950,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [activeTab, setActiveTab] = useState<WorkspaceTab>(() => (
         isWorkspaceTab(searchParams.get('tab')) ? (searchParams.get('tab') as WorkspaceTab) : 'recipients'
     ));
-    const [selectedCycleId, setSelectedCycleId] = useState('');
+    const [selectedCycleId, setSelectedCycleId] = useState(() => parseWorkspaceCycleParam(searchParams.get('cycleId')));
     const [cycleSelectionReady, setCycleSelectionReady] = useState(false);
-    const [selectedSheet, setSelectedSheet] = useState<RecipientSheetValue | ''>('');
+    const [selectedSheet, setSelectedSheet] = useState<RecipientSheetValue | ''>(() => parseWorkspaceSheetParam(searchParams.get('sheet')));
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState<number>(1500);
+    const [pageSize, setPageSize] = useState<number>(() => parseWorkspacePageSizeParam(searchParams.get('pageSize')));
     const [filters, setFilters] = useState<RecipientFilters>(EMPTY_FILTERS);
     const [desktopFiltersCollapsed, setDesktopFiltersCollapsed] = useState(false);
     const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -951,8 +968,12 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [guidedTemplateForm, setGuidedTemplateForm] = useState<EstGuidedTemplateConfig | null>(null);
     const [isAdvancedTemplateEditorOpen, setIsAdvancedTemplateEditorOpen] = useState(false);
     const [campaignTemplateId, setCampaignTemplateId] = useState('');
-    const [campaignViewTab, setCampaignViewTab] = useState<CampaignViewTab>('send');
-    const [settingsViewTab, setSettingsViewTab] = useState<SettingsViewTab>('email');
+    const [campaignViewTab, setCampaignViewTab] = useState<CampaignViewTab>(() => (
+        isCampaignViewTab(searchParams.get('campaignView')) ? (searchParams.get('campaignView') as CampaignViewTab) : 'send'
+    ));
+    const [settingsViewTab, setSettingsViewTab] = useState<SettingsViewTab>(() => (
+        isSettingsViewTab(searchParams.get('settingsView')) ? (searchParams.get('settingsView') as SettingsViewTab) : 'email'
+    ));
     const [campaignPreviewModal, setCampaignPreviewModal] = useState<CampaignPreviewModal>(null);
     const [sendScope, setSendScope] = useState<SendScope>('selected');
     const [logsExpanded, setLogsExpanded] = useState(false);
@@ -999,14 +1020,60 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     }, [activeTab, searchParams]);
 
     useEffect(() => {
+        const currentParams = new URLSearchParams(searchParams.toString());
+        currentParams.sort();
+
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.set('tab', activeTab);
+
+        if (selectedCycleId) {
+            nextParams.set('cycleId', selectedCycleId === ALL_CYCLES_VALUE ? 'all' : selectedCycleId);
+        } else {
+            nextParams.delete('cycleId');
+        }
+
+        if (selectedSheet) {
+            nextParams.set('sheet', selectedSheet);
+        } else {
+            nextParams.delete('sheet');
+        }
+
+        if (pageSize !== 1500) {
+            nextParams.set('pageSize', String(pageSize));
+        } else {
+            nextParams.delete('pageSize');
+        }
+
+        if (campaignViewTab !== 'send') {
+            nextParams.set('campaignView', campaignViewTab);
+        } else {
+            nextParams.delete('campaignView');
+        }
+
+        if (settingsViewTab !== 'email') {
+            nextParams.set('settingsView', settingsViewTab);
+        } else {
+            nextParams.delete('settingsView');
+        }
+
+        nextParams.sort();
+
+        const currentQuery = currentParams.toString();
+        const nextQuery = nextParams.toString();
+
+        if (currentQuery === nextQuery) {
+            return;
+        }
+
+        router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    }, [activeTab, campaignViewTab, pageSize, pathname, router, searchParams, selectedCycleId, selectedSheet, settingsViewTab]);
+
+    useEffect(() => {
         setMobileFiltersOpen(false);
     }, [activeTab]);
 
     const updateTab = (nextTab: WorkspaceTab) => {
         setActiveTab(nextTab);
-        const params = new URLSearchParams(searchParams.toString());
-        params.set('tab', nextTab);
-        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     };
 
     const isRecipientsTab = activeTab === 'recipients';
@@ -1032,10 +1099,18 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             return;
         }
 
-        const nextCycleId = cyclesQuery.data?.[0]?.id || ALL_CYCLES_VALUE;
-        setSelectedCycleId(nextCycleId);
+        const availableCycleIds = cyclesQuery.data?.map((cycle) => cycle.id) ?? [];
+        const nextCycleId = selectedCycleId === ALL_CYCLES_VALUE
+            ? ALL_CYCLES_VALUE
+            : (selectedCycleId && availableCycleIds.includes(selectedCycleId))
+                ? selectedCycleId
+                : (cyclesQuery.data?.[0]?.id || ALL_CYCLES_VALUE);
+
+        if (selectedCycleId !== nextCycleId) {
+            setSelectedCycleId(nextCycleId);
+        }
         setCycleSelectionReady(true);
-    }, [cycleSelectionReady, cyclesQuery.data, cyclesQuery.isFetched]);
+    }, [cycleSelectionReady, cyclesQuery.data, cyclesQuery.isFetched, selectedCycleId]);
 
     useEffect(() => {
         if (!cycleSelectionReady) {
