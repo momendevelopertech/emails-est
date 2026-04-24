@@ -2,7 +2,19 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { Building2, Download, Loader2, Save, Star, Users } from 'lucide-react';
+import {
+    BadgeCheck,
+    Building2,
+    Download,
+    Loader2,
+    Mail,
+    MapPin,
+    MessageSquareText,
+    Phone,
+    Save,
+    Star,
+    Users,
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 import api from '@/lib/api';
 
@@ -75,6 +87,7 @@ const nominationOptions: Array<{ value: '' | NominationRole; label: string }> = 
     { value: 'ROAMING', label: 'Recommend as Roaming' },
     { value: 'SENIOR', label: 'Recommend as Senior' },
 ];
+const ratingOptions: EditableReviewRow['draftRating'][] = ['1', '2', '3', '4', '5'];
 
 const roleBadgeStyles: Record<ReviewRow['hierarchy_role'], string> = {
     HEAD: 'border border-slate-300 bg-slate-100 text-slate-800',
@@ -189,11 +202,16 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
     ) => {
         setRows((current) => current.map((row) => (
             row.recipient_id === recipientId
-                ? {
-                    ...row,
-                    [field]: value,
-                    ...(field === 'draftRating' ? { showsInheritedSeniorRating: false } : {}),
-                }
+                ? field === 'draftRating'
+                    ? {
+                        ...row,
+                        draftRating: value as EditableReviewRow['draftRating'],
+                        showsInheritedSeniorRating: !value && Boolean(payload ? getInheritedSeniorRating(row, payload.role) : ''),
+                    }
+                    : {
+                        ...row,
+                        [field]: value,
+                    }
                 : row
         )));
     };
@@ -296,30 +314,30 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
 
     return (
         <section className="min-h-screen bg-atmosphere px-4 py-8 sm:px-6 lg:px-8">
-            <div className="mx-auto max-w-[1700px] space-y-5">
-                <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-900/5">
-                    <div className="bg-[#171717] px-6 py-8 text-white md:px-8">
+            <div className="mx-auto max-w-[1320px] space-y-4 sm:space-y-5">
+                <div className="overflow-hidden rounded-[1.8rem] border border-slate-200 bg-white shadow-xl shadow-slate-900/5">
+                    <div className="bg-[#171717] px-5 py-6 text-white md:px-7">
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0">
                                 <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white/80">
                                     <Users size={14} />
                                     <span>{payload.role === 'HEAD' ? 'Head review sheet' : 'Senior review sheet'}</span>
                                 </div>
-                                <h1 className="mt-4 text-3xl font-semibold leading-tight text-white sm:text-4xl">
+                                <h1 className="mt-4 text-2xl font-semibold leading-tight text-white sm:text-3xl">
                                     {payload.reviewer.recipient_name}
                                 </h1>
-                                <p className="mt-3 max-w-3xl text-sm leading-7 text-white/75">
+                                <p className="mt-3 max-w-3xl text-sm leading-6 text-white/75">
                                     This sheet is public and does not require login. Rate the listed people from 1 to 5, add comments,
                                     and recommend who can step up to roaming or senior responsibilities.
                                 </p>
                             </div>
 
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="rounded-[1.2rem] border border-white/10 bg-white/10 px-4 py-3 text-sm">
+                            <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[320px]">
+                                <div className="rounded-[1.05rem] border border-white/10 bg-white/10 px-4 py-3 text-sm">
                                     <div className="text-white/60">Building</div>
                                     <div className="mt-1 font-semibold text-white">{payload.building}</div>
                                 </div>
-                                <div className="rounded-[1.2rem] border border-white/10 bg-white/10 px-4 py-3 text-sm">
+                                <div className="rounded-[1.05rem] border border-white/10 bg-white/10 px-4 py-3 text-sm">
                                     <div className="text-white/60">Floor / Scope</div>
                                     <div className="mt-1 font-semibold text-white">{payload.floor || 'Full building'}</div>
                                 </div>
@@ -327,27 +345,27 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                         </div>
                     </div>
 
-                    <div className="border-b border-slate-200 bg-slate-50 px-6 py-5 md:px-8">
+                    <div className="border-b border-slate-200 bg-slate-50 px-5 py-5 md:px-7">
                         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                             <div className="grid gap-3 sm:grid-cols-3">
-                                <div className="rounded-[1.1rem] border border-slate-200 bg-white px-4 py-3 text-sm">
+                                <div className="rounded-[1rem] border border-slate-200 bg-white px-4 py-3 text-sm">
                                     <div className="text-slate-500">Rows</div>
                                     <div className="mt-1 text-lg font-semibold text-slate-950">{payload.summary.total_rows}</div>
                                 </div>
-                                <div className="rounded-[1.1rem] border border-slate-200 bg-white px-4 py-3 text-sm">
+                                <div className="rounded-[1rem] border border-slate-200 bg-white px-4 py-3 text-sm">
                                     <div className="text-slate-500">Saved by this sheet</div>
                                     <div className="mt-1 text-lg font-semibold text-slate-950">{payload.summary.reviewed_rows}</div>
                                 </div>
-                                <div className="rounded-[1.1rem] border border-slate-200 bg-white px-4 py-3 text-sm">
+                                <div className="rounded-[1rem] border border-slate-200 bg-white px-4 py-3 text-sm">
                                     <div className="text-slate-500">Senior updates</div>
                                     <div className="mt-1 text-lg font-semibold text-slate-950">{payload.summary.senior_reviewed_rows}</div>
                                 </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-3">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                                 <button
                                     type="button"
-                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 sm:w-auto"
                                     onClick={exportExcel}
                                 >
                                     <Download size={16} />
@@ -355,7 +373,7 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                 </button>
                                 <button
                                     type="button"
-                                    className="inline-flex items-center gap-2 rounded-xl bg-cactus px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cactus px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                                     onClick={() => void saveAllReviews()}
                                     disabled={viewState === 'saving'}
                                 >
@@ -371,13 +389,13 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                         </div>
                     </div>
 
-                    <div className="space-y-5 px-6 py-6 md:px-8">
+                    <div className="space-y-4 px-4 py-4 sm:px-5 md:px-7">
                         {groupedRows.map((group) => (
-                            <div key={group.groupName} className="overflow-hidden rounded-[1.6rem] border border-slate-200 bg-slate-50">
+                            <div key={group.groupName} className="overflow-hidden rounded-[1.4rem] border border-slate-200 bg-slate-50">
                                 <div className="flex flex-col gap-3 border-b border-slate-200 bg-white px-4 py-4 md:flex-row md:items-center md:justify-between">
                                     <div>
                                         <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Group</div>
-                                        <div className="mt-1 flex items-center gap-2 text-lg font-semibold text-slate-950">
+                                        <div className="mt-1 flex items-center gap-2 text-base font-semibold text-slate-950 sm:text-lg">
                                             <Building2 size={18} className="text-slate-400" />
                                             <span>{group.groupName}</span>
                                         </div>
@@ -385,105 +403,188 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                     <div className="text-sm text-slate-600">{group.rows.length} rows</div>
                                 </div>
 
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-[1250px] divide-y divide-slate-200 text-left text-sm">
-                                        <thead className="bg-slate-100 text-slate-600">
-                                            <tr>
-                                                <th className="px-3 py-3 text-left">Row</th>
-                                                <th className="px-3 py-3 text-left">Rating</th>
-                                                <th className="px-3 py-3 text-left">Name</th>
-                                                <th className="px-3 py-3 text-left">Role</th>
-                                                <th className="px-3 py-3 text-left">Floor</th>
-                                                <th className="px-3 py-3 text-left">Room</th>
-                                                <th className="px-3 py-3 text-left">Phone</th>
-                                                <th className="px-3 py-3 text-left">Email</th>
-                                                <th className="px-3 py-3 text-left">Comment</th>
-                                                <th className="px-3 py-3 text-left">Recommendation</th>
-                                                {payload.role === 'HEAD' ? (
-                                                    <th className="px-3 py-3 text-left">Senior feedback</th>
-                                                ) : null}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-200 bg-white">
-                                            {group.rows.map((row) => (
-                                                <tr key={row.recipient_id} className={row.hierarchy_role === 'SENIOR' ? 'bg-cyan-50/50' : ''}>
-                                                    <td className="px-3 py-3 align-top text-slate-700">{row.row_order}</td>
-                                                    <td className="px-3 py-3 align-top">
-                                                        <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                                                            <Star size={14} className="text-amber-500" />
-                                                            <select
-                                                                value={getVisibleRating(row, payload.role)}
-                                                                onChange={(event) => handleRowChange(row.recipient_id, 'draftRating', event.target.value)}
-                                                                className="bg-transparent text-sm font-medium text-slate-900 outline-none"
-                                                            >
-                                                                <option value="">-</option>
-                                                                <option value="1">1</option>
-                                                                <option value="2">2</option>
-                                                                <option value="3">3</option>
-                                                                <option value="4">4</option>
-                                                                <option value="5">5</option>
-                                                            </select>
+                                <div className="space-y-3 p-3 sm:p-4">
+                                    {group.rows.map((row) => {
+                                        const visibleRating = getVisibleRating(row, payload.role);
+                                        const hasCustomRating = Boolean(row.draftRating);
+
+                                        return (
+                                            <article
+                                                key={row.recipient_id}
+                                                className={`rounded-[1.25rem] border p-4 shadow-sm shadow-slate-900/5 ${
+                                                    row.hierarchy_role === 'SENIOR'
+                                                        ? 'border-cyan-200 bg-cyan-50/40'
+                                                        : 'border-slate-200 bg-white'
+                                                }`}
+                                            >
+                                                <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
+                                                    <div className="space-y-3">
+                                                        <div className="min-w-0">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                                                                    Row {row.row_order}
+                                                                </span>
+                                                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${roleBadgeStyles[row.hierarchy_role]}`}>
+                                                                    {row.role || row.hierarchy_role}
+                                                                </span>
+                                                                {row.showsInheritedSeniorRating && row.linked_senior_review ? (
+                                                                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                                                                        <BadgeCheck size={12} />
+                                                                        <span>Senior rating synced</span>
+                                                                    </span>
+                                                                ) : null}
+                                                            </div>
+                                                            <h2 className="mt-2 text-base font-semibold text-slate-950 sm:text-lg">
+                                                                {row.recipient_name}
+                                                            </h2>
                                                         </div>
-                                                        {row.showsInheritedSeniorRating && row.linked_senior_review ? (
-                                                            <div className="mt-2 text-xs font-medium text-emerald-700">
-                                                                Synced from senior: {row.linked_senior_review.reviewer.recipient_name}
+
+                                                        <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                                                            {row.floor ? (
+                                                                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                                                                    <Building2 size={12} className="text-slate-400" />
+                                                                    <span>Floor {row.floor}</span>
+                                                                </span>
+                                                            ) : null}
+                                                            {row.room ? (
+                                                                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                                                                    <MapPin size={12} className="text-slate-400" />
+                                                                    <span>Room {row.room}</span>
+                                                                </span>
+                                                            ) : null}
+                                                            {row.phone ? (
+                                                                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                                                                    <Phone size={12} className="text-slate-400" />
+                                                                    <span>{row.phone}</span>
+                                                                </span>
+                                                            ) : null}
+                                                            {row.email ? (
+                                                                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 break-all">
+                                                                    <Mail size={12} className="text-slate-400" />
+                                                                    <span>{row.email}</span>
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
+
+                                                        {payload.role === 'HEAD' && row.linked_senior_review ? (
+                                                            <div className="rounded-[1.05rem] border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-950">
+                                                                <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                                                                    <BadgeCheck size={13} />
+                                                                    <span>Senior feedback</span>
+                                                                </div>
+                                                                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                                                                    <span className="font-semibold">{row.linked_senior_review.reviewer.recipient_name}</span>
+                                                                    <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                                                                        Rating {row.linked_senior_review.rating ?? '-'}
+                                                                    </span>
+                                                                    {row.linked_senior_review.nominationRole ? (
+                                                                        <span className="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                                                                            {formatNominationLabel(row.linked_senior_review.nominationRole)}
+                                                                        </span>
+                                                                    ) : null}
+                                                                </div>
+                                                                {row.linked_senior_review.comment ? (
+                                                                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-emerald-900">
+                                                                        {row.linked_senior_review.comment}
+                                                                    </p>
+                                                                ) : null}
                                                             </div>
                                                         ) : null}
-                                                    </td>
-                                                    <td className="px-3 py-3 align-top">
-                                                        <div className="font-semibold text-slate-950">{row.recipient_name}</div>
-                                                        {row.group_name && payload.role === 'HEAD' && row.hierarchy_role === 'INVIGILATOR' ? (
-                                                            <div className="mt-1 text-xs text-slate-500">Senior: {row.group_name}</div>
-                                                        ) : null}
-                                                    </td>
-                                                    <td className="px-3 py-3 align-top">
-                                                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${roleBadgeStyles[row.hierarchy_role]}`}>
-                                                            {row.role || row.hierarchy_role}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-3 py-3 align-top text-slate-700">{row.floor || '-'}</td>
-                                                    <td className="px-3 py-3 align-top text-slate-700">{row.room || '-'}</td>
-                                                    <td className="px-3 py-3 align-top text-slate-700">{row.phone || '-'}</td>
-                                                    <td className="px-3 py-3 align-top text-slate-700">{row.email || '-'}</td>
-                                                    <td className="px-3 py-3 align-top">
-                                                        <textarea
-                                                            value={row.draftComment}
-                                                            onChange={(event) => handleRowChange(row.recipient_id, 'draftComment', event.target.value)}
-                                                            className="min-h-[78px] w-[260px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-cyan-300 focus:bg-white"
-                                                            placeholder="Add a comment"
-                                                        />
-                                                    </td>
-                                                    <td className="px-3 py-3 align-top">
-                                                        <select
-                                                            value={row.draftNominationRole}
-                                                            onChange={(event) => handleRowChange(row.recipient_id, 'draftNominationRole', event.target.value)}
-                                                            className="min-w-[190px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-cyan-300 focus:bg-white"
-                                                        >
-                                                            {nominationOptions.map((option) => (
-                                                                <option key={option.value || 'empty'} value={option.value}>
-                                                                    {option.label}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                    </td>
-                                                    {payload.role === 'HEAD' ? (
-                                                        <td className="px-3 py-3 align-top">
-                                                            {row.linked_senior_review ? (
-                                                                <div className="w-[260px] rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs text-emerald-900">
-                                                                    <div className="font-semibold">{row.linked_senior_review.reviewer.recipient_name}</div>
-                                                                    <div className="mt-1">Rating: {row.linked_senior_review.rating ?? '-'}</div>
-                                                                    <div className="mt-1">Recommendation: {formatNominationLabel(row.linked_senior_review.nominationRole)}</div>
-                                                                    <div className="mt-1 whitespace-pre-wrap text-emerald-800">{row.linked_senior_review.comment || '-'}</div>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        <div className="rounded-[1.05rem] border border-slate-200 bg-slate-50 p-3">
+                                                            <div className="flex items-center justify-between gap-3">
+                                                                <div>
+                                                                    <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                                                        <Star size={13} className="text-amber-500" />
+                                                                        <span>Rating</span>
+                                                                    </div>
+                                                                    <div className="mt-1 text-sm text-slate-600">Tap a score from 1 to 5.</div>
                                                                 </div>
-                                                            ) : (
-                                                                <span className="text-xs text-slate-400">No senior feedback yet</span>
-                                                            )}
-                                                        </td>
-                                                    ) : null}
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                                                {(hasCustomRating || row.showsInheritedSeniorRating) ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                                                                        onClick={() => handleRowChange(row.recipient_id, 'draftRating', '')}
+                                                                    >
+                                                                        Clear
+                                                                    </button>
+                                                                ) : null}
+                                                            </div>
+
+                                                            <div className="mt-3 grid grid-cols-5 gap-2">
+                                                                {ratingOptions.map((option) => {
+                                                                    const active = visibleRating === option;
+                                                                    const inheritedActive = row.showsInheritedSeniorRating && !hasCustomRating && active;
+
+                                                                    return (
+                                                                        <button
+                                                                            key={option}
+                                                                            type="button"
+                                                                            onClick={() => handleRowChange(row.recipient_id, 'draftRating', option)}
+                                                                            className={`flex h-11 items-center justify-center rounded-xl border text-sm font-semibold transition ${
+                                                                                active
+                                                                                    ? inheritedActive
+                                                                                        ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                                                                                        : 'border-cyan-600 bg-cyan-600 text-white'
+                                                                                    : 'border-slate-200 bg-white text-slate-700 hover:border-cyan-300 hover:text-cyan-700'
+                                                                            }`}
+                                                                        >
+                                                                            {option}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+
+                                                            {row.showsInheritedSeniorRating && row.linked_senior_review ? (
+                                                                <div className="mt-3 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-medium text-emerald-700">
+                                                                    Synced from senior review by {row.linked_senior_review.reviewer.recipient_name}
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+
+                                                        <div className="rounded-[1.05rem] border border-slate-200 bg-slate-50 p-3">
+                                                            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Recommendation</div>
+                                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                                {nominationOptions.map((option) => {
+                                                                    const active = row.draftNominationRole === option.value;
+
+                                                                    return (
+                                                                        <button
+                                                                            key={option.value || 'empty'}
+                                                                            type="button"
+                                                                            onClick={() => handleRowChange(row.recipient_id, 'draftNominationRole', option.value)}
+                                                                            className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                                                                                active
+                                                                                    ? 'border-slate-900 bg-slate-900 text-white'
+                                                                                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900'
+                                                                            }`}
+                                                                        >
+                                                                            {option.label}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="rounded-[1.05rem] border border-slate-200 bg-slate-50 p-3">
+                                                            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                                                <MessageSquareText size={13} className="text-slate-400" />
+                                                                <span>Comment</span>
+                                                            </div>
+                                                            <textarea
+                                                                value={row.draftComment}
+                                                                onChange={(event) => handleRowChange(row.recipient_id, 'draftComment', event.target.value)}
+                                                                className="mt-3 min-h-[88px] w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:border-cyan-300 focus:bg-white"
+                                                                placeholder="Add a comment"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </article>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         ))}

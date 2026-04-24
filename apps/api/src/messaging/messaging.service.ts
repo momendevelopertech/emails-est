@@ -2790,33 +2790,36 @@ export class MessagingService {
     private buildHeadBriefMessage(node: HierarchyHeadNode, publicReviewUrl?: string | null) {
         const headName = normalizeImportValue(node.target.name) || 'Unknown Head';
         const lines = [
-            '*EST Building Brief*',
-            `Head: ${headName}`,
-            `Building: ${node.target.normalized_building}`,
+            '🏢 *EST Building Brief*',
+            `👤 *Head:* ${headName}`,
+            `📍 *Building:* ${node.target.normalized_building}`,
             '',
-            '*Floors and assigned seniors*',
+            '👥 *Floors and assigned seniors*',
         ];
 
         const seniors = node.seniors.slice().sort((a, b) => a.target.row_order - b.target.row_order);
         if (!seniors.length) {
-            lines.push('- No senior assignments available yet.');
+            lines.push('• No senior assignments available yet.');
         } else {
             for (const senior of seniors) {
                 const seniorName = normalizeImportValue(senior.target.name) ?? 'Unnamed Senior';
-                const seniorPhone = normalizeImportValue(senior.target.phone) ?? 'No phone';
-                const seniorEmail = normalizeImportValue(senior.target.email) ?? 'No email';
-                lines.push(`- [Row ${senior.target.row_order}] ${senior.floor}: ${seniorName} | ${seniorPhone} | ${seniorEmail}`);
+                const seniorPhone = normalizeImportValue(senior.target.phone) ?? 'Not listed';
+                const seniorEmail = normalizeImportValue(senior.target.email) ?? 'Not listed';
+                lines.push(
+                    `• *${senior.floor}* | *${seniorName}*`,
+                    `  Row ${senior.target.row_order} • 👥 ${senior.members.length} invigilators • 📱 ${seniorPhone}`,
+                    `  ✉️ ${seniorEmail}`,
+                );
             }
         }
 
         lines.push(
             '',
-            '*Coordination*',
+            '📝 *Coordination*',
             'Please create WhatsApp groups with each assigned senior and share the final invigilator distribution.',
-            publicReviewUrl ? `Public review sheet: ${publicReviewUrl}` : '',
+            publicReviewUrl ? `🔗 *Public review sheet*\n${publicReviewUrl}` : '',
             '',
-            'Best regards,',
-            'EST Team',
+            '*EST Team*',
         );
         return lines.filter(Boolean).join('\n');
     }
@@ -2824,12 +2827,12 @@ export class MessagingService {
     private buildSeniorBriefMessage(node: HierarchySeniorNode, publicReviewUrl?: string | null) {
         const seniorName = normalizeImportValue(node.target.name) || 'Unknown Senior';
         const lines = [
-            '*EST Senior Brief*',
-            `Senior: ${seniorName}`,
-            `Building: ${node.target.normalized_building}`,
-            `Floor: ${node.floor}`,
+            '🧭 *EST Senior Brief*',
+            `👤 *Senior:* ${seniorName}`,
+            `📍 *Building:* ${node.target.normalized_building}`,
+            `🏷️ *Floor:* ${node.floor}`,
             '',
-            '*Invigilators in this floor*',
+            '👥 *Invigilators in this floor*',
         ];
 
         const invigilators = node.members.slice().sort((a, b) => a.row_order - b.row_order);
@@ -2839,21 +2842,23 @@ export class MessagingService {
             invigilators
                 .forEach((invigilator, index) => {
                     const name = normalizeImportValue(invigilator.name) ?? 'Unnamed Invigilator';
-                    const phone = normalizeImportValue(invigilator.phone) ?? 'No phone';
+                    const phone = normalizeImportValue(invigilator.phone) ?? 'Not listed';
                     const room = normalizeImportValue(invigilator.room_est1) ?? 'No room';
                     const role = normalizeImportValue(invigilator.role) ?? 'Invigilator';
-                    lines.push(`${index + 1}. [Row ${invigilator.row_order}] ${name} | ${role} | ${phone} | Room ${room}`);
+                    lines.push(
+                        `${index + 1}. *${name}*`,
+                        `   Row ${invigilator.row_order} • ${role} • 🚪 Room ${room} • 📱 ${phone}`,
+                    );
                 });
         }
 
         lines.push(
             '',
-            '*Coordination*',
+            '📝 *Coordination*',
             'Please create room-wise WhatsApp groups with the invigilators listed above and confirm room coverage.',
-            publicReviewUrl ? `Public review sheet: ${publicReviewUrl}` : '',
+            publicReviewUrl ? `🔗 *Public review sheet*\n${publicReviewUrl}` : '',
             '',
-            'Best regards,',
-            'EST Team',
+            '*EST Team*',
         );
         return lines.filter(Boolean).join('\n');
     }
