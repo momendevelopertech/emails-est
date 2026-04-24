@@ -26,6 +26,9 @@ export type TemplateEditorVariable = {
 export type TemplatePreviewRecipient = Record<string, string>;
 
 const GUIDED_TEMPLATE_META_PREFIX = 'EST_GUIDED_TEMPLATE_META:';
+const EST_LOGO_URL = '{{brand_logo_url}}';
+const FOOTER_CONTACT_EMAIL = 'noreply@est.com';
+const FOOTER_PHYSICAL_ADDRESS = 'EST Operations Office, Cairo, Egypt';
 
 const escapeHtml = (value: string) => value
     .replace(/&/g, '&amp;')
@@ -334,6 +337,8 @@ const buildExamAssignmentEmailBodyV3 = ({
 export const TEMPLATE_EDITOR_VARIABLES: TemplateEditorVariable[] = [
     { token: '{{name}}', label: 'Name' },
     { token: '{{arabic_name}}', label: 'Arabic name' },
+    { token: '{{assignment_role}}', label: 'Assignment role label' },
+    { token: '{{test_center}}', label: 'Test center' },
     { token: '{{room_est1}}', label: 'Room' },
     { token: '{{role}}', label: 'Role' },
     { token: '{{type}}', label: 'Type' },
@@ -341,6 +346,8 @@ export const TEMPLATE_EDITOR_VARIABLES: TemplateEditorVariable[] = [
     { token: '{{address}}', label: 'Address' },
     { token: '{{building}}', label: 'Building' },
     { token: '{{location}}', label: 'Location' },
+    { token: '{{map_link}}', label: 'Google Maps link' },
+    { token: '{{brand_logo_url}}', label: 'Brand logo URL' },
     { token: '{{exam_type}}', label: 'Exam type' },
     { token: '{{sheet}}', label: 'Sheet' },
     { token: '{{email}}', label: 'Email' },
@@ -353,6 +360,8 @@ export const TEMPLATE_EDITOR_VARIABLES: TemplateEditorVariable[] = [
 export const TEMPLATE_PREVIEW_RECIPIENT: TemplatePreviewRecipient = {
     name: 'Mohamed Hassan',
     arabic_name: 'محمد حسن',
+    assignment_role: 'Chief Invigilator',
+    test_center: 'Future University - New Cairo',
     room_est1: 'Hall A-214',
     role: 'Chief Invigilator',
     type: 'Speaking Committee',
@@ -360,13 +369,15 @@ export const TEMPLATE_PREVIEW_RECIPIENT: TemplatePreviewRecipient = {
     address: 'Rawasy Hall, District 5',
     building: 'North Academic Building',
     location: 'Gate 3, beside the main conference court',
+    map_link: 'https://maps.app.goo.gl/example',
+    brand_logo_url: '/brand/est-logo.jpg',
     exam_type: 'EST Assignment',
     sheet: 'EST1',
     email: 'mohamed.hassan@example.com',
     phone: '+201000000000',
-    confirm_url: 'https://emails-est-web.vercel.app/messaging/confirm?token=preview&action=confirm',
-    decline_url: 'https://emails-est-web.vercel.app/messaging/confirm?token=preview&action=decline',
-    response_url: 'https://emails-est-web.vercel.app/messaging/confirm?token=preview',
+    confirm_url: 'https://emails-est-web.vercel.app/r/preview/confirm',
+    decline_url: 'https://emails-est-web.vercel.app/r/preview/decline',
+    response_url: 'https://emails-est-web.vercel.app/r/preview',
 };
 
 const createGuidedOfficialPreset = (
@@ -494,6 +505,98 @@ export const buildEmailPreviewDocument = (body: string) => `<!DOCTYPE html>
   </body>
 </html>`;
 
+const buildBulletproofButton = (label: string, href: string, background: string, width = 232) => `
+    <!--[if mso]>
+    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${href}" style="height:44px;v-text-anchor:middle;width:${width}px;" arcsize="50%" stroke="f" fillcolor="${background}">
+        <w:anchorlock/>
+        <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:700;">${label}</center>
+    </v:roundrect>
+    <![endif]-->
+    <!--[if !mso]><!-- -->
+    <a href="${href}" role="button" aria-label="${label}" style="display:block;background:${background};border-radius:999px;color:#ffffff;font-family:Segoe UI,Tahoma,Arial,sans-serif;font-size:14px;font-weight:800;line-height:44px;text-align:center;text-decoration:none;width:${width}px;-webkit-text-size-adjust:none;mso-hide:all;">${label}</a>
+    <!--<![endif]-->
+`.trim();
+
+const buildGuidedFooterBlock = () => `
+    <tr>
+        <td style="padding:24px 28px 30px;border-top:1px solid #dbe2ea;background:#f8fafc;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                <tr>
+                    <td style="padding:0 0 8px;font-size:12px;line-height:18px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#475569;mso-line-height-rule:exactly;">
+                        EST
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:0 0 4px;font-size:13px;line-height:20px;color:#475569;mso-line-height-rule:exactly;">
+                        Contact email:
+                        <a href="mailto:${FOOTER_CONTACT_EMAIL}" style="color:#0f172a;text-decoration:underline;">${FOOTER_CONTACT_EMAIL}</a>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:0 0 4px;font-size:13px;line-height:20px;color:#475569;mso-line-height-rule:exactly;">
+                        Physical address: ${FOOTER_PHYSICAL_ADDRESS}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:0;font-size:12px;line-height:20px;color:#64748b;mso-line-height-rule:exactly;">
+                        Unsubscribe: If you no longer wish to receive these emails, please reply to this message.
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+`.trim();
+
+const buildGuidedButtonsBlock = () => `
+    <tr>
+        <td style="padding:0 0 20px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #d8e3da;background:#f6fbf7;">
+                <tr>
+                    <td style="padding:22px 24px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                            <tr>
+                                <td style="padding:0 0 8px;font-size:12px;line-height:18px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#166534;mso-line-height-rule:exactly;">
+                                    Action Required
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 0 10px;font-size:18px;line-height:28px;font-weight:800;color:#0f172a;mso-line-height-rule:exactly;">
+                                    Please confirm your attendance or send an apology.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 0 18px;font-size:14px;line-height:24px;color:#475569;mso-line-height-rule:exactly;">
+                                    This is the most important step. Open the response options below and choose the correct action.
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:0 0 14px;">
+                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                                        <tr>
+                                            <td width="50%" style="padding:0 6px 0 0;vertical-align:top;" align="left">
+                                                ${buildBulletproofButton('Confirm Attendance', '{{confirm_url}}', '#15803d')}
+                                            </td>
+                                            <td width="50%" style="padding:0 0 0 6px;vertical-align:top;" align="left">
+                                                ${buildBulletproofButton('Send Apology', '{{decline_url}}', '#dc2626')}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding:14px 16px;border:1px solid #dbe2ea;background:#ffffff;font-size:12px;line-height:20px;color:#475569;mso-line-height-rule:exactly;">
+                                    If the buttons do not open, use this page instead:
+                                    <a href="{{response_url}}" style="color:#0f172a;font-weight:800;text-decoration:underline;word-break:break-word;">Open response page</a>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+`.trim();
+
 function normalizeGuidedTemplateConfig(config: EstGuidedTemplateConfig): EstGuidedTemplateConfig {
     return {
         examLabel: config.examLabel === 'EST II' ? 'EST II' : 'EST I',
@@ -510,85 +613,156 @@ export function buildGuidedTemplateContent(config: EstGuidedTemplateConfig) {
     const subject = normalized.variant === 'CONFIRMATION'
         ? `${normalized.examLabel} Exam Assignment - Action Required | {{name}}`
         : `${normalized.examLabel} Exam Assignment | {{name}}`;
-    const actionSection = normalized.variant === 'CONFIRMATION'
-        ? `
-            <div style="margin-top:24px;padding:18px;border-radius:18px;background:#eff6ff;border:1px solid #bfdbfe;">
-                <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#1d4ed8;">Action Required</div>
-                <p style="margin:12px 0 0;font-size:14px;line-height:1.7;color:#334155;">
-                    Please open the response page to confirm attendance or send an apology.
-                </p>
-                <p style="margin:14px 0 0;font-size:13px;line-height:1.7;color:#1e40af;">
-                    {{response_url}}
-                </p>
-            </div>
-        `
-        : '';
+    const responseBlock = normalized.variant === 'CONFIRMATION' ? buildGuidedButtonsBlock() : '';
+    const roomBlock = normalized.variant === 'CONFIRMATION'
+        ? ''
+        : `
+                                        <tr>
+                                            <td style="padding:0 0 12px;">
+                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #dbe2ea;background:#f8fafc;">
+                                                    <tr>
+                                                        <td style="padding:16px 18px;">
+                                                            <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Room #</div>
+                                                            <div style="margin-top:8px;font-size:16px;line-height:1.7;font-weight:800;color:#111111;">{{room_est1}}</div>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+`.trim();
 
     return {
         subject,
         body: `
 ${metadata}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:0;padding:24px;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0;padding:0;border-collapse:collapse;table-layout:fixed;background:#eef2f6;font-family:Segoe UI,Tahoma,Arial,sans-serif;color:#0f172a;mso-table-lspace:0pt;mso-table-rspace:0pt;">
     <tr>
-        <td align="center">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:720px;border-radius:28px;overflow:hidden;background:#ffffff;box-shadow:0 24px 60px rgba(15,23,42,0.08);">
+        <td align="center" style="padding:24px 12px;">
+            <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0" style="width:640px;max-width:640px;margin:0 auto;border-collapse:collapse;background:#ffffff;">
                 <tr>
-                    <td style="padding:34px 32px;background:linear-gradient(135deg,#0f766e 0%,#1d4ed8 100%);color:#ffffff;">
-                        <div style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">${normalized.examLabel} Assignment</div>
-                        <div style="margin-top:12px;font-size:32px;font-weight:800;line-height:1.2;">{{name}}</div>
-                        <p style="margin:14px 0 0;font-size:14px;line-height:1.8;color:rgba(255,255,255,0.92);">
-                            Please review your exam assignment details carefully and keep this message for reference.
-                        </p>
-                    </td>
-                </tr>
-                <tr>
-                    <td style="padding:30px 32px;">
-                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
+                    <td style="border:1px solid #dbe2ea;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;background:#ffffff;">
                             <tr>
-                                <td style="padding:0 8px 16px 0;" width="33.333%">
-                                    <div style="padding:16px;border-radius:20px;background:#ecfeff;border:1px solid #a5f3fc;">
-                                        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0f766e;">Exam day</div>
-                                        <div style="margin-top:8px;font-size:18px;font-weight:800;color:#0f172a;">${normalized.examDay}</div>
+                                <td style="padding:28px 28px 22px;background:#171717;">
+                                    <img src="${EST_LOGO_URL}" alt="EST" width="180" style="display:block;width:180px;max-width:180px;height:auto;border:0;outline:none;text-decoration:none;" />
+                                    <div style="margin-top:10px;font-size:13px;line-height:1.4;font-weight:900;letter-spacing:0.28em;text-transform:uppercase;color:#f8fafc;">
+                                        EST
                                     </div>
-                                </td>
-                                <td style="padding:0 8px 16px;" width="33.333%">
-                                    <div style="padding:16px;border-radius:20px;background:#eff6ff;border:1px solid #bfdbfe;">
-                                        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#1d4ed8;">Full date</div>
-                                        <div style="margin-top:8px;font-size:18px;font-weight:800;color:#0f172a;">${normalized.examDate}</div>
-                                    </div>
-                                </td>
-                                <td style="padding:0 0 16px 8px;" width="33.333%">
-                                    <div style="padding:16px;border-radius:20px;background:#fff7ed;border:1px solid #fdba74;">
-                                        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#c2410c;">Arrival time</div>
-                                        <div style="margin-top:8px;font-size:18px;font-weight:800;color:#0f172a;">${normalized.arrivalTime}</div>
-                                    </div>
+                                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;border-collapse:collapse;">
+                                        <tr>
+                                            <td style="padding:8px 14px;background:#ffe347;color:#111111;font-size:12px;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;">
+                                                ${normalized.examLabel} Exam Assignment
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    <p style="margin:16px 0 0;font-size:15px;line-height:27px;color:#f8fafc;mso-line-height-rule:exactly;">
+                                        Dear {{name}}, we look forward to welcoming you on <strong>${normalized.examDay}</strong> the <strong>${normalized.examDate}</strong> for the <strong>${normalized.examLabel} Exam</strong> as our <strong>{{assignment_role}}</strong>.
+                                    </p>
                                 </td>
                             </tr>
+                            <tr>
+                                <td style="padding:28px;">
+                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                                        ${responseBlock}
+                                        <tr>
+                                            <td style="padding:0 0 20px;">
+                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #dbe2ea;background:#f9fafb;">
+                                                    <tr>
+                                                        <td style="padding:18px 18px 6px;font-size:12px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">
+                                                            Assignment Snapshot
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style="padding:0 18px 18px;">
+                                                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                                                                <tr>
+                                                                    <td width="33.333%" valign="top" style="padding:0 10px 0 0;">
+                                                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #f2dd7d;background:#fff8cc;">
+                                                                            <tr>
+                                                                                <td style="padding:14px 14px 12px;">
+                                                                                    <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#7c6500;">Day</div>
+                                                                                    <div style="margin-top:8px;font-size:18px;line-height:1.4;font-weight:900;color:#111111;">${normalized.examDay}</div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        </table>
+                                                                    </td>
+                                                                    <td width="33.333%" valign="top" style="padding:0 5px;">
+                                                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #dbe2ea;background:#ffffff;">
+                                                                            <tr>
+                                                                                <td style="padding:14px 14px 12px;">
+                                                                                    <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Date</div>
+                                                                                    <div style="margin-top:8px;font-size:18px;line-height:1.4;font-weight:900;color:#111111;">${normalized.examDate}</div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        </table>
+                                                                    </td>
+                                                                    <td width="33.333%" valign="top" style="padding:0 0 0 10px;">
+                                                                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #171717;background:#171717;">
+                                                                            <tr>
+                                                                                <td style="padding:14px 14px 12px;">
+                                                                                    <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#f8fafc;">Arrival Time</div>
+                                                                                    <div style="margin-top:8px;font-size:18px;line-height:1.4;font-weight:900;color:#ffe347;">${normalized.arrivalTime}</div>
+                                                                                </td>
+                                                                            </tr>
+                                                                        </table>
+                                                                    </td>
+                                                                </tr>
+                                                            </table>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                    </table>
+
+                                    <div style="margin-bottom:18px;font-size:12px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">
+                                        Session Details
+                                    </div>
+                                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">
+                                        <tr>
+                                            <td style="padding:0 0 12px;">
+                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #dbe2ea;background:#f8fafc;">
+                                                    <tr>
+                                                        <td style="padding:16px 18px;">
+                                                            <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Test Center</div>
+                                                            <div style="margin-top:8px;font-size:16px;line-height:1.7;font-weight:800;color:#111111;">{{test_center}}</div>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                        ${roomBlock}
+                                        <tr>
+                                            <td style="padding:0 0 12px;">
+                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #dbe2ea;background:#f8fafc;">
+                                                    <tr>
+                                                        <td style="padding:16px 18px;">
+                                                            <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Address</div>
+                                                            <div style="margin-top:8px;font-size:16px;line-height:1.7;font-weight:700;color:#111111;">{{address}}</div>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding:0;">
+                                                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;border:1px solid #dbe2ea;background:#f8fafc;">
+                                                    <tr>
+                                                        <td style="padding:16px 18px;">
+                                                            <div style="font-size:11px;line-height:1.4;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Google Maps</div>
+                                                            <div style="margin-top:8px;font-size:15px;line-height:1.7;font-weight:700;color:#111111;">
+                                                                <a href="{{map_link}}" style="color:#111111;text-decoration:underline;">{{map_link}}</a>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            ${buildGuidedFooterBlock()}
                         </table>
-
-                        <div style="margin-top:8px;padding:22px;border-radius:22px;background:#f8fafc;border:1px solid #e2e8f0;">
-                            <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Assignment details</div>
-                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-top:14px;">
-                                <tr>
-                                    <td style="padding:8px 0;font-size:14px;color:#475569;">Role</td>
-                                    <td style="padding:8px 0;font-size:14px;font-weight:700;color:#0f172a;text-align:right;">{{role}}</td>
-                                </tr>
-                                <tr>
-                                    <td style="padding:8px 0;font-size:14px;color:#475569;">Room</td>
-                                    <td style="padding:8px 0;font-size:14px;font-weight:700;color:#0f172a;text-align:right;">{{room_est1}}</td>
-                                </tr>
-                                <tr>
-                                    <td style="padding:8px 0;font-size:14px;color:#475569;">Building</td>
-                                    <td style="padding:8px 0;font-size:14px;font-weight:700;color:#0f172a;text-align:right;">{{building}}</td>
-                                </tr>
-                                <tr>
-                                    <td style="padding:8px 0;font-size:14px;color:#475569;">Address</td>
-                                    <td style="padding:8px 0;font-size:14px;font-weight:700;color:#0f172a;text-align:right;">{{address}}</td>
-                                </tr>
-                            </table>
-                        </div>
-
-                        ${actionSection}
                     </td>
                 </tr>
             </table>
@@ -641,7 +815,7 @@ export const buildWhatsAppPreviewText = (
             guidedConfig.variant === 'CONFIRMATION' ? '*Action Required*' : null,
             guidedConfig.variant === 'CONFIRMATION' ? 'Please open the response page to confirm attendance or send an apology.' : null,
             guidedConfig.variant === 'CONFIRMATION' ? `🔗 ${recipient.response_url || '{{response_url}}'}` : null,
-        ].filter(Boolean).join('\n'), recipient);
+        ].filter((line) => line !== null && line !== undefined).join('\n'), recipient);
     }
 
     if (isHtmlTemplateBody(body)) {
