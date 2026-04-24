@@ -502,7 +502,7 @@ const normalizeGuidedTemplateConfig = (config: EstGuidedTemplateConfig): EstGuid
     variant: config.variant === 'CONFIRMATION' ? 'CONFIRMATION' : 'STANDARD',
 });
 
-export const buildGuidedTemplateContent = (config: EstGuidedTemplateConfig) => {
+export function buildGuidedTemplateContent(config: EstGuidedTemplateConfig) {
     const normalized = normalizeGuidedTemplateConfig(config);
     const metadata = `<!-- ${GUIDED_TEMPLATE_META_PREFIX}${encodeURIComponent(JSON.stringify(normalized))} -->`;
     const subject = normalized.variant === 'CONFIRMATION'
@@ -594,7 +594,7 @@ ${metadata}
     </tr>
 </table>`.trim(),
     };
-};
+}
 
 export const parseGuidedTemplateConfig = (body: string): EstGuidedTemplateConfig | null => {
     const match = String(body || '').match(new RegExp(`<!--\\s*${GUIDED_TEMPLATE_META_PREFIX}([^>]+)\\s*-->`, 'i'));
