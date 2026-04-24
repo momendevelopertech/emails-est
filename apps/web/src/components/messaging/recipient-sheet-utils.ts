@@ -4,6 +4,7 @@ export type SwappableRecipientSheet = Extract<ManagedRecipientSheet, 'EST1' | 'E
 
 export type ConflictComparableRecipient = {
     id: string;
+    cycleId?: string | null;
     name?: string | null;
     phone?: string | null;
     sheet?: RecipientSheetValue | null;
@@ -14,6 +15,39 @@ export type BlacklistConflictInfo = {
     foundIn: SwappableRecipientSheet[];
     matchedByName: boolean;
     matchedByPhone: boolean;
+};
+
+export type SheetAssignmentTemplateRecipient = {
+    id: string;
+    cycleId?: string | null;
+    room?: string | null;
+    room_est1?: string | null;
+    division?: string | null;
+    building?: string | null;
+    location?: string | null;
+    address?: string | null;
+    governorate?: string | null;
+    role?: string | null;
+    type?: string | null;
+    exam_type?: string | null;
+    day?: string | null;
+    date?: string | null;
+    test_center?: string | null;
+    faculty?: string | null;
+    map_link?: string | null;
+    additional_info_1?: string | null;
+    additional_info_2?: string | null;
+    arrival_time?: string | null;
+    preferred_test_center?: string | null;
+    preferred_proctoring_city?: string | null;
+};
+
+export type SheetAssignmentOption = {
+    value: string;
+    templateRecipientId: string;
+    building: string;
+    floorKey: string;
+    room: string;
 };
 
 export const SHEET_META: Record<RecipientSheetValue, {
@@ -93,6 +127,51 @@ const normalizeName = (value?: string | null) => String(value || '')
     .toLowerCase()
     .replace(/\s+/g, ' ');
 
+const normalizeText = (value?: string | null) => {
+    const normalized = String(value || '').trim().replace(/\s+/g, ' ');
+    return normalized || null;
+};
+
+const CYCLELESS_KEY = '__no_cycle__';
+
+const resolveCycleKey = (cycleId?: string | null) => cycleId || CYCLELESS_KEY;
+
+const compareNatural = (left: string, right: string) => left.localeCompare(right, undefined, {
+    numeric: true,
+    sensitivity: 'base',
+});
+
+export function resolveRecipientFloorKey(roomValue?: string | null) {
+    const normalizedRoom = normalizeText(roomValue);
+
+    if (!normalizedRoom) {
+        return 'general';
+    }
+
+    if (/floor|دور/i.test(normalizedRoom)) {
+        return normalizedRoom;
+    }
+
+    const numericMatch = normalizedRoom.match(/\d+/)?.[0] || '';
+    if (numericMatch.length >= 3) {
+        return numericMatch.slice(0, numericMatch.length - 2);
+    }
+
+    return 'general';
+}
+
+export function formatRecipientFloorLabel(floorKey: string, isArabic: boolean) {
+    if (!floorKey || floorKey === 'general') {
+        return isArabic ? 'بدون دور محدد' : 'Unassigned floor';
+    }
+
+    if (/^\d+$/.test(floorKey)) {
+        return isArabic ? `الدور ${floorKey}` : `Floor ${floorKey}`;
+    }
+
+    return floorKey;
+}
+
 export function buildBlacklistConflictMap(
     blacklistItems: ConflictComparableRecipient[],
     activeItems: ConflictComparableRecipient[],
@@ -138,4 +217,71 @@ export function buildBlacklistConflictMap(
     }
 
     return conflictMap;
+}
+
+export function buildBlacklistConflictMapByCycle(
+    blacklistItems: ConflictComparableRecipient[],
+    activeItems: ConflictComparableRecipient[],
+) {
+    const activeByCycle = new Map<string, ConflictComparableRecipient[]>();
+
+    for (const activeRecipient of activeItems) {
+        const cycleKey = resolveCycleKey(activeRecipient.cycleId);
+        const scopedRecipients = activeByCycle.get(cycleKey) ?? [];
+        scopedRecipients.push(activeRecipient);
+        activeByCycle.set(cycleKey, scopedRecipients);
+    }
+
+    const conflictMap = new Map<string, BlacklistConflictInfo>();
+
+    for (const blacklistRecipient of blacklistItems) {
+        const cycleKey = resolveCycleKey(blacklistRecipient.cycleId);
+        const scopedConflicts = buildBlacklistConflictMap(
+            [blacklistRecipient],
+            activeByCycle.get(cycleKey) ?? [],
+        );
+        const conflict = scopedConflicts.get(blacklistRecipient.id);
+
+        if (conflict) {
+            conflictMap.set(blacklistRecipient.id, conflict);
+        }
+    }
+
+    return conflictMap;
+}
+
+export function buildSheetAssignmentOptions(recipients: SheetAssignmentTemplateRecipient[]) {
+    const options: SheetAssignmentOption[] = [];
+    const seenKeys = new Set<string>();
+
+    for (const recipient of recipients) {
+        const room = normalizeText(recipient.room_est1) ?? normalizeText(recipient.room);
+
+        if (!room) {
+            continue;
+        }
+
+        const building = normalizeText(recipient.building) ?? 'Unassigned building';
+        const floorKey = resolveRecipientFloorKey(room);
+        const uniqueKey = `${building.toLowerCase()}|${floorKey.toLowerCase()}|${room.toLowerCase()}`;
+
+        if (seenKeys.has(uniqueKey)) {
+            continue;
+        }
+
+        seenKeys.add(uniqueKey);
+        options.push({
+            value: uniqueKey,
+            templateRecipientId: recipient.id,
+            building,
+            floorKey,
+            room,
+        });
+    }
+
+    return options.sort((left, right) => (
+        compareNatural(left.building, right.building)
+        || compareNatural(left.floorKey, right.floorKey)
+        || compareNatural(left.room, right.room)
+    ));
 }

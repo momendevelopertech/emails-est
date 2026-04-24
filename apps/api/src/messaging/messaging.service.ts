@@ -126,7 +126,7 @@ export class MessagingService {
                 where,
                 orderBy: [
                     { cycle: { created_at: 'desc' } },
-                    { created_at: 'desc' },
+                    { created_at: 'asc' },
                 ],
                 include: {
                     cycle: {

@@ -208,6 +208,22 @@ describe('MessagingService', () => {
         });
     });
 
+    it('findRecipients keeps latest cycles first while preserving uploaded row order inside each cycle', async () => {
+        prisma.recipient.findMany.mockResolvedValue([]);
+        prisma.recipient.count.mockResolvedValue(0);
+
+        await service.findRecipients({ page: 1, limit: 50 } as any);
+
+        expect(prisma.recipient.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            orderBy: [
+                { cycle: { created_at: 'desc' } },
+                { created_at: 'asc' },
+            ],
+            skip: 0,
+            take: 50,
+        }));
+    });
+
     it('deleteRecipient removes the selected row', async () => {
         prisma.recipient.delete.mockResolvedValue({ id: 'r1' });
 

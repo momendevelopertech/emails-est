@@ -1,11 +1,13 @@
 'use client';
 
-import { MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import {
+    ArrowLeftRight,
+    CheckCircle2,
     ChevronLeft,
     ChevronRight,
     ChevronDown,
@@ -45,7 +47,9 @@ import { buildRecipientExcelRow, getImportErrorMessage } from './upload-utils';
 import RecipientFormModal, { RecipientExcelFormState, RecipientFormErrors } from './RecipientFormModal';
 import {
     type BlacklistConflictInfo,
-    buildBlacklistConflictMap,
+    buildBlacklistConflictMapByCycle,
+    buildSheetAssignmentOptions,
+    formatRecipientFloorLabel,
     getRecipientSheetLabel,
     isManagedRecipientSheet,
     MANAGED_SHEET_DISPLAY_ORDER,
@@ -66,6 +70,7 @@ type RecipientResponseValue = 'PENDING' | 'CONFIRMED' | 'DECLINED';
 type DeliveryChannelName = 'EMAIL' | 'WHATSAPP';
 type DeliveryChannelState = 'SENT' | 'FAILED' | 'SKIPPED';
 type CampaignPreviewModal = 'email' | 'whatsapp' | null;
+type ReassignTargetSheet = Extract<RecipientSheetValue, 'EST1' | 'EST2'>;
 
 type Recipient = {
     id: string;
@@ -530,6 +535,29 @@ const RECIPIENT_DETAIL_FIELDS: Array<{ key: keyof Recipient; fallback: string }>
     { key: 'additional_info_2', fallback: 'Additional info 2' },
 ];
 
+const REASSIGNMENT_FIELD_KEYS: Array<keyof Recipient> = [
+    'division',
+    'exam_type',
+    'role',
+    'day',
+    'date',
+    'test_center',
+    'faculty',
+    'room',
+    'room_est1',
+    'type',
+    'governorate',
+    'address',
+    'building',
+    'location',
+    'map_link',
+    'additional_info_1',
+    'additional_info_2',
+    'arrival_time',
+    'preferred_test_center',
+    'preferred_proctoring_city',
+];
+
 const isWorkspaceTab = (value?: string | null): value is WorkspaceTab =>
     value === 'recipients' || value === 'templates' || value === 'campaign' || value === 'settings';
 
@@ -660,6 +688,42 @@ const trimRecipientFormValues = (form: RecipientExcelFormState): RecipientExcelF
     additional_info_2: form.additional_info_2.trim(),
     sheet: form.sheet.trim() as RecipientExcelFormState['sheet'],
 });
+
+const buildReassignedRecipientPayload = (
+    recipient: Recipient,
+    targetSheet: ReassignTargetSheet,
+    templateRecipient: Recipient,
+) => {
+    const payload: Record<string, string | undefined> = {
+        cycleId: recipient.cycleId || undefined,
+        name: recipient.name || '',
+        arabic_name: recipient.arabic_name || '',
+        email: recipient.email || '',
+        phone: recipient.phone || '',
+        employer: recipient.employer || '',
+        kind_of_school: recipient.kind_of_school || '',
+        title: recipient.title || '',
+        insurance_number: recipient.insurance_number || '',
+        institution_tax_number: recipient.institution_tax_number || '',
+        national_id_number: recipient.national_id_number || '',
+        national_id_picture: recipient.national_id_picture || '',
+        personal_photo: recipient.personal_photo || '',
+        bank_account_name: recipient.bank_account_name || '',
+        bank_name: recipient.bank_name || '',
+        bank_branch_name: recipient.bank_branch_name || '',
+        account_number: recipient.account_number || '',
+        iban_number: recipient.iban_number || '',
+        bank_divid: recipient.bank_divid || '',
+        sheet: targetSheet,
+    };
+
+    for (const field of REASSIGNMENT_FIELD_KEYS) {
+        payload[field] = String(templateRecipient[field] || recipient[field] || '');
+    }
+
+    payload.room = payload.room_est1 || payload.room || '';
+    return payload;
+};
 
 export default function MessagingWorkspaceClient({ locale }: { locale: string }) {
     const isArabic = locale === 'ar';
@@ -862,6 +926,29 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         readyCredentials: isArabic ? 'مسجل دخولك كأدمن، وتقدر تدير الرفع والقوالب والإرسال من هنا.' : 'You are signed in as admin and can manage upload, templates and delivery here.',
     }), [isArabic]);
 
+    const recipientSheetActionCopy = useMemo(() => ({
+        moveToSpare: isArabic ? 'انقل إلى Spare' : 'Move to Spare',
+        moveToSheet: isArabic ? 'انقل إلى...' : 'Move to...',
+        moveReady: isArabic ? 'نقل' : 'Move',
+        targetSheet: isArabic ? 'الشيت الهدف' : 'Target sheet',
+        targetBuilding: isArabic ? 'المبنى' : 'Building',
+        targetFloor: isArabic ? 'الدور' : 'Floor',
+        targetRoom: isArabic ? 'الرووم' : 'Room',
+        reassignSpareTitle: isArabic ? 'توزيع مراقب من Spare' : 'Assign spare recipient',
+        reassignSpareHint: isArabic ? 'اختر EST1 أو EST2 ثم حدّد المبنى والدور والرووم من نفس الشيت قبل النقل.' : 'Choose EST1 or EST2, then pick the building, floor, and room from that sheet before moving.',
+        noAssignmentSlots: isArabic ? 'لا توجد أماكن متاحة في هذا الشيت حالياً.' : 'No assignment slots are available in this sheet right now.',
+        confirmMove: isArabic ? 'تأكيد النقل' : 'Confirm move',
+        moveToSpareSuccess: isArabic ? 'تم نقل الصف إلى Spare بنجاح.' : 'Row moved to Spare successfully.',
+        moveToSheetSuccess: isArabic ? 'تم تعيين المراقب في المكان المحدد بنجاح.' : 'Recipient assigned to the selected slot successfully.',
+        moveError: isArabic ? 'تعذر تنفيذ النقل.' : 'Unable to complete the move.',
+        blacklistConflict: isArabic ? 'تعارض في Blacklist' : 'Blacklist conflict',
+        blacklistConflictFoundIn: isArabic ? 'موجود أيضاً في' : 'Also found in',
+        blacklistConflictMatchedBy: isArabic ? 'التطابق بواسطة' : 'Matched by',
+        blacklistConflictClear: isArabic ? 'سليم' : 'Clear',
+        blacklistConflictHint: isArabic ? 'الصفوف المتعارضة متعلّمة بالأحمر حتى تراجعها وتحذف غير المطلوب.' : 'Conflicting blacklist rows are marked in red so you can review and delete the duplicates.',
+        blacklistConflictDeleteHint: isArabic ? 'احذف الصف إذا كان يجب أن يبقى خارج الشيتات التشغيلية.' : 'Delete this row if the recipient should stay out of the operational sheets.',
+    }), [isArabic]);
+
     const [activeTab, setActiveTab] = useState<WorkspaceTab>(() => (
         isWorkspaceTab(searchParams.get('tab')) ? (searchParams.get('tab') as WorkspaceTab) : 'recipients'
     ));
@@ -912,6 +999,12 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [isRecipientFormOpen, setIsRecipientFormOpen] = useState(false);
     const [expandedRecipientDetailsId, setExpandedRecipientDetailsId] = useState<string | null>(null);
     const [deleteConfirmState, setDeleteConfirmState] = useState<{ type: 'recipient'; recipientId: string } | { type: 'cycle'; cycleId: string } | null>(null);
+    const [movingRecipientId, setMovingRecipientId] = useState<string | null>(null);
+    const [spareAssignmentRecipient, setSpareAssignmentRecipient] = useState<Recipient | null>(null);
+    const [spareAssignmentTargetSheet, setSpareAssignmentTargetSheet] = useState<ReassignTargetSheet>('EST1');
+    const [spareAssignmentBuilding, setSpareAssignmentBuilding] = useState('');
+    const [spareAssignmentFloor, setSpareAssignmentFloor] = useState('');
+    const [spareAssignmentRoomKey, setSpareAssignmentRoomKey] = useState('');
     const subjectInputRef = useRef<HTMLInputElement>(null);
     const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -966,6 +1059,69 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             cycleId: selectedCycleId === ALL_CYCLES_VALUE ? '' : selectedCycleId,
         }));
     }, [cycleSelectionReady, selectedCycleId]);
+
+    const fetchAllRecipients = useCallback(async (params: Record<string, string | number | undefined>) => {
+        const firstResponse = await api.get('/messaging/recipients', {
+            params: {
+                ...params,
+                page: 1,
+                limit: 1000,
+            },
+        });
+        const firstPage = firstResponse.data as { items: Recipient[]; total: number };
+        let items = [...(firstPage.items ?? [])];
+        const total = firstPage.total ?? items.length;
+        const pages = Math.ceil(total / 1000);
+
+        for (let currentPage = 2; currentPage <= pages; currentPage += 1) {
+            const response = await api.get('/messaging/recipients', {
+                params: {
+                    ...params,
+                    page: currentPage,
+                    limit: 1000,
+                },
+            });
+            items = items.concat(response.data?.items ?? []);
+        }
+
+        return items;
+    }, []);
+
+    const sheetReferenceQueryEnabled = ready && activeTab === 'recipients' && (
+        selectedSheet === 'BLACKLIST'
+        || selectedSheet === 'SPARE'
+        || Boolean(spareAssignmentRecipient)
+    );
+
+    const est1ReferenceQuery = useQuery<Recipient[]>({
+        queryKey: ['messaging-recipient-reference', selectedCycleId, 'EST1'],
+        queryFn: () => fetchAllRecipients({
+            cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+            sheet: 'EST1',
+        }),
+        enabled: sheetReferenceQueryEnabled,
+        staleTime: 30_000,
+    });
+
+    const est2ReferenceQuery = useQuery<Recipient[]>({
+        queryKey: ['messaging-recipient-reference', selectedCycleId, 'EST2'],
+        queryFn: () => fetchAllRecipients({
+            cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+            sheet: 'EST2',
+        }),
+        enabled: sheetReferenceQueryEnabled,
+        staleTime: 30_000,
+    });
+
+    const spareReferenceQuery = useQuery<Recipient[]>({
+        queryKey: ['messaging-recipient-reference', selectedCycleId, 'SPARE'],
+        queryFn: () => fetchAllRecipients({
+            cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
+            sheet: 'SPARE',
+        }),
+        enabled: ready && activeTab === 'recipients' && selectedSheet === 'BLACKLIST',
+        staleTime: 30_000,
+    });
 
     const recipientsQuery = useQuery<{ items: Recipient[]; total: number; page: number; limit: number }>({
         queryKey: ['messaging-recipients', filters, selectedCycleId, selectedSheet, page, pageSize],
@@ -1128,7 +1284,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     }, [guidedTemplateForm]);
 
     useEffect(() => {
-        if (!isRecipientFormOpen && !isTemplateComposerOpen) {
+        if (!isRecipientFormOpen && !isTemplateComposerOpen && !spareAssignmentRecipient) {
             return;
         }
 
@@ -1138,7 +1294,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         return () => {
             document.body.style.overflow = previousOverflow;
         };
-    }, [isRecipientFormOpen, isTemplateComposerOpen]);
+    }, [isRecipientFormOpen, isTemplateComposerOpen, spareAssignmentRecipient]);
 
     const refreshAll = async () => {
         await Promise.all([
@@ -1226,6 +1382,52 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         },
         onError(error: any) {
             toast.error(getImportErrorMessage(error, isArabic ? 'تعذر تحديث حالة الرد.' : 'Unable to update the response status.'));
+        },
+    });
+
+    const moveRecipientMutation = useMutation({
+        mutationFn: async ({
+            recipient,
+            targetSheet,
+            templateRecipient,
+        }: {
+            recipient: Recipient;
+            targetSheet: RecipientSheetValue;
+            templateRecipient?: Recipient | null;
+        }) => {
+            await fetchCsrfToken();
+
+            if (targetSheet === 'SPARE') {
+                const response = await api.patch(`/messaging/recipients/${recipient.id}/sheet`, { sheet: 'SPARE' });
+                return response.data;
+            }
+
+            if (!templateRecipient || (targetSheet !== 'EST1' && targetSheet !== 'EST2')) {
+                throw new Error('A destination slot is required.');
+            }
+
+            const response = await api.put(
+                `/messaging/recipients/${recipient.id}`,
+                buildReassignedRecipientPayload(recipient, targetSheet, templateRecipient),
+            );
+            return response.data;
+        },
+        onSuccess(_data, variables) {
+            toast.success(
+                variables.targetSheet === 'SPARE'
+                    ? recipientSheetActionCopy.moveToSpareSuccess
+                    : recipientSheetActionCopy.moveToSheetSuccess,
+            );
+            setMovingRecipientId(null);
+            setSelectedRecipientIds((current) => current.filter((id) => id !== variables.recipient.id));
+            setSpareAssignmentRecipient(null);
+            void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
+            void queryClient.invalidateQueries({ queryKey: ['messaging-recipient-filter-options'] });
+            void queryClient.invalidateQueries({ queryKey: ['messaging-recipient-reference'] });
+        },
+        onError(error: any) {
+            setMovingRecipientId(null);
+            toast.error(getImportErrorMessage(error, recipientSheetActionCopy.moveError));
         },
     });
 
@@ -1575,6 +1777,145 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const availableHierarchySeniors = hierarchyReferenceResult?.available_targets.seniors ?? [];
     const hierarchyPreviewTargets = hierarchyPreviewResult?.preview.ordered ?? [];
     const hierarchyDeliveryRows = hierarchySendResult?.delivery ?? [];
+    const est1ReferenceRecipients = est1ReferenceQuery.data ?? EMPTY_RECIPIENTS;
+    const est2ReferenceRecipients = est2ReferenceQuery.data ?? EMPTY_RECIPIENTS;
+    const spareReferenceRecipients = spareReferenceQuery.data ?? EMPTY_RECIPIENTS;
+    const blacklistReferenceRecipients = useMemo(
+        () => [...est1ReferenceRecipients, ...est2ReferenceRecipients, ...spareReferenceRecipients],
+        [est1ReferenceRecipients, est2ReferenceRecipients, spareReferenceRecipients],
+    );
+    const blacklistConflictMap = useMemo(
+        () => selectedSheet === 'BLACKLIST'
+            ? buildBlacklistConflictMapByCycle(recipients, blacklistReferenceRecipients)
+            : new Map<string, BlacklistConflictInfo>(),
+        [blacklistReferenceRecipients, recipients, selectedSheet],
+    );
+    const blacklistConflictCount = blacklistConflictMap.size;
+    const blacklistReferenceLoading = selectedSheet === 'BLACKLIST' && (
+        est1ReferenceQuery.isLoading
+        || est2ReferenceQuery.isLoading
+        || spareReferenceQuery.isLoading
+    );
+    const spareAssignmentReferenceRecipients = useMemo(() => {
+        if (!spareAssignmentRecipient) {
+            return EMPTY_RECIPIENTS;
+        }
+
+        const targetRecipients = spareAssignmentTargetSheet === 'EST1'
+            ? est1ReferenceRecipients
+            : est2ReferenceRecipients;
+
+        if (selectedCycleId !== ALL_CYCLES_VALUE) {
+            return targetRecipients;
+        }
+
+        return targetRecipients.filter((recipient) => (
+            spareAssignmentRecipient.cycleId
+                ? recipient.cycleId === spareAssignmentRecipient.cycleId
+                : !recipient.cycleId
+        ));
+    }, [
+        est1ReferenceRecipients,
+        est2ReferenceRecipients,
+        selectedCycleId,
+        spareAssignmentRecipient,
+        spareAssignmentTargetSheet,
+    ]);
+    const spareAssignmentOptions = useMemo(
+        () => buildSheetAssignmentOptions(spareAssignmentReferenceRecipients),
+        [spareAssignmentReferenceRecipients],
+    );
+    const spareAssignmentBuildingOptions = useMemo(
+        () => Array.from(new Set(spareAssignmentOptions.map((option) => option.building))).map((building) => ({
+            value: building,
+            label: building,
+        })),
+        [spareAssignmentOptions],
+    );
+    const spareAssignmentFloorOptions = useMemo(() => (
+        Array.from(new Set(
+            spareAssignmentOptions
+                .filter((option) => option.building === spareAssignmentBuilding)
+                .map((option) => option.floorKey),
+        )).map((floorKey) => ({
+            value: floorKey,
+            label: formatRecipientFloorLabel(floorKey, isArabic),
+        }))
+    ), [isArabic, spareAssignmentBuilding, spareAssignmentOptions]);
+    const spareAssignmentRoomOptions = useMemo(() => (
+        spareAssignmentOptions
+            .filter((option) => option.building === spareAssignmentBuilding && option.floorKey === spareAssignmentFloor)
+            .map((option) => ({
+                value: option.value,
+                label: option.room,
+            }))
+    ), [spareAssignmentBuilding, spareAssignmentFloor, spareAssignmentOptions]);
+    const selectedSpareAssignmentOption = useMemo(
+        () => spareAssignmentOptions.find((option) => option.value === spareAssignmentRoomKey) ?? null,
+        [spareAssignmentOptions, spareAssignmentRoomKey],
+    );
+    const selectedSpareAssignmentTemplate = useMemo(
+        () => spareAssignmentReferenceRecipients.find((recipient) => recipient.id === selectedSpareAssignmentOption?.templateRecipientId) ?? null,
+        [selectedSpareAssignmentOption?.templateRecipientId, spareAssignmentReferenceRecipients],
+    );
+    const spareAssignmentLoading = Boolean(spareAssignmentRecipient) && (
+        spareAssignmentTargetSheet === 'EST1'
+            ? est1ReferenceQuery.isLoading
+            : est2ReferenceQuery.isLoading
+    );
+
+    useEffect(() => {
+        if (!spareAssignmentRecipient) {
+            return;
+        }
+
+        if (spareAssignmentTargetSheet === 'EST1' && !est1ReferenceRecipients.length && est2ReferenceRecipients.length) {
+            setSpareAssignmentTargetSheet('EST2');
+            return;
+        }
+
+        if (spareAssignmentTargetSheet === 'EST2' && !est2ReferenceRecipients.length && est1ReferenceRecipients.length) {
+            setSpareAssignmentTargetSheet('EST1');
+        }
+    }, [
+        est1ReferenceRecipients.length,
+        est2ReferenceRecipients.length,
+        spareAssignmentRecipient,
+        spareAssignmentTargetSheet,
+    ]);
+
+    useEffect(() => {
+        if (!spareAssignmentRecipient) {
+            return;
+        }
+
+        const firstBuilding = spareAssignmentBuildingOptions[0]?.value ?? '';
+        if (!spareAssignmentBuildingOptions.some((option) => option.value === spareAssignmentBuilding)) {
+            setSpareAssignmentBuilding(firstBuilding);
+        }
+    }, [spareAssignmentBuilding, spareAssignmentBuildingOptions, spareAssignmentRecipient]);
+
+    useEffect(() => {
+        if (!spareAssignmentRecipient) {
+            return;
+        }
+
+        const firstFloor = spareAssignmentFloorOptions[0]?.value ?? '';
+        if (!spareAssignmentFloorOptions.some((option) => option.value === spareAssignmentFloor)) {
+            setSpareAssignmentFloor(firstFloor);
+        }
+    }, [spareAssignmentFloor, spareAssignmentFloorOptions, spareAssignmentRecipient]);
+
+    useEffect(() => {
+        if (!spareAssignmentRecipient) {
+            return;
+        }
+
+        const firstRoom = spareAssignmentRoomOptions[0]?.value ?? '';
+        if (!spareAssignmentRoomOptions.some((option) => option.value === spareAssignmentRoomKey)) {
+            setSpareAssignmentRoomKey(firstRoom);
+        }
+    }, [spareAssignmentRecipient, spareAssignmentRoomKey, spareAssignmentRoomOptions]);
 
     const pageStats = useMemo(() => ({
         pending: recipients.filter((recipient) => recipient.status === 'PENDING').length,
@@ -1648,6 +1989,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         { value: 'CONFIRMED', label: RESPONSE_STATUS_LABELS.confirmed },
         { value: 'DECLINED', label: RESPONSE_STATUS_LABELS.declined },
     ];
+    const reassignTargetSheetOptions = (['EST1', 'EST2'] as ReassignTargetSheet[]).map((sheetValue) => ({
+        value: sheetValue,
+        label: getRecipientSheetLabel(sheetValue, isArabic),
+    }));
 
     const allVisibleSelected = recipients.length > 0 && recipients.every((recipient) => selectedRecipientIds.includes(recipient.id));
 
@@ -1683,6 +2028,36 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         }
 
         setSelectedRecipientIds((current) => Array.from(new Set([...current, ...recipients.map((recipient) => recipient.id)])));
+    };
+
+    const moveRecipientToSpare = (recipient: Recipient) => {
+        setMovingRecipientId(recipient.id);
+        moveRecipientMutation.mutate({
+            recipient,
+            targetSheet: 'SPARE',
+        });
+    };
+
+    const openSpareAssignmentDialog = (recipient: Recipient) => {
+        setSpareAssignmentRecipient(recipient);
+        setSpareAssignmentTargetSheet(est1ReferenceRecipients.length || !est2ReferenceRecipients.length ? 'EST1' : 'EST2');
+        setSpareAssignmentBuilding('');
+        setSpareAssignmentFloor('');
+        setSpareAssignmentRoomKey('');
+    };
+
+    const confirmSpareAssignment = () => {
+        if (!spareAssignmentRecipient || !selectedSpareAssignmentTemplate) {
+            toast.error(recipientSheetActionCopy.noAssignmentSlots);
+            return;
+        }
+
+        setMovingRecipientId(spareAssignmentRecipient.id);
+        moveRecipientMutation.mutate({
+            recipient: spareAssignmentRecipient,
+            targetSheet: spareAssignmentTargetSheet,
+            templateRecipient: selectedSpareAssignmentTemplate,
+        });
     };
 
     const openCreateRecipientForm = () => {
@@ -1798,31 +2173,12 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
                 params.sheet = sheet || undefined;
                 params.status = applyCurrentFilters ? filters.status || undefined : undefined;
-                params.page = 1;
-                params.limit = 1000;
-
-                const firstResponse = await api.get('/messaging/recipients', { params });
-                const firstPage = firstResponse.data as { items: Recipient[]; total: number };
-                let items = [...(firstPage.items ?? [])];
-                const total = firstPage.total ?? items.length;
-                const pages = Math.ceil(total / 1000);
-
-                for (let currentPage = 2; currentPage <= pages; currentPage += 1) {
-                    const response = await api.get('/messaging/recipients', {
-                        params: {
-                            ...params,
-                            page: currentPage,
-                        },
-                    });
-                    items = items.concat(response.data?.items ?? []);
-                }
-
-                return items;
+                return fetchAllRecipients(params);
             };
 
             const allItems = await fetchRecipientsForExport();
             const blacklistConflictMap: Map<string, BlacklistConflictInfo> = selectedSheet === 'BLACKLIST'
-                ? buildBlacklistConflictMap(
+                ? buildBlacklistConflictMapByCycle(
                     allItems,
                     (await Promise.all(
                         MANAGED_SHEET_DISPLAY_ORDER
@@ -2229,6 +2585,102 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             payload.status = 'PENDING';
         }
         return payload;
+    };
+
+    const renderBlacklistConflictSummary = (conflict?: BlacklistConflictInfo) => {
+        if (selectedSheet !== 'BLACKLIST') {
+            return null;
+        }
+
+        if (!conflict) {
+            return (
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    <div className="flex items-center gap-2 font-semibold">
+                        <CheckCircle2 size={14} />
+                        <span>{recipientSheetActionCopy.blacklistConflictClear}</span>
+                    </div>
+                </div>
+            );
+        }
+
+        const matchReasons = [
+            conflict.matchedByName ? (isArabic ? 'الاسم' : 'Name') : null,
+            conflict.matchedByPhone ? (isArabic ? 'رقم الهاتف' : 'Phone') : null,
+        ].filter(Boolean).join(' + ');
+
+        return (
+            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
+                <div className="flex items-center gap-2 font-semibold">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
+                    <span>{recipientSheetActionCopy.blacklistConflict}</span>
+                </div>
+                <div className="mt-2 space-y-1 text-rose-800">
+                    <div>
+                        {recipientSheetActionCopy.blacklistConflictFoundIn}: {conflict.foundIn.map((sheet) => getRecipientSheetLabel(sheet, isArabic)).join(', ')}
+                    </div>
+                    <div>
+                        {recipientSheetActionCopy.blacklistConflictMatchedBy}: {matchReasons || '-'}
+                    </div>
+                    <div>{recipientSheetActionCopy.blacklistConflictDeleteHint}</div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderRecipientActionButtons = (recipient: Recipient) => {
+        const isMoving = movingRecipientId === recipient.id && moveRecipientMutation.isPending;
+        const canMoveToSpare = recipient.sheet === 'EST1' || recipient.sheet === 'EST2';
+        const canAssignFromSpare = recipient.sheet === 'SPARE';
+
+        return (
+            <div className="space-y-2" onClick={stopRowToggle}>
+                {canMoveToSpare ? (
+                    <button
+                        type="button"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => moveRecipientToSpare(recipient)}
+                        disabled={isMoving}
+                    >
+                        <ArrowLeftRight size={13} />
+                        <span>{recipientSheetActionCopy.moveToSpare}</span>
+                    </button>
+                ) : null}
+
+                {canAssignFromSpare ? (
+                    <button
+                        type="button"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => openSpareAssignmentDialog(recipient)}
+                        disabled={isMoving}
+                    >
+                        <ArrowLeftRight size={13} />
+                        <span>{recipientSheetActionCopy.moveToSheet}</span>
+                    </button>
+                ) : null}
+
+                <div className="flex items-center justify-center gap-2">
+                    <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                        onClick={() => openEditRecipientForm(recipient)}
+                        aria-label={copy.edit}
+                        title={copy.edit}
+                    >
+                        <SquarePen size={14} />
+                    </button>
+                    <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 transition hover:bg-rose-50"
+                        onClick={() => deleteRecipient(recipient.id)}
+                        disabled={deleteRecipientMutation.isPending}
+                        aria-label={copy.delete}
+                        title={copy.delete}
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                </div>
+            </div>
+        );
     };
 
     const buildHierarchyBriefPayload = () => ({
@@ -2760,8 +3212,23 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     </div>
                                 </div>
 
+                                {selectedSheet === 'BLACKLIST' ? (
+                                    <div className={`border-b px-4 py-3 text-sm ${blacklistConflictCount ? 'border-rose-200 bg-rose-50 text-rose-900' : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`}>
+                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                            <div className="font-semibold">
+                                                {blacklistReferenceLoading
+                                                    ? copy.loading
+                                                    : `${blacklistConflictCount} ${recipientSheetActionCopy.blacklistConflict}`}
+                                            </div>
+                                            <div className="text-xs sm:text-sm">
+                                                {recipientSheetActionCopy.blacklistConflictHint}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : null}
+
                                 <div className="overflow-x-auto">
-                                    <div className="min-w-[1120px]">
+                                    <div className="min-w-[1280px]">
                                         <table className="w-full table-fixed divide-y divide-slate-200 text-left text-sm">
                                             <thead className="bg-slate-50 text-slate-600">
                                                 <tr>
@@ -2780,7 +3247,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                     <th className="sticky top-0 z-10 w-[100px] bg-slate-50 px-2.5 py-3">{copy.confirmTitle}</th>
                                                     <th className="sticky top-0 z-10 w-[60px] bg-slate-50 px-2.5 py-3 text-center">{copy.attempts}</th>
                                                     <th className="sticky top-0 z-10 w-[110px] bg-slate-50 px-2.5 py-3">{copy.lastAttempt}</th>
-                                                    <th className="sticky top-0 z-10 w-[90px] bg-slate-50 px-2.5 py-3 text-center">{copy.actions}</th>
+                                                    <th className="sticky top-0 z-10 w-[220px] bg-slate-50 px-2.5 py-3 text-center">{copy.actions}</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100 bg-white">
@@ -2817,6 +3284,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                         : responseState === 'declined'
                                                             ? copy.confirmedLabels.declined
                                                             : copy.confirmedLabels.pending;
+                                                    const blacklistConflict = selectedSheet === 'BLACKLIST'
+                                                        ? blacklistConflictMap.get(recipient.id)
+                                                        : undefined;
                                                     const detailsExpanded = expandedRecipientDetailsId === recipient.id;
                                                     const detailItems = RECIPIENT_DETAIL_FIELDS.map(({ key, fallback }) => ({
                                                         key,
@@ -2841,7 +3311,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                     return (
                                                         <tr
                                                             key={recipient.id}
-                                                            className="cursor-pointer transition hover:bg-blue-50/60"
+                                                            className={`cursor-pointer transition ${
+                                                                blacklistConflict
+                                                                    ? 'bg-rose-50/70 hover:bg-rose-100/70'
+                                                                    : 'hover:bg-blue-50/60'
+                                                            }`}
                                                             onClick={() => toggleRecipient(recipient.id)}
                                                         >
                                                             <td className="px-2.5 py-2 align-top">
@@ -2871,7 +3345,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                                 </div>
                                                             </td>
                                                             <td className="px-2.5 py-2 align-top">
-                                                                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                                                                <div className={`rounded-xl border p-3 ${
+                                                                    blacklistConflict
+                                                                        ? 'border-rose-200 bg-rose-50/80'
+                                                                        : 'border-slate-200 bg-slate-50/70'
+                                                                }`}>
                                                                     <div className="grid gap-2 sm:grid-cols-3">
                                                                         <div className="rounded-lg bg-white/80 px-2.5 py-2">
                                                                             <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">{copy.roomEst1}</div>
@@ -2917,6 +3395,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                                             )}
                                                                         </div>
                                                                     ) : null}
+
+                                                                    {renderBlacklistConflictSummary(blacklistConflict)}
                                                                 </div>
                                                             </td>
                                                             <td className="px-2.5 py-2 align-top">
@@ -2976,27 +3456,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                                 )}
                                                             </td>
                                                             <td className="px-2.5 py-2 align-top">
-                                                                <div className="flex items-center justify-center gap-2" onClick={stopRowToggle}>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
-                                                                        onClick={() => openEditRecipientForm(recipient)}
-                                                                        aria-label={copy.edit}
-                                                                        title={copy.edit}
-                                                                    >
-                                                                        <SquarePen size={14} />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 transition hover:bg-rose-50"
-                                                                        onClick={() => deleteRecipient(recipient.id)}
-                                                                        disabled={deleteRecipientMutation.isPending}
-                                                                        aria-label={copy.delete}
-                                                                        title={copy.delete}
-                                                                    >
-                                                                        <Trash2 size={14} />
-                                                                    </button>
-                                                                </div>
+                                                                {renderRecipientActionButtons(recipient)}
                                                             </td>
                                                         </tr>
                                                     );
@@ -3431,6 +3891,115 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             saveRecipient: copy.saveRecipient,
                         }}
                     />
+                    {spareAssignmentRecipient ? (
+                        <div className="fixed inset-0 z-[92] flex items-center justify-center p-4 md:p-6">
+                            <button
+                                type="button"
+                                className="overlay-backdrop absolute inset-0"
+                                aria-label={copy.cancelEdit}
+                                onClick={() => setSpareAssignmentRecipient(null)}
+                            />
+                            <div className="modal-shell relative z-10 w-full max-w-3xl rounded-[2rem] p-5 md:p-6">
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-slate-950">{recipientSheetActionCopy.reassignSpareTitle}</h3>
+                                        <p className="mt-2 text-sm leading-6 text-slate-500">{recipientSheetActionCopy.reassignSpareHint}</p>
+                                    </div>
+                                    <button type="button" className="btn-outline" onClick={() => setSpareAssignmentRecipient(null)}>
+                                        {copy.cancelEdit}
+                                    </button>
+                                </div>
+
+                                <div className="mt-5 rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-4">
+                                    <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.name}</div>
+                                    <div className="mt-2 text-base font-semibold text-slate-950">{spareAssignmentRecipient.name}</div>
+                                    <div className="mt-1 text-sm text-slate-500">{spareAssignmentRecipient.phone || spareAssignmentRecipient.email || EMPTY_VALUE_LABEL}</div>
+                                </div>
+
+                                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">{recipientSheetActionCopy.targetSheet}</label>
+                                        <FormSelect
+                                            value={spareAssignmentTargetSheet}
+                                            onChange={(nextValue) => setSpareAssignmentTargetSheet(nextValue as ReassignTargetSheet)}
+                                            options={reassignTargetSheetOptions}
+                                            ariaLabel={recipientSheetActionCopy.targetSheet}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">{recipientSheetActionCopy.targetBuilding}</label>
+                                        <FormSelect
+                                            value={spareAssignmentBuilding}
+                                            onChange={setSpareAssignmentBuilding}
+                                            options={spareAssignmentBuildingOptions}
+                                            ariaLabel={recipientSheetActionCopy.targetBuilding}
+                                            disabled={!spareAssignmentBuildingOptions.length}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">{recipientSheetActionCopy.targetFloor}</label>
+                                        <FormSelect
+                                            value={spareAssignmentFloor}
+                                            onChange={setSpareAssignmentFloor}
+                                            options={spareAssignmentFloorOptions}
+                                            ariaLabel={recipientSheetActionCopy.targetFloor}
+                                            disabled={!spareAssignmentFloorOptions.length}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-sm font-medium text-slate-700">{recipientSheetActionCopy.targetRoom}</label>
+                                        <FormSelect
+                                            value={spareAssignmentRoomKey}
+                                            onChange={setSpareAssignmentRoomKey}
+                                            options={spareAssignmentRoomOptions}
+                                            ariaLabel={recipientSheetActionCopy.targetRoom}
+                                            disabled={!spareAssignmentRoomOptions.length}
+                                        />
+                                    </div>
+                                </div>
+
+                                {!spareAssignmentLoading && !spareAssignmentOptions.length ? (
+                                    <div className="mt-5 rounded-[1.35rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                        {recipientSheetActionCopy.noAssignmentSlots}
+                                    </div>
+                                ) : null}
+
+                                {selectedSpareAssignmentOption ? (
+                                    <div className="mt-5 rounded-[1.35rem] border border-slate-200 bg-white px-4 py-4 text-sm text-slate-700">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{copy.preview}</div>
+                                        <div className="mt-3 grid gap-3 md:grid-cols-3">
+                                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{recipientSheetActionCopy.targetBuilding}</div>
+                                                <div className="mt-1 font-semibold text-slate-900">{selectedSpareAssignmentOption.building}</div>
+                                            </div>
+                                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{recipientSheetActionCopy.targetFloor}</div>
+                                                <div className="mt-1 font-semibold text-slate-900">{formatRecipientFloorLabel(selectedSpareAssignmentOption.floorKey, isArabic)}</div>
+                                            </div>
+                                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{recipientSheetActionCopy.targetRoom}</div>
+                                                <div className="mt-1 font-semibold text-slate-900">{selectedSpareAssignmentOption.room}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                <div className="mt-5 flex flex-wrap gap-3">
+                                    <button
+                                        type="button"
+                                        className="btn-primary"
+                                        onClick={confirmSpareAssignment}
+                                        disabled={spareAssignmentLoading || moveRecipientMutation.isPending || !selectedSpareAssignmentTemplate}
+                                    >
+                                        {recipientSheetActionCopy.confirmMove}
+                                    </button>
+                                    <button type="button" className="btn-outline" onClick={() => setSpareAssignmentRecipient(null)}>
+                                        {copy.cancelEdit}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
                     <ConfirmDialog
                         open={Boolean(deleteConfirmState)}
                         title={

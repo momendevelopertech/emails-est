@@ -21,7 +21,6 @@ import {
     getUploadHint,
     parseRecipientWorkbook,
 } from './upload-utils';
-import ExcelSheetManagerClient from './ExcelSheetManagerClient';
 
 export default function UploadExcelClient({ locale }: { locale: string }) {
     const { ready, isChecking, error } = useRequireAuth(locale);
@@ -30,7 +29,6 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
     const hint = useMemo(() => getUploadHint(locale), [locale]);
     const [fileName, setFileName] = useState('');
     const [isUploading, setIsUploading] = useState(false);
-    const [importedCycleId, setImportedCycleId] = useState<string | null>(null);
     const [previewCount, setPreviewCount] = useState<number | null>(null);
     const isArabic = locale === 'ar';
     const cardClass = 'rounded-[2rem] border border-slate-200/80 bg-white p-5 shadow-sm shadow-slate-900/5 md:p-6';
@@ -76,7 +74,6 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
         setFileName(file.name);
         setIsUploading(true);
         setPreviewCount(null);
-        setImportedCycleId(null);
 
         try {
             const parsedWorkbook = await parseRecipientWorkbook(file, locale);
@@ -85,12 +82,11 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
             }
 
             await fetchCsrfToken();
-            const response = await api.post('/messaging/recipients/import', {
+            await api.post('/messaging/recipients/import', {
                 source_file_name: parsedWorkbook.sourceFileName,
                 recipients: parsedWorkbook.recipients,
             });
             setPreviewCount(parsedWorkbook.recipients.length);
-            setImportedCycleId(response.data?.cycle?.id ?? null);
             void queryClient.invalidateQueries({ queryKey: ['sheet-manager-cycles'] });
             void queryClient.invalidateQueries({ queryKey: ['sheet-manager'] });
             void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
@@ -189,8 +185,8 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
                             </div>
                             <p className="mt-1.5 text-xs text-emerald-700">
                                 {isArabic
-                                    ? 'تم استيراد كل الشيتات — يمكنك الآن إدارة التبديل في جدول الشيتات أدناه.'
-                                    : 'All sheets imported — you can now manage swaps in the sheet manager below.'}
+                                    ? 'تم استيراد كل الشيتات بنجاح. تقدر تكمل النقل والمراجعة من صفحة المستلمين مباشرة.'
+                                    : 'All sheets were imported successfully. Continue move and review actions directly from the recipients page.'}
                             </p>
                             <div className="mt-3 flex flex-wrap gap-2">
                                 <Link href={`/${locale}/messaging?tab=recipients`} className="btn-outline">
@@ -244,12 +240,6 @@ export default function UploadExcelClient({ locale }: { locale: string }) {
                 </aside>
             </div>
 
-            {/* ── Sheet Manager ── */}
-            <ExcelSheetManagerClient
-                key={importedCycleId ?? 'latest-cycle'}
-                locale={locale}
-                defaultCycleId={importedCycleId ?? undefined}
-            />
         </section>
     );
 }
