@@ -62,3 +62,48 @@ export const getPublicResponseMetadata = (params?: { token?: string; action?: st
         },
     };
 };
+
+export const getPublicHierarchyReviewMetadata = (params?: { token?: string }): Metadata => {
+    const siteUrl = getSiteUrl();
+    const baseUrl = new URL(siteUrl);
+    const routePath = params?.token
+        ? `/briefs/${encodeURIComponent(params.token)}`
+        : '/briefs';
+    const pageUrl = new URL(routePath, siteUrl).toString();
+    const ogImageUrl = new URL('/brand/est-og.jpg', siteUrl).toString();
+
+    return {
+        metadataBase: baseUrl,
+        title: 'EST Hierarchy Review',
+        description: 'Review assignments, rate staff, and export the latest hierarchy sheet.',
+        icons: {
+            icon: '/icons/icon.svg',
+            apple: '/icons/icon.svg',
+        },
+        alternates: {
+            canonical: pageUrl,
+        },
+        openGraph: {
+            title: 'EST Hierarchy Review',
+            description: 'Review assignments, rate staff, and export the latest hierarchy sheet.',
+            url: pageUrl,
+            siteName: 'Emails EST',
+            type: 'website',
+            images: [
+                {
+                    url: ogImageUrl,
+                    width: 1200,
+                    height: 630,
+                    alt: 'EST logo',
+                    type: 'image/jpeg',
+                },
+            ],
+        },
+        twitter: {
+            card: 'summary_large_image',
+            title: 'EST Hierarchy Review',
+            description: 'Review assignments, rate staff, and export the latest hierarchy sheet.',
+            images: [ogImageUrl],
+        },
+    };
+};

@@ -135,6 +135,7 @@ export async function configureApp(app: NestExpressApplication) {
                 requestPath === '/auth/logout' ||
                 requestPath === '/public/recipients/confirm' ||
                 requestPath === '/public/recipients/decline' ||
+                requestPath === '/public/hierarchy-reviews/save' ||
                 requestPath === '/public/whatsapp/reply' ||
                 requestPath === '/public/whatsapp/webhook'
             );

@@ -25,6 +25,16 @@ describe('MessagingService', () => {
             create: jest.fn(),
             update: jest.fn(),
         },
+        hierarchyReviewLink: {
+            upsert: jest.fn(),
+            findUnique: jest.fn(),
+            findUniqueOrThrow: jest.fn(),
+        },
+        hierarchyReviewEntry: {
+            findMany: jest.fn(),
+            upsert: jest.fn(),
+            deleteMany: jest.fn(),
+        },
         log: { create: jest.fn(), findMany: jest.fn(), count: jest.fn() },
         $transaction: jest.fn(),
     };
@@ -34,7 +44,13 @@ describe('MessagingService', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        prisma.$transaction.mockResolvedValue(undefined);
+        prisma.$transaction.mockImplementation(async (input: any) => {
+            if (typeof input === 'function') {
+                return input(prisma);
+            }
+
+            return undefined;
+        });
     });
 
     it('importRecipients keeps partial rows and skips only duplicates inside the same upload', async () => {
@@ -195,16 +211,265 @@ describe('MessagingService', () => {
         } as any)).rejects.toThrow('Recipient sheet must be EST1, EST2, SPARE, or BLACKLIST.');
     });
 
-    it('swapRecipientSheet moves a recipient between operational sheets', async () => {
-        prisma.recipient.findUnique.mockResolvedValue({ id: 'r1', sheet: RecipientSheet.EST1 });
-        prisma.recipient.update.mockResolvedValue({ id: 'r1', sheet: RecipientSheet.SPARE, name: 'Ali Hassan' });
+    it('swapRecipientSheet moves a recipient to spare and reorders it after the spare rows', async () => {
+        prisma.recipient.findUnique.mockResolvedValue({
+            id: 'r1',
+            cycleId: 'cycle-1',
+            sheet: RecipientSheet.EST1,
+            name: 'Ali Hassan',
+        });
+        prisma.recipient.findMany.mockResolvedValue([
+            {
+                id: 'r1',
+                cycleId: 'cycle-1',
+                sheet: RecipientSheet.EST1,
+                room: '201',
+                room_est1: '201',
+                division: '2',
+                building: 'Building A',
+                created_at: new Date('2026-04-24T10:00:00.000Z'),
+            },
+            {
+                id: 'sp-1',
+                cycleId: 'cycle-1',
+                sheet: RecipientSheet.SPARE,
+                room: 'Spare',
+                room_est1: 'Spare',
+                division: null,
+                building: 'Building A',
+                created_at: new Date('2026-04-24T10:00:01.000Z'),
+            },
+        ]);
+        prisma.recipient.update
+            .mockResolvedValueOnce({ id: 'r1', sheet: RecipientSheet.SPARE, name: 'Ali Hassan' })
+            .mockResolvedValueOnce({ id: 'sp-1' })
+            .mockResolvedValueOnce({ id: 'r1' });
 
         await service.swapRecipientSheet('r1', RecipientSheet.SPARE);
 
-        expect(prisma.recipient.update).toHaveBeenCalledWith({
+        expect(prisma.recipient.update).toHaveBeenNthCalledWith(1, {
             where: { id: 'r1' },
             data: { sheet: RecipientSheet.SPARE },
             select: { id: true, sheet: true, name: true },
+        });
+        expect(prisma.recipient.update).toHaveBeenNthCalledWith(3, expect.objectContaining({
+            where: { id: 'r1' },
+            data: { created_at: new Date('2026-04-24T10:00:00.001Z') },
+        }));
+    });
+
+    it('reassignRecipientToSlot keeps the spare row after the target room group', async () => {
+        prisma.recipient.findUnique
+            .mockResolvedValueOnce({
+                id: 'spare-1',
+                cycleId: 'cycle-1',
+                sheet: RecipientSheet.SPARE,
+                name: 'Spare One',
+            })
+            .mockResolvedValueOnce({
+                id: 'template-1',
+                cycleId: 'cycle-1',
+                sheet: RecipientSheet.EST1,
+                division: '5',
+                exam_type: null,
+                role: 'Invigilator',
+                day: null,
+                date: null,
+                test_center: 'Building A',
+                faculty: null,
+                room: '502',
+                room_est1: '502',
+                type: 'Proctor',
+                governorate: 'Cairo',
+                address: null,
+                building: 'Building A',
+                location: null,
+                map_link: null,
+                additional_info_1: null,
+                additional_info_2: null,
+                arrival_time: null,
+                preferred_test_center: null,
+                preferred_proctoring_city: null,
+            });
+        prisma.recipient.findMany.mockResolvedValue([
+            {
+                id: 'est-before',
+                cycleId: 'cycle-1',
+                sheet: RecipientSheet.EST1,
+                room: '501',
+                room_est1: '501',
+                division: '5',
+                building: 'Building A',
+                created_at: new Date('2026-04-24T10:00:00.000Z'),
+            },
+            {
+                id: 'template-1',
+                cycleId: 'cycle-1',
+                sheet: RecipientSheet.EST1,
+                room: '502',
+                room_est1: '502',
+                division: '5',
+                building: 'Building A',
+                created_at: new Date('2026-04-24T10:00:01.000Z'),
+            },
+            {
+                id: 'est-room-peer',
+                cycleId: 'cycle-1',
+                sheet: RecipientSheet.EST1,
+                room: '502',
+                room_est1: '502',
+                division: '5',
+                building: 'Building A',
+                created_at: new Date('2026-04-24T10:00:02.000Z'),
+            },
+            {
+                id: 'spare-1',
+                cycleId: 'cycle-1',
+                sheet: RecipientSheet.SPARE,
+                room: 'Spare',
+                room_est1: 'Spare',
+                division: null,
+                building: 'Building A',
+                created_at: new Date('2026-04-24T10:00:03.000Z'),
+            },
+        ]);
+        prisma.recipient.update
+            .mockResolvedValueOnce({
+                id: 'spare-1',
+                sheet: RecipientSheet.EST1,
+                name: 'Spare One',
+                room_est1: '502',
+                building: 'Building A',
+                division: '5',
+            })
+            .mockResolvedValueOnce({ id: 'est-before' })
+            .mockResolvedValueOnce({ id: 'template-1' })
+            .mockResolvedValueOnce({ id: 'est-room-peer' })
+            .mockResolvedValueOnce({ id: 'spare-1' });
+
+        const result = await service.reassignRecipientToSlot('spare-1', RecipientSheet.EST1, 'template-1');
+
+        expect(result).toEqual(expect.objectContaining({ id: 'spare-1', sheet: RecipientSheet.EST1, room_est1: '502' }));
+        expect(prisma.recipient.update).toHaveBeenNthCalledWith(1, expect.objectContaining({
+            where: { id: 'spare-1' },
+            data: expect.objectContaining({
+                sheet: RecipientSheet.EST1,
+                room: '502',
+                room_est1: '502',
+                division: '5',
+                building: 'Building A',
+            }),
+        }));
+        expect(prisma.recipient.update).toHaveBeenNthCalledWith(4, expect.objectContaining({
+            where: { id: 'spare-1' },
+            data: { created_at: new Date('2026-04-24T10:00:00.003Z') },
+        }));
+    });
+
+    it('swapRecipientWithSpare replaces the row position and moves the apologizer into spare', async () => {
+        prisma.recipient.findUnique.mockResolvedValue({
+            id: 'est-1',
+            cycleId: 'cycle-1',
+            sheet: RecipientSheet.EST2,
+            name: 'Original Invigilator',
+            division: '6',
+            exam_type: null,
+            role: 'Invigilator',
+            day: null,
+            date: null,
+            test_center: 'Building B',
+            faculty: null,
+            room: '602',
+            room_est1: '602',
+            type: 'Proctor',
+            governorate: 'Giza',
+            address: null,
+            building: 'Building B',
+            location: null,
+            map_link: null,
+            additional_info_1: null,
+            additional_info_2: null,
+            arrival_time: null,
+            preferred_test_center: null,
+            preferred_proctoring_city: null,
+        });
+        prisma.recipient.findMany
+            .mockResolvedValueOnce([
+                {
+                    id: 'spare-1',
+                    cycleId: 'cycle-1',
+                    sheet: RecipientSheet.SPARE,
+                    name: 'Spare Candidate',
+                    phone: '01123456789',
+                },
+            ])
+            .mockResolvedValueOnce([
+                {
+                    id: 'est-1',
+                    cycleId: 'cycle-1',
+                    sheet: RecipientSheet.EST2,
+                    room: '602',
+                    room_est1: '602',
+                    division: '6',
+                    building: 'Building B',
+                    created_at: new Date('2026-04-24T10:00:00.000Z'),
+                },
+                {
+                    id: 'spare-other',
+                    cycleId: 'cycle-1',
+                    sheet: RecipientSheet.SPARE,
+                    room: 'Spare',
+                    room_est1: 'Spare',
+                    division: null,
+                    building: 'Building B',
+                    created_at: new Date('2026-04-24T10:00:01.000Z'),
+                },
+                {
+                    id: 'spare-1',
+                    cycleId: 'cycle-1',
+                    sheet: RecipientSheet.SPARE,
+                    room: 'Spare',
+                    room_est1: 'Spare',
+                    division: null,
+                    building: 'Building B',
+                    created_at: new Date('2026-04-24T10:00:02.000Z'),
+                },
+            ]);
+        prisma.recipient.update
+            .mockResolvedValueOnce({ id: 'spare-1' })
+            .mockResolvedValueOnce({ id: 'est-1', sheet: RecipientSheet.SPARE, name: 'Original Invigilator' })
+            .mockResolvedValueOnce({ id: 'spare-1' })
+            .mockResolvedValueOnce({ id: 'spare-other' })
+            .mockResolvedValueOnce({ id: 'est-1' });
+
+        const result = await service.swapRecipientWithSpare('est-1', '01123456789');
+
+        expect(result).toEqual(expect.objectContaining({
+            success: true,
+            moved_into_slot: expect.objectContaining({
+                id: 'spare-1',
+                sheet: RecipientSheet.EST2,
+                room_est1: '602',
+            }),
+        }));
+        expect(prisma.recipient.update).toHaveBeenNthCalledWith(1, expect.objectContaining({
+            where: { id: 'spare-1' },
+            data: expect.objectContaining({
+                sheet: RecipientSheet.EST2,
+                room: '602',
+                room_est1: '602',
+                division: '6',
+                building: 'Building B',
+            }),
+        }));
+        expect(prisma.recipient.update).toHaveBeenNthCalledWith(2, {
+            where: { id: 'est-1' },
+            data: { sheet: RecipientSheet.SPARE },
+            select: {
+                id: true,
+                sheet: true,
+                name: true,
+            },
         });
     });
 
@@ -534,6 +799,9 @@ describe('MessagingService', () => {
                 room_est1: '201',
             },
         ]);
+        prisma.hierarchyReviewLink.upsert
+            .mockResolvedValueOnce({ token: 'head-token' })
+            .mockResolvedValueOnce({ token: 'senior-token' });
         whatsAppService.sendWhatsApp.mockResolvedValue({ ok: true });
 
         const result = await service.sendHierarchyWhatsAppBriefs({
@@ -547,6 +815,8 @@ describe('MessagingService', () => {
         expect(result.summary.seniors.sent).toBe(1);
         expect(whatsAppService.sendWhatsApp).toHaveBeenCalledTimes(2);
         expect(whatsAppService.sendWhatsApp.mock.calls[0][1]).toContain('*EST Building Brief*');
+        expect(whatsAppService.sendWhatsApp.mock.calls[0][1]).toContain('/briefs/head-token');
         expect(whatsAppService.sendWhatsApp.mock.calls[1][1]).toContain('*EST Senior Brief*');
+        expect(whatsAppService.sendWhatsApp.mock.calls[1][1]).toContain('/briefs/senior-token');
     });
 });

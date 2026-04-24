@@ -11,6 +11,8 @@ import { RetryRecipientsDto } from './dto/retry-recipients.dto';
 import { RecipientFilterDto } from './dto/recipient-filter.dto';
 import { SendHierarchyBriefsDto } from './dto/send-hierarchy-briefs.dto';
 import { UpdateRecipientResponseDto } from './dto/update-recipient-response.dto';
+import { ReassignRecipientDto } from './dto/reassign-recipient.dto';
+import { SwapRecipientWithSpareDto } from './dto/swap-recipient-with-spare.dto';
 import { RecipientSheet } from '@prisma/client';
 
 @UseGuards(JwtAuthGuard)
@@ -56,6 +58,16 @@ export class MessagingController {
     @Patch('recipients/:id/sheet')
     async swapRecipientSheet(@Param('id') id: string, @Body() body: { sheet: RecipientSheet }) {
         return this.messagingService.swapRecipientSheet(id, body.sheet);
+    }
+
+    @Post('recipients/:id/reassign')
+    async reassignRecipient(@Param('id') id: string, @Body() body: ReassignRecipientDto) {
+        return this.messagingService.reassignRecipientToSlot(id, body.targetSheet, body.templateRecipientId);
+    }
+
+    @Post('recipients/:id/swap-with-spare')
+    async swapRecipientWithSpare(@Param('id') id: string, @Body() body: SwapRecipientWithSpareDto) {
+        return this.messagingService.swapRecipientWithSpare(id, body.sparePhone);
     }
 
     @Put('recipients/:id/response')

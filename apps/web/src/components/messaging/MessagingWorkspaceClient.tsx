@@ -349,6 +349,7 @@ type HierarchyBriefPreviewTarget = {
     email: string | null;
     whatsapp_message: string;
     email_subject: string;
+    public_review_url: string;
     seniors: Array<{
         recipient_id: string;
         recipient_name: string;
@@ -535,29 +536,6 @@ const RECIPIENT_DETAIL_FIELDS: Array<{ key: keyof Recipient; fallback: string }>
     { key: 'additional_info_2', fallback: 'Additional info 2' },
 ];
 
-const REASSIGNMENT_FIELD_KEYS: Array<keyof Recipient> = [
-    'division',
-    'exam_type',
-    'role',
-    'day',
-    'date',
-    'test_center',
-    'faculty',
-    'room',
-    'room_est1',
-    'type',
-    'governorate',
-    'address',
-    'building',
-    'location',
-    'map_link',
-    'additional_info_1',
-    'additional_info_2',
-    'arrival_time',
-    'preferred_test_center',
-    'preferred_proctoring_city',
-];
-
 const isWorkspaceTab = (value?: string | null): value is WorkspaceTab =>
     value === 'recipients' || value === 'templates' || value === 'campaign' || value === 'settings';
 
@@ -655,6 +633,31 @@ const summarizeText = (value: string, maxLength = 240) => {
     return `${compact.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 };
 
+const normalizeRecipientPhoneLookup = (value?: string | null) => {
+    const digits = String(value || '').replace(/\D/g, '');
+    if (!digits) {
+        return '';
+    }
+
+    if (digits.length === 10 && digits.startsWith('1')) {
+        return `0${digits}`;
+    }
+
+    if (digits.length === 12 && digits.startsWith('20')) {
+        return `0${digits.slice(2)}`;
+    }
+
+    if (digits.length === 13 && digits.startsWith('0020')) {
+        return `0${digits.slice(4)}`;
+    }
+
+    if (digits.length >= 11) {
+        return digits.slice(-11);
+    }
+
+    return digits;
+};
+
 const trimRecipientFormValues = (form: RecipientExcelFormState): RecipientExcelFormState => ({
     room_est1: form.room_est1.trim(),
     division: form.division.trim(),
@@ -688,42 +691,6 @@ const trimRecipientFormValues = (form: RecipientExcelFormState): RecipientExcelF
     additional_info_2: form.additional_info_2.trim(),
     sheet: form.sheet.trim() as RecipientExcelFormState['sheet'],
 });
-
-const buildReassignedRecipientPayload = (
-    recipient: Recipient,
-    targetSheet: ReassignTargetSheet,
-    templateRecipient: Recipient,
-) => {
-    const payload: Record<string, string | undefined> = {
-        cycleId: recipient.cycleId || undefined,
-        name: recipient.name || '',
-        arabic_name: recipient.arabic_name || '',
-        email: recipient.email || '',
-        phone: recipient.phone || '',
-        employer: recipient.employer || '',
-        kind_of_school: recipient.kind_of_school || '',
-        title: recipient.title || '',
-        insurance_number: recipient.insurance_number || '',
-        institution_tax_number: recipient.institution_tax_number || '',
-        national_id_number: recipient.national_id_number || '',
-        national_id_picture: recipient.national_id_picture || '',
-        personal_photo: recipient.personal_photo || '',
-        bank_account_name: recipient.bank_account_name || '',
-        bank_name: recipient.bank_name || '',
-        bank_branch_name: recipient.bank_branch_name || '',
-        account_number: recipient.account_number || '',
-        iban_number: recipient.iban_number || '',
-        bank_divid: recipient.bank_divid || '',
-        sheet: targetSheet,
-    };
-
-    for (const field of REASSIGNMENT_FIELD_KEYS) {
-        payload[field] = String(templateRecipient[field] || recipient[field] || '');
-    }
-
-    payload.room = payload.room_est1 || payload.room || '';
-    return payload;
-};
 
 export default function MessagingWorkspaceClient({ locale }: { locale: string }) {
     const isArabic = locale === 'ar';
@@ -949,6 +916,20 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         blacklistConflictDeleteHint: isArabic ? 'احذف الصف إذا كان يجب أن يبقى خارج الشيتات التشغيلية.' : 'Delete this row if the recipient should stay out of the operational sheets.',
     }), [isArabic]);
 
+    const recipientSheetActionUxCopy = useMemo(() => ({
+        ...recipientSheetActionCopy,
+        swapWithSpare: isArabic ? 'بدّل مع Spare' : 'Swap with Spare',
+        currentSlot: isArabic ? 'المكان الحالي' : 'Current slot',
+        sparePhone: isArabic ? 'رقم مراقب Spare' : 'Spare phone number',
+        sparePhonePlaceholder: isArabic ? 'اكتب رقم مراقب Spare' : 'Enter the spare recipient phone',
+        swapSpareTitle: isArabic ? 'تبديل مع مراقب من Spare' : 'Swap with a Spare recipient',
+        swapSpareHint: isArabic ? 'أدخل رقم مراقب من Spare، وسيأخذ نفس الدور والرووم الحالية للمعتذر بنفس ترتيب الشيت.' : 'Enter a Spare phone number and that recipient will take over the same floor and room while the current row moves to Spare in the correct sheet order.',
+        spareMatchPreview: isArabic ? 'سيتم التبديل مع' : 'Matched Spare',
+        spareNoMatch: isArabic ? 'لم نجد مراقباً في Spare بهذا الرقم في نفس الدورة.' : 'No Spare recipient matches this phone number in the same cycle.',
+        confirmSwap: isArabic ? 'تأكيد التبديل' : 'Confirm swap',
+        swapSuccess: isArabic ? 'تم التبديل مع Spare بنجاح.' : 'Spare swap completed successfully.',
+    }), [isArabic, recipientSheetActionCopy]);
+
     const [activeTab, setActiveTab] = useState<WorkspaceTab>(() => (
         isWorkspaceTab(searchParams.get('tab')) ? (searchParams.get('tab') as WorkspaceTab) : 'recipients'
     ));
@@ -1005,6 +986,8 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [spareAssignmentBuilding, setSpareAssignmentBuilding] = useState('');
     const [spareAssignmentFloor, setSpareAssignmentFloor] = useState('');
     const [spareAssignmentRoomKey, setSpareAssignmentRoomKey] = useState('');
+    const [spareSwapRecipient, setSpareSwapRecipient] = useState<Recipient | null>(null);
+    const [spareSwapPhone, setSpareSwapPhone] = useState('');
     const subjectInputRef = useRef<HTMLInputElement>(null);
     const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -1091,6 +1074,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         selectedSheet === 'BLACKLIST'
         || selectedSheet === 'SPARE'
         || Boolean(spareAssignmentRecipient)
+        || Boolean(spareSwapRecipient)
     );
 
     const est1ReferenceQuery = useQuery<Recipient[]>({
@@ -1119,7 +1103,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             cycleId: selectedCycleId === ALL_CYCLES_VALUE ? undefined : selectedCycleId,
             sheet: 'SPARE',
         }),
-        enabled: ready && activeTab === 'recipients' && selectedSheet === 'BLACKLIST',
+        enabled: ready && activeTab === 'recipients' && (
+            selectedSheet === 'BLACKLIST'
+            || Boolean(spareSwapRecipient)
+        ),
         staleTime: 30_000,
     });
 
@@ -1284,7 +1271,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     }, [guidedTemplateForm]);
 
     useEffect(() => {
-        if (!isRecipientFormOpen && !isTemplateComposerOpen && !spareAssignmentRecipient) {
+        if (!isRecipientFormOpen && !isTemplateComposerOpen && !spareAssignmentRecipient && !spareSwapRecipient) {
             return;
         }
 
@@ -1294,7 +1281,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         return () => {
             document.body.style.overflow = previousOverflow;
         };
-    }, [isRecipientFormOpen, isTemplateComposerOpen, spareAssignmentRecipient]);
+    }, [isRecipientFormOpen, isTemplateComposerOpen, spareAssignmentRecipient, spareSwapRecipient]);
 
     const refreshAll = async () => {
         await Promise.all([
@@ -1406,10 +1393,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                 throw new Error('A destination slot is required.');
             }
 
-            const response = await api.put(
-                `/messaging/recipients/${recipient.id}`,
-                buildReassignedRecipientPayload(recipient, targetSheet, templateRecipient),
-            );
+            const response = await api.post(`/messaging/recipients/${recipient.id}/reassign`, {
+                targetSheet,
+                templateRecipientId: templateRecipient.id,
+            });
             return response.data;
         },
         onSuccess(_data, variables) {
@@ -1421,6 +1408,32 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             setMovingRecipientId(null);
             setSelectedRecipientIds((current) => current.filter((id) => id !== variables.recipient.id));
             setSpareAssignmentRecipient(null);
+            setSpareSwapRecipient(null);
+            setSpareSwapPhone('');
+            void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
+            void queryClient.invalidateQueries({ queryKey: ['messaging-recipient-filter-options'] });
+            void queryClient.invalidateQueries({ queryKey: ['messaging-recipient-reference'] });
+        },
+        onError(error: any) {
+            setMovingRecipientId(null);
+            toast.error(getImportErrorMessage(error, recipientSheetActionCopy.moveError));
+        },
+    });
+
+    const swapRecipientWithSpareMutation = useMutation({
+        mutationFn: async ({ recipientId, sparePhone }: { recipientId: string; sparePhone: string }) => {
+            await fetchCsrfToken();
+            const response = await api.post(`/messaging/recipients/${recipientId}/swap-with-spare`, {
+                sparePhone,
+            });
+            return response.data;
+        },
+        onSuccess(_data, variables) {
+            toast.success(recipientSheetActionUxCopy.swapSuccess);
+            setMovingRecipientId(null);
+            setSelectedRecipientIds((current) => current.filter((id) => id !== variables.recipientId));
+            setSpareSwapRecipient(null);
+            setSpareSwapPhone('');
             void queryClient.invalidateQueries({ queryKey: ['messaging-recipients'] });
             void queryClient.invalidateQueries({ queryKey: ['messaging-recipient-filter-options'] });
             void queryClient.invalidateQueries({ queryKey: ['messaging-recipient-reference'] });
@@ -1863,6 +1876,32 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             ? est1ReferenceQuery.isLoading
             : est2ReferenceQuery.isLoading
     );
+    const spareSwapReferenceRecipients = useMemo(() => {
+        if (!spareSwapRecipient) {
+            return EMPTY_RECIPIENTS;
+        }
+
+        if (selectedCycleId !== ALL_CYCLES_VALUE) {
+            return spareReferenceRecipients;
+        }
+
+        return spareReferenceRecipients.filter((recipient) => (
+            spareSwapRecipient.cycleId
+                ? recipient.cycleId === spareSwapRecipient.cycleId
+                : !recipient.cycleId
+        ));
+    }, [selectedCycleId, spareReferenceRecipients, spareSwapRecipient]);
+    const matchedSpareSwapRecipient = useMemo(() => {
+        const normalizedPhone = normalizeRecipientPhoneLookup(spareSwapPhone);
+        if (!normalizedPhone) {
+            return null;
+        }
+
+        return spareSwapReferenceRecipients.find((recipient) => (
+            recipient.id !== spareSwapRecipient?.id
+            && normalizeRecipientPhoneLookup(recipient.phone) === normalizedPhone
+        )) ?? null;
+    }, [spareSwapPhone, spareSwapReferenceRecipients, spareSwapRecipient?.id]);
 
     useEffect(() => {
         if (!spareAssignmentRecipient) {
@@ -2046,6 +2085,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
         setSpareAssignmentRoomKey('');
     };
 
+    const openSpareSwapDialog = (recipient: Recipient) => {
+        setSpareSwapRecipient(recipient);
+        setSpareSwapPhone('');
+    };
+
     const confirmSpareAssignment = () => {
         if (!spareAssignmentRecipient || !selectedSpareAssignmentTemplate) {
             toast.error(recipientSheetActionCopy.noAssignmentSlots);
@@ -2057,6 +2101,19 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
             recipient: spareAssignmentRecipient,
             targetSheet: spareAssignmentTargetSheet,
             templateRecipient: selectedSpareAssignmentTemplate,
+        });
+    };
+
+    const confirmSpareSwap = () => {
+        if (!spareSwapRecipient || !matchedSpareSwapRecipient) {
+            toast.error(recipientSheetActionUxCopy.spareNoMatch);
+            return;
+        }
+
+        setMovingRecipientId(spareSwapRecipient.id);
+        swapRecipientWithSpareMutation.mutate({
+            recipientId: spareSwapRecipient.id,
+            sparePhone: spareSwapPhone.trim(),
         });
     };
 
@@ -2628,7 +2685,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     };
 
     const renderRecipientActionButtons = (recipient: Recipient) => {
-        const isMoving = movingRecipientId === recipient.id && moveRecipientMutation.isPending;
+        const isMoving = movingRecipientId === recipient.id && (
+            moveRecipientMutation.isPending
+            || swapRecipientWithSpareMutation.isPending
+        );
         const canMoveToSpare = recipient.sheet === 'EST1' || recipient.sheet === 'EST2';
         const canAssignFromSpare = recipient.sheet === 'SPARE';
 
@@ -2643,6 +2703,18 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                     >
                         <ArrowLeftRight size={13} />
                         <span>{recipientSheetActionCopy.moveToSpare}</span>
+                    </button>
+                ) : null}
+
+                {canMoveToSpare ? (
+                    <button
+                        type="button"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => openSpareSwapDialog(recipient)}
+                        disabled={isMoving}
+                    >
+                        <ArrowLeftRight size={13} />
+                        <span>{recipientSheetActionUxCopy.swapWithSpare}</span>
                     </button>
                 ) : null}
 
@@ -4000,6 +4072,100 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             </div>
                         </div>
                     ) : null}
+                    {spareSwapRecipient ? (
+                        <div className="fixed inset-0 z-[92] flex items-center justify-center p-4 md:p-6">
+                            <button
+                                type="button"
+                                className="overlay-backdrop absolute inset-0"
+                                aria-label={copy.cancelEdit}
+                                onClick={() => {
+                                    setSpareSwapRecipient(null);
+                                    setSpareSwapPhone('');
+                                }}
+                            />
+                            <div className="modal-shell relative z-10 w-full max-w-2xl rounded-[2rem] p-5 md:p-6">
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-slate-950">{recipientSheetActionUxCopy.swapSpareTitle}</h3>
+                                        <p className="mt-2 text-sm leading-6 text-slate-500">{recipientSheetActionUxCopy.swapSpareHint}</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="btn-outline"
+                                        onClick={() => {
+                                            setSpareSwapRecipient(null);
+                                            setSpareSwapPhone('');
+                                        }}
+                                    >
+                                        {copy.cancelEdit}
+                                    </button>
+                                </div>
+
+                                <div className="mt-5 grid gap-4 md:grid-cols-2">
+                                    <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-4 py-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{copy.name}</div>
+                                        <div className="mt-2 text-base font-semibold text-slate-950">{spareSwapRecipient.name}</div>
+                                        <div className="mt-1 text-sm text-slate-500">{spareSwapRecipient.phone || spareSwapRecipient.email || EMPTY_VALUE_LABEL}</div>
+                                    </div>
+                                    <div className="rounded-[1.5rem] border border-emerald-200 bg-emerald-50 px-4 py-4">
+                                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">{recipientSheetActionUxCopy.currentSlot}</div>
+                                        <div className="mt-2 text-base font-semibold text-slate-950">{spareSwapRecipient.room_est1 || spareSwapRecipient.room || EMPTY_VALUE_LABEL}</div>
+                                        <div className="mt-1 text-sm text-slate-600">
+                                            {[spareSwapRecipient.building, spareSwapRecipient.division].filter(Boolean).join(' • ') || EMPTY_VALUE_LABEL}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5">
+                                    <label className="mb-2 block text-sm font-medium text-slate-700">{recipientSheetActionUxCopy.sparePhone}</label>
+                                    <input
+                                        value={spareSwapPhone}
+                                        onChange={(event) => setSpareSwapPhone(event.target.value)}
+                                        className="input w-full !min-h-[2.75rem] !rounded-xl !px-3 !py-2 text-sm"
+                                        placeholder={recipientSheetActionUxCopy.sparePhonePlaceholder}
+                                    />
+                                </div>
+
+                                {spareSwapPhone.trim() ? (
+                                    matchedSpareSwapRecipient ? (
+                                        <div className="mt-5 rounded-[1.35rem] border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+                                            <div className="font-semibold">{recipientSheetActionUxCopy.spareMatchPreview}</div>
+                                            <div className="mt-2">{matchedSpareSwapRecipient.name}</div>
+                                            <div className="mt-1 text-emerald-800">{matchedSpareSwapRecipient.phone || matchedSpareSwapRecipient.email || EMPTY_VALUE_LABEL}</div>
+                                            <div className="mt-3 text-xs text-emerald-800">
+                                                {recipientSheetActionUxCopy.currentSlot}: {spareSwapRecipient.room_est1 || spareSwapRecipient.room || EMPTY_VALUE_LABEL}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="mt-5 rounded-[1.35rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                            {recipientSheetActionUxCopy.spareNoMatch}
+                                        </div>
+                                    )
+                                ) : null}
+
+                                <div className="mt-5 flex flex-wrap gap-3">
+                                    <button
+                                        type="button"
+                                        className="btn-primary"
+                                        onClick={confirmSpareSwap}
+                                        disabled={!matchedSpareSwapRecipient || swapRecipientWithSpareMutation.isPending}
+                                    >
+                                        {recipientSheetActionUxCopy.confirmSwap}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn-outline"
+                                        onClick={() => {
+                                            setSpareSwapRecipient(null);
+                                            setSpareSwapPhone('');
+                                        }}
+                                    >
+                                        {copy.cancelEdit}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
                     <ConfirmDialog
                         open={Boolean(deleteConfirmState)}
                         title={
@@ -5227,6 +5393,11 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                 <div>Phone: {target.phone || '-'}</div>
                                                 <div>Email: {target.email || '-'}</div>
                                             </div>
+                                            {target.public_review_url ? (
+                                                <div className="mt-2 text-xs text-slate-600">
+                                                    Public review: <a href={target.public_review_url} target="_blank" rel="noreferrer" className="font-semibold text-cyan-700 underline underline-offset-4">{target.public_review_url}</a>
+                                                </div>
+                                            ) : null}
                                             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs whitespace-pre-wrap text-slate-700">
                                                 {target.whatsapp_message}
                                             </div>

@@ -10,7 +10,14 @@ import { RetryRecipientsDto } from './dto/retry-recipients.dto';
 import { RecipientFilterDto } from './dto/recipient-filter.dto';
 import { ImportRecipientsDto } from './dto/import-recipients.dto';
 import { HierarchyBriefChannel, SendHierarchyBriefsDto } from './dto/send-hierarchy-briefs.dto';
-import { Prisma, RecipientSheet, RecipientStatus, TemplateType } from '@prisma/client';
+import {
+    HierarchyNominationRole,
+    HierarchyReviewTargetRole,
+    Prisma,
+    RecipientSheet,
+    RecipientStatus,
+    TemplateType,
+} from '@prisma/client';
 import { format } from 'date-fns';
 import { randomUUID } from 'crypto';
 import {
@@ -35,6 +42,16 @@ type WhatsAppReplyAction = 'CONFIRM' | 'DECLINE' | 'UNKNOWN';
 type HierarchyRole = 'HEAD' | 'SENIOR' | 'INVIGILATOR';
 type HierarchyTargetRole = 'HEAD' | 'SENIOR';
 type RecipientDeliveryChannel = 'EMAIL' | 'WHATSAPP';
+type RecipientPlacementRow = {
+    id: string;
+    cycleId: string | null;
+    sheet: RecipientSheet;
+    room: string | null;
+    room_est1: string | null;
+    division: string | null;
+    building: string | null;
+    created_at: Date;
+};
 
 type HierarchyRecipientRow = {
     id: string;
@@ -79,6 +96,7 @@ type HierarchyTargetPreview = {
     whatsapp_message: string;
     email_subject: string;
     email_body_html: string;
+    public_review_url: string;
     seniors: Array<{
         recipient_id: string;
         recipient_name: string;
@@ -105,6 +123,64 @@ type RecipientChannelDeliveryResult = {
     status: ChannelDeliveryState;
     detail?: string;
 };
+
+type HierarchyReviewSnapshotRow = {
+    recipient_id: string;
+    recipient_name: string;
+    row_order: number;
+    hierarchy_role: HierarchyRole;
+    role: string | null;
+    group_recipient_id: string | null;
+    group_name: string | null;
+    floor: string | null;
+    room: string | null;
+    phone: string | null;
+    email: string | null;
+};
+
+type HierarchyReviewSnapshot = {
+    scope_role: HierarchyTargetRole;
+    cycle_id: string | null;
+    building: string;
+    floor: string | null;
+    reviewer: {
+        recipient_id: string;
+        recipient_name: string;
+        row_order: number;
+    };
+    generated_at: string;
+    rows: HierarchyReviewSnapshotRow[];
+};
+
+type HierarchyReviewRowInput = {
+    targetRecipientId: string;
+    rating?: number | null;
+    comment?: string | null;
+    nominationRole?: HierarchyNominationRole | null;
+};
+
+const RECIPIENT_ASSIGNMENT_FIELD_KEYS = [
+    'division',
+    'exam_type',
+    'role',
+    'day',
+    'date',
+    'test_center',
+    'faculty',
+    'room',
+    'room_est1',
+    'type',
+    'governorate',
+    'address',
+    'building',
+    'location',
+    'map_link',
+    'additional_info_1',
+    'additional_info_2',
+    'arrival_time',
+    'preferred_test_center',
+    'preferred_proctoring_city',
+] as const;
 
 @Injectable()
 export class MessagingService {
@@ -372,6 +448,40 @@ export class MessagingService {
             throw new BadRequestException('Cannot move recipient to LEGACY sheet.');
         }
 
+        if (sheet === RecipientSheet.SPARE) {
+            return this.prisma.$transaction(async (tx) => {
+                const recipient = await tx.recipient.findUnique({
+                    where: { id },
+                    select: {
+                        id: true,
+                        cycleId: true,
+                        sheet: true,
+                        name: true,
+                    },
+                });
+
+                if (!recipient) {
+                    throw new BadRequestException('Recipient not found.');
+                }
+
+                const placementRows = await this.getScopedRecipientPlacementRows(tx, recipient.cycleId);
+                const orderedIds = this.buildMovedRecipientOrder({
+                    recipients: placementRows,
+                    recipientId: recipient.id,
+                    targetSheet: RecipientSheet.SPARE,
+                });
+
+                const updatedRecipient = await tx.recipient.update({
+                    where: { id },
+                    data: { sheet: RecipientSheet.SPARE },
+                    select: { id: true, sheet: true, name: true },
+                });
+
+                await this.applyRecipientOrder(tx, placementRows, orderedIds);
+                return updatedRecipient;
+            });
+        }
+
         const recipient = await this.prisma.recipient.findUnique({
             where: { id },
             select: { id: true, sheet: true },
@@ -385,6 +495,218 @@ export class MessagingService {
             where: { id },
             data: { sheet },
             select: { id: true, sheet: true, name: true },
+        });
+    }
+
+    async reassignRecipientToSlot(id: string, targetSheet: RecipientSheet, templateRecipientId: string) {
+        if (targetSheet !== RecipientSheet.EST1 && targetSheet !== RecipientSheet.EST2) {
+            throw new BadRequestException('Target sheet must be EST1 or EST2.');
+        }
+
+        if (!templateRecipientId?.trim()) {
+            throw new BadRequestException('Template recipient is required.');
+        }
+
+        return this.prisma.$transaction(async (tx) => {
+            const recipient = await tx.recipient.findUnique({
+                where: { id },
+                select: {
+                    id: true,
+                    cycleId: true,
+                    sheet: true,
+                    name: true,
+                },
+            });
+
+            if (!recipient) {
+                throw new BadRequestException('Recipient not found.');
+            }
+
+            if (recipient.sheet !== RecipientSheet.SPARE) {
+                throw new BadRequestException('Only Spare recipients can be reassigned into EST sheets.');
+            }
+
+            const templateRecipient = await tx.recipient.findUnique({
+                where: { id: templateRecipientId.trim() },
+                select: {
+                    id: true,
+                    cycleId: true,
+                    sheet: true,
+                    division: true,
+                    exam_type: true,
+                    role: true,
+                    day: true,
+                    date: true,
+                    test_center: true,
+                    faculty: true,
+                    room: true,
+                    room_est1: true,
+                    type: true,
+                    governorate: true,
+                    address: true,
+                    building: true,
+                    location: true,
+                    map_link: true,
+                    additional_info_1: true,
+                    additional_info_2: true,
+                    arrival_time: true,
+                    preferred_test_center: true,
+                    preferred_proctoring_city: true,
+                },
+            });
+
+            if (!templateRecipient) {
+                throw new BadRequestException('Template recipient not found.');
+            }
+
+            if (templateRecipient.sheet !== targetSheet) {
+                throw new BadRequestException('The selected target slot does not belong to the requested sheet.');
+            }
+
+            if (templateRecipient.cycleId !== recipient.cycleId) {
+                throw new BadRequestException('Recipients can only be reassigned inside the same uploaded cycle.');
+            }
+
+            const placementRows = await this.getScopedRecipientPlacementRows(tx, recipient.cycleId);
+            const orderedIds = this.buildMovedRecipientOrder({
+                recipients: placementRows,
+                recipientId: recipient.id,
+                targetSheet,
+                anchorRecipient: templateRecipient,
+            });
+
+            const updatedRecipient = await tx.recipient.update({
+                where: { id },
+                data: {
+                    sheet: targetSheet,
+                    ...this.buildOperationalAssignmentData(templateRecipient),
+                },
+                select: {
+                    id: true,
+                    sheet: true,
+                    name: true,
+                    room_est1: true,
+                    building: true,
+                    division: true,
+                },
+            });
+
+            await this.applyRecipientOrder(tx, placementRows, orderedIds);
+            return updatedRecipient;
+        });
+    }
+
+    async swapRecipientWithSpare(id: string, sparePhone: string) {
+        const normalizedPhone = normalizeEgyptMobilePhone(sparePhone);
+        if (!normalizedPhone) {
+            throw new BadRequestException('A valid Spare phone number is required.');
+        }
+
+        return this.prisma.$transaction(async (tx) => {
+            const activeRecipient = await tx.recipient.findUnique({
+                where: { id },
+                select: {
+                    id: true,
+                    cycleId: true,
+                    sheet: true,
+                    name: true,
+                    division: true,
+                    exam_type: true,
+                    role: true,
+                    day: true,
+                    date: true,
+                    test_center: true,
+                    faculty: true,
+                    room: true,
+                    room_est1: true,
+                    type: true,
+                    governorate: true,
+                    address: true,
+                    building: true,
+                    location: true,
+                    map_link: true,
+                    additional_info_1: true,
+                    additional_info_2: true,
+                    arrival_time: true,
+                    preferred_test_center: true,
+                    preferred_proctoring_city: true,
+                },
+            });
+
+            if (!activeRecipient) {
+                throw new BadRequestException('Recipient not found.');
+            }
+
+            if (activeRecipient.sheet !== RecipientSheet.EST1 && activeRecipient.sheet !== RecipientSheet.EST2) {
+                throw new BadRequestException('Only EST1 and EST2 recipients can be swapped with Spare.');
+            }
+
+            const spareCandidates = await tx.recipient.findMany({
+                where: {
+                    ...this.buildRecipientScopeWhere(activeRecipient.cycleId),
+                    sheet: RecipientSheet.SPARE,
+                },
+                select: {
+                    id: true,
+                    cycleId: true,
+                    sheet: true,
+                    name: true,
+                    phone: true,
+                },
+            });
+
+            const spareRecipient = spareCandidates.find((candidate) => (
+                normalizeEgyptMobilePhone(candidate.phone) === normalizedPhone
+            ));
+
+            if (!spareRecipient) {
+                throw new BadRequestException('No Spare recipient was found with that phone number.');
+            }
+
+            const placementRows = await this.getScopedRecipientPlacementRows(tx, activeRecipient.cycleId);
+            const orderedIds = this.buildSwapRecipientOrder({
+                recipients: placementRows,
+                activeRecipientId: activeRecipient.id,
+                spareRecipientId: spareRecipient.id,
+            });
+
+            const activeRecipientAssignment = this.buildOperationalAssignmentData(activeRecipient);
+
+            await tx.recipient.update({
+                where: { id: spareRecipient.id },
+                data: {
+                    sheet: activeRecipient.sheet,
+                    ...activeRecipientAssignment,
+                },
+            });
+
+            const movedToSpareRecipient = await tx.recipient.update({
+                where: { id: activeRecipient.id },
+                data: {
+                    sheet: RecipientSheet.SPARE,
+                },
+                select: {
+                    id: true,
+                    sheet: true,
+                    name: true,
+                },
+            });
+
+            await this.applyRecipientOrder(tx, placementRows, orderedIds);
+
+            return {
+                success: true,
+                moved_to_spare: movedToSpareRecipient,
+                moved_into_slot: {
+                    id: spareRecipient.id,
+                    name: spareRecipient.name,
+                    phone: spareRecipient.phone,
+                    sheet: activeRecipient.sheet,
+                    room_est1: activeRecipient.room_est1,
+                    building: activeRecipient.building,
+                    division: activeRecipient.division,
+                },
+            };
         });
     }
 
@@ -836,9 +1158,20 @@ export class MessagingService {
         const selectedSeniorNodes = includeSeniors
             ? seniorsOrdered.filter((node) => !selectedSeniorIds || selectedSeniorIds.has(node.target.id))
             : [];
+        const reviewLinksByRecipientId = await this.ensureHierarchyReviewLinks({
+            cycleId,
+            selectedHeadNodes,
+            selectedSeniorNodes,
+        });
 
-        const headTargets = selectedHeadNodes.map((node) => this.buildHeadTargetPreview(node));
-        const seniorTargets = selectedSeniorNodes.map((node) => this.buildSeniorTargetPreview(node));
+        const headTargets = selectedHeadNodes.map((node) => this.buildHeadTargetPreview(
+            node,
+            reviewLinksByRecipientId.get(node.target.id) || '',
+        ));
+        const seniorTargets = selectedSeniorNodes.map((node) => this.buildSeniorTargetPreview(
+            node,
+            reviewLinksByRecipientId.get(node.target.id) || '',
+        ));
         const orderedTargets = [...headTargets, ...seniorTargets].sort((a, b) => a.row_order - b.row_order);
 
         const buildingsCount = new Set([
@@ -1031,6 +1364,114 @@ export class MessagingService {
             ...responseBase,
             delivery,
         };
+    }
+
+    async getHierarchyReview(token: string) {
+        const normalizedToken = token.trim();
+        if (!normalizedToken) {
+            throw new BadRequestException('Review token is required.');
+        }
+
+        const link = await this.prisma.hierarchyReviewLink.findUnique({
+            where: { token: normalizedToken },
+            include: {
+                entries: {
+                    orderBy: { created_at: 'asc' },
+                },
+            },
+        });
+
+        if (!link) {
+            throw new BadRequestException('Invalid review link.');
+        }
+
+        return this.buildHierarchyReviewResponse(link);
+    }
+
+    async saveHierarchyReview(token: string, rows: HierarchyReviewRowInput[]) {
+        const normalizedToken = token.trim();
+        if (!normalizedToken) {
+            throw new BadRequestException('Review token is required.');
+        }
+
+        return this.prisma.$transaction(async (tx) => {
+            const link = await tx.hierarchyReviewLink.findUnique({
+                where: { token: normalizedToken },
+                include: {
+                    entries: true,
+                },
+            });
+
+            if (!link) {
+                throw new BadRequestException('Invalid review link.');
+            }
+
+            const snapshot = this.parseHierarchyReviewSnapshot(link.snapshot);
+            const snapshotRowsById = new Map(snapshot.rows.map((row) => [row.recipient_id, row]));
+
+            for (const row of rows) {
+                const snapshotRow = snapshotRowsById.get(row.targetRecipientId);
+                if (!snapshotRow) {
+                    throw new BadRequestException('One or more review rows do not belong to this link.');
+                }
+
+                const rating = typeof row.rating === 'number' ? row.rating : null;
+                const comment = normalizeImportValue(row.comment);
+                const nominationRole = row.nominationRole ?? null;
+                const hasValues = rating !== null || Boolean(comment) || nominationRole !== null;
+
+                if (!hasValues) {
+                    await tx.hierarchyReviewEntry.deleteMany({
+                        where: {
+                            linkId: link.id,
+                            targetRecipientId: row.targetRecipientId,
+                        },
+                    });
+                    continue;
+                }
+
+                await tx.hierarchyReviewEntry.upsert({
+                    where: {
+                        linkId_targetRecipientId: {
+                            linkId: link.id,
+                            targetRecipientId: row.targetRecipientId,
+                        },
+                    },
+                    create: {
+                        linkId: link.id,
+                        targetRecipientId: row.targetRecipientId,
+                        targetRecipientName: snapshotRow.recipient_name,
+                        targetRole: snapshotRow.role,
+                        targetRoom: snapshotRow.room,
+                        rating,
+                        comment,
+                        nominationRole,
+                    },
+                    update: {
+                        targetRecipientName: snapshotRow.recipient_name,
+                        targetRole: snapshotRow.role,
+                        targetRoom: snapshotRow.room,
+                        rating,
+                        comment,
+                        nominationRole,
+                    },
+                });
+            }
+
+            const refreshedLink = await tx.hierarchyReviewLink.findUniqueOrThrow({
+                where: { token: normalizedToken },
+                include: {
+                    entries: {
+                        orderBy: { created_at: 'asc' },
+                    },
+                },
+            });
+
+            return {
+                saved: rows.length,
+                review: await this.buildHierarchyReviewResponse(refreshedLink, tx),
+            };
+        });
     }
 
     async getTemplates() {
@@ -1693,6 +2134,529 @@ export class MessagingService {
         return 'يرجى الرد بكلمة confirm للتأكيد أو apology للاعتذار.';
     }
 
+    private buildRecipientScopeWhere(cycleId?: string | null): Prisma.RecipientWhereInput {
+        return cycleId
+            ? { cycleId }
+            : { cycleId: null };
+    }
+
+    private async getScopedRecipientPlacementRows(
+        tx: Prisma.TransactionClient,
+        cycleId?: string | null,
+    ): Promise<RecipientPlacementRow[]> {
+        return tx.recipient.findMany({
+            where: this.buildRecipientScopeWhere(cycleId),
+            orderBy: [
+                { created_at: 'asc' },
+                { id: 'asc' },
+            ],
+            select: {
+                id: true,
+                cycleId: true,
+                sheet: true,
+                room: true,
+                room_est1: true,
+                division: true,
+                building: true,
+                created_at: true,
+            },
+        });
+    }
+
+    private buildMovedRecipientOrder(options: {
+        recipients: RecipientPlacementRow[];
+        recipientId: string;
+        targetSheet: RecipientSheet;
+        anchorRecipient?: {
+            room?: string | null;
+            room_est1?: string | null;
+            division?: string | null;
+            building?: string | null;
+        } | null;
+    }) {
+        const { recipients, recipientId, targetSheet, anchorRecipient } = options;
+        const remainingRecipients = recipients.filter((recipient) => recipient.id !== recipientId);
+        const orderedIds = remainingRecipients.map((recipient) => recipient.id);
+
+        let insertIndex = orderedIds.length;
+
+        if (targetSheet === RecipientSheet.SPARE) {
+            const lastSpareIndex = this.findLastSheetIndex(remainingRecipients, RecipientSheet.SPARE);
+            insertIndex = lastSpareIndex === -1 ? orderedIds.length : lastSpareIndex + 1;
+        } else {
+            const anchorKey = this.buildRecipientPlacementKey(anchorRecipient || null);
+            const lastMatchingRoomIndex = anchorKey
+                ? this.findLastMatchingSlotIndex(remainingRecipients, targetSheet, anchorKey)
+                : -1;
+
+            if (lastMatchingRoomIndex !== -1) {
+                insertIndex = lastMatchingRoomIndex + 1;
+            } else {
+                const lastTargetSheetIndex = this.findLastSheetIndex(remainingRecipients, targetSheet);
+                insertIndex = lastTargetSheetIndex === -1 ? orderedIds.length : lastTargetSheetIndex + 1;
+            }
+        }
+
+        orderedIds.splice(insertIndex, 0, recipientId);
+        return orderedIds;
+    }
+
+    private buildSwapRecipientOrder(options: {
+        recipients: RecipientPlacementRow[];
+        activeRecipientId: string;
+        spareRecipientId: string;
+    }) {
+        const { recipients, activeRecipientId, spareRecipientId } = options;
+        const activeRecipientIndex = recipients.findIndex((recipient) => recipient.id === activeRecipientId);
+        if (activeRecipientIndex === -1) {
+            throw new BadRequestException('Active recipient order could not be resolved.');
+        }
+
+        const remainingRecipients = recipients.filter((recipient) => (
+            recipient.id !== activeRecipientId && recipient.id !== spareRecipientId
+        ));
+        const orderedIds = remainingRecipients.map((recipient) => recipient.id);
+        const spareReplacementIndex = Math.min(activeRecipientIndex, orderedIds.length);
+        orderedIds.splice(spareReplacementIndex, 0, spareRecipientId);
+
+        const lastSpareIndexBeforeInsert = this.findLastSheetIndex(remainingRecipients, RecipientSheet.SPARE);
+        const adjustedLastSpareIndex = lastSpareIndexBeforeInsert === -1
+            ? -1
+            : spareReplacementIndex <= lastSpareIndexBeforeInsert
+                ? lastSpareIndexBeforeInsert + 1
+                : lastSpareIndexBeforeInsert;
+        const activeRecipientInsertIndex = adjustedLastSpareIndex === -1
+            ? orderedIds.length
+            : adjustedLastSpareIndex + 1;
+
+        orderedIds.splice(activeRecipientInsertIndex, 0, activeRecipientId);
+        return orderedIds;
+    }
+
+    private findLastSheetIndex(recipients: RecipientPlacementRow[], sheet: RecipientSheet) {
+        for (let index = recipients.length - 1; index >= 0; index -= 1) {
+            if (recipients[index].sheet === sheet) {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private findLastMatchingSlotIndex(
+        recipients: RecipientPlacementRow[],
+        sheet: RecipientSheet,
+        anchorKey: string,
+    ) {
+        for (let index = recipients.length - 1; index >= 0; index -= 1) {
+            const recipient = recipients[index];
+            if (recipient.sheet !== sheet) {
+                continue;
+            }
+
+            if (this.buildRecipientPlacementKey(recipient) === anchorKey) {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private buildRecipientPlacementKey(recipient?: {
+        room?: string | null;
+        room_est1?: string | null;
+        division?: string | null;
+        building?: string | null;
+    } | null) {
+        if (!recipient) {
+            return '';
+        }
+
+        const room = normalizeImportValue(recipient.room_est1) ?? normalizeImportValue(recipient.room);
+        if (!room) {
+            return '';
+        }
+
+        const building = normalizeImportValue(recipient.building) ?? '';
+        const division = normalizeImportValue(recipient.division) ?? '';
+        return [building, division, room]
+            .map((value) => value.trim().toLowerCase())
+            .join('|');
+    }
+
+    private buildOperationalAssignmentData(recipient: {
+        division?: string | null;
+        exam_type?: string | null;
+        role?: string | null;
+        day?: string | null;
+        date?: string | null;
+        test_center?: string | null;
+        faculty?: string | null;
+        room?: string | null;
+        room_est1?: string | null;
+        type?: string | null;
+        governorate?: string | null;
+        address?: string | null;
+        building?: string | null;
+        location?: string | null;
+        map_link?: string | null;
+        additional_info_1?: string | null;
+        additional_info_2?: string | null;
+        arrival_time?: string | null;
+        preferred_test_center?: string | null;
+        preferred_proctoring_city?: string | null;
+    }) {
+        const roomValue = normalizeImportValue(recipient.room_est1) ?? normalizeImportValue(recipient.room);
+        const assignmentData = RECIPIENT_ASSIGNMENT_FIELD_KEYS.reduce<Record<string, string | null>>((accumulator, field) => {
+            if (field === 'room' || field === 'room_est1') {
+                accumulator[field] = roomValue;
+                return accumulator;
+            }
+
+            accumulator[field] = normalizeImportValue(recipient[field]) ?? null;
+            return accumulator;
+        }, {});
+
+        assignmentData.room = roomValue;
+        assignmentData.room_est1 = roomValue;
+        return assignmentData;
+    }
+
+    private async applyRecipientOrder(
+        tx: Prisma.TransactionClient,
+        recipients: RecipientPlacementRow[],
+        orderedIds: string[],
+    ) {
+        const baseTime = recipients[0]?.created_at ?? new Date();
+        const currentTimestampsById = new Map(
+            recipients.map((recipient) => [recipient.id, recipient.created_at.getTime()]),
+        );
+
+        for (let index = 0; index < orderedIds.length; index += 1) {
+            const recipientId = orderedIds[index];
+            const nextCreatedAt = new Date(baseTime.getTime() + index);
+
+            if (currentTimestampsById.get(recipientId) === nextCreatedAt.getTime()) {
+                continue;
+            }
+
+            await tx.recipient.update({
+                where: { id: recipientId },
+                data: { created_at: nextCreatedAt },
+            });
+        }
+    }
+
+    private resolveHierarchyScopeKey(cycleId?: string | null) {
+        return cycleId || '__no_cycle__';
+    }
+
+    private buildHierarchyReviewUrl(token: string) {
+        return token ? `${getFrontendOrigin()}/briefs/${encodeURIComponent(token)}` : '';
+    }
+
+    private buildHeadHierarchyReviewSnapshot(cycleId: string | null, node: HierarchyHeadNode): HierarchyReviewSnapshot {
+        const rows: HierarchyReviewSnapshotRow[] = [];
+        const seniors = node.seniors.slice().sort((a, b) => a.target.row_order - b.target.row_order);
+
+        for (const senior of seniors) {
+            const seniorName = normalizeImportValue(senior.target.name) || 'Unknown Senior';
+            rows.push({
+                recipient_id: senior.target.id,
+                recipient_name: seniorName,
+                row_order: senior.target.row_order,
+                hierarchy_role: 'SENIOR',
+                role: normalizeImportValue(senior.target.role),
+                group_recipient_id: senior.target.id,
+                group_name: seniorName,
+                floor: senior.floor,
+                room: null,
+                phone: normalizeImportValue(senior.target.phone),
+                email: normalizeImportValue(senior.target.email),
+            });
+
+            const members = senior.members.slice().sort((a, b) => a.row_order - b.row_order);
+            for (const member of members) {
+                rows.push({
+                    recipient_id: member.id,
+                    recipient_name: normalizeImportValue(member.name) || 'Unknown Invigilator',
+                    row_order: member.row_order,
+                    hierarchy_role: 'INVIGILATOR',
+                    role: normalizeImportValue(member.role),
+                    group_recipient_id: senior.target.id,
+                    group_name: seniorName,
+                    floor: senior.floor,
+                    room: normalizeImportValue(member.room_est1),
+                    phone: normalizeImportValue(member.phone),
+                    email: normalizeImportValue(member.email),
+                });
+            }
+        }
+
+        return {
+            scope_role: 'HEAD',
+            cycle_id: cycleId,
+            building: node.target.normalized_building,
+            floor: null,
+            reviewer: {
+                recipient_id: node.target.id,
+                recipient_name: normalizeImportValue(node.target.name) || 'Unknown Head',
+                row_order: node.target.row_order,
+            },
+            generated_at: new Date().toISOString(),
+            rows,
+        };
+    }
+
+    private buildSeniorHierarchyReviewSnapshot(cycleId: string | null, node: HierarchySeniorNode): HierarchyReviewSnapshot {
+        const rows = node.members
+            .slice()
+            .sort((a, b) => a.row_order - b.row_order)
+            .map<HierarchyReviewSnapshotRow>((member) => ({
+                recipient_id: member.id,
+                recipient_name: normalizeImportValue(member.name) || 'Unknown Invigilator',
+                row_order: member.row_order,
+                hierarchy_role: 'INVIGILATOR',
+                role: normalizeImportValue(member.role),
+                group_recipient_id: node.target.id,
+                group_name: normalizeImportValue(node.target.name) || 'Unknown Senior',
+                floor: node.floor,
+                room: normalizeImportValue(member.room_est1),
+                phone: normalizeImportValue(member.phone),
+                email: normalizeImportValue(member.email),
+            }));
+
+        return {
+            scope_role: 'SENIOR',
+            cycle_id: cycleId,
+            building: node.target.normalized_building,
+            floor: node.floor,
+            reviewer: {
+                recipient_id: node.target.id,
+                recipient_name: normalizeImportValue(node.target.name) || 'Unknown Senior',
+                row_order: node.target.row_order,
+            },
+            generated_at: new Date().toISOString(),
+            rows,
+        };
+    }
+
+    private async ensureHierarchyReviewLinks(options: {
+        cycleId?: string | null;
+        selectedHeadNodes: HierarchyHeadNode[];
+        selectedSeniorNodes: HierarchySeniorNode[];
+    }) {
+        const scopeKey = this.resolveHierarchyScopeKey(options.cycleId);
+        const reviewLinksByRecipientId = new Map<string, string>();
+
+        for (const node of options.selectedHeadNodes) {
+            const snapshot = this.buildHeadHierarchyReviewSnapshot(options.cycleId ?? null, node);
+            const link = await this.prisma.hierarchyReviewLink.upsert({
+                where: {
+                    scopeKey_recipientId_role: {
+                        scopeKey,
+                        recipientId: node.target.id,
+                        role: HierarchyReviewTargetRole.HEAD,
+                    },
+                },
+                create: {
+                    token: randomUUID(),
+                    scopeKey,
+                    cycleId: options.cycleId ?? null,
+                    recipientId: node.target.id,
+                    role: HierarchyReviewTargetRole.HEAD,
+                    recipientName: snapshot.reviewer.recipient_name,
+                    building: snapshot.building,
+                    floor: snapshot.floor,
+                    snapshot: snapshot as unknown as Prisma.InputJsonValue,
+                },
+                update: {
+                    cycleId: options.cycleId ?? null,
+                    recipientName: snapshot.reviewer.recipient_name,
+                    building: snapshot.building,
+                    floor: snapshot.floor,
+                    snapshot: snapshot as unknown as Prisma.InputJsonValue,
+                },
+                select: {
+                    token: true,
+                },
+            });
+
+            reviewLinksByRecipientId.set(node.target.id, this.buildHierarchyReviewUrl(link.token));
+        }
+
+        for (const node of options.selectedSeniorNodes) {
+            const snapshot = this.buildSeniorHierarchyReviewSnapshot(options.cycleId ?? null, node);
+            const link = await this.prisma.hierarchyReviewLink.upsert({
+                where: {
+                    scopeKey_recipientId_role: {
+                        scopeKey,
+                        recipientId: node.target.id,
+                        role: HierarchyReviewTargetRole.SENIOR,
+                    },
+                },
+                create: {
+                    token: randomUUID(),
+                    scopeKey,
+                    cycleId: options.cycleId ?? null,
+                    recipientId: node.target.id,
+                    role: HierarchyReviewTargetRole.SENIOR,
+                    recipientName: snapshot.reviewer.recipient_name,
+                    building: snapshot.building,
+                    floor: snapshot.floor,
+                    snapshot: snapshot as unknown as Prisma.InputJsonValue,
+                },
+                update: {
+                    cycleId: options.cycleId ?? null,
+                    recipientName: snapshot.reviewer.recipient_name,
+                    building: snapshot.building,
+                    floor: snapshot.floor,
+                    snapshot: snapshot as unknown as Prisma.InputJsonValue,
+                },
+                select: {
+                    token: true,
+                },
+            });
+
+            reviewLinksByRecipientId.set(node.target.id, this.buildHierarchyReviewUrl(link.token));
+        }
+
+        return reviewLinksByRecipientId;
+    }
+
+    private parseHierarchyReviewSnapshot(value: Prisma.JsonValue): HierarchyReviewSnapshot {
+        const snapshot = value as unknown as HierarchyReviewSnapshot | null;
+        if (!snapshot || !Array.isArray(snapshot.rows)) {
+            throw new BadRequestException('Review snapshot is unavailable.');
+        }
+
+        return snapshot;
+    }
+
+    private serializeHierarchyReviewEntry(entry?: {
+        rating?: number | null;
+        comment?: string | null;
+        nominationRole?: HierarchyNominationRole | null;
+        updated_at?: Date;
+    } | null) {
+        if (!entry) {
+            return null;
+        }
+
+        return {
+            rating: entry.rating ?? null,
+            comment: entry.comment ?? null,
+            nominationRole: entry.nominationRole ?? null,
+            updated_at: entry.updated_at ? entry.updated_at.toISOString() : null,
+        };
+    }
+
+    private async buildHierarchyReviewResponse(
+        link: {
+            id: string;
+            token: string;
+            scopeKey: string;
+            cycleId: string | null;
+            recipientId: string;
+            recipientName: string;
+            role: HierarchyReviewTargetRole;
+            building: string;
+            floor: string | null;
+            snapshot: Prisma.JsonValue;
+            entries: Array<{
+                targetRecipientId: string;
+                rating: number | null;
+                comment: string | null;
+                nominationRole: HierarchyNominationRole | null;
+                updated_at: Date;
+            }>;
+        },
+        tx?: Prisma.TransactionClient,
+    ) {
+        const snapshot = this.parseHierarchyReviewSnapshot(link.snapshot);
+        const ownReviewMap = new Map(
+            link.entries.map((entry) => [entry.targetRecipientId, entry]),
+        );
+
+        const seniorReviewMap = new Map<string, {
+            rating: number | null;
+            comment: string | null;
+            nominationRole: HierarchyNominationRole | null;
+            updated_at: string | null;
+            reviewer: {
+                recipient_id: string;
+                recipient_name: string;
+                floor: string | null;
+            };
+        }>();
+
+        if (link.role === HierarchyReviewTargetRole.HEAD) {
+            const prismaClient = tx ?? this.prisma;
+            const seniorEntries = await prismaClient.hierarchyReviewEntry.findMany({
+                where: {
+                    link: {
+                        scopeKey: link.scopeKey,
+                        building: link.building,
+                        role: HierarchyReviewTargetRole.SENIOR,
+                    },
+                },
+                select: {
+                    targetRecipientId: true,
+                    rating: true,
+                    comment: true,
+                    nominationRole: true,
+                    updated_at: true,
+                    link: {
+                        select: {
+                            recipientId: true,
+                            recipientName: true,
+                            floor: true,
+                        },
+                    },
+                },
+            });
+
+            for (const entry of seniorEntries) {
+                seniorReviewMap.set(entry.targetRecipientId, {
+                    rating: entry.rating ?? null,
+                    comment: entry.comment ?? null,
+                    nominationRole: entry.nominationRole ?? null,
+                    updated_at: entry.updated_at ? entry.updated_at.toISOString() : null,
+                    reviewer: {
+                        recipient_id: entry.link.recipientId,
+                        recipient_name: entry.link.recipientName,
+                        floor: entry.link.floor,
+                    },
+                });
+            }
+        }
+
+        return {
+            token: link.token,
+            role: link.role,
+            cycle_id: link.cycleId,
+            building: link.building,
+            floor: link.floor,
+            reviewer: {
+                recipient_id: link.recipientId,
+                recipient_name: link.recipientName,
+            },
+            generated_at: snapshot.generated_at,
+            summary: {
+                total_rows: snapshot.rows.length,
+                reviewed_rows: ownReviewMap.size,
+                senior_reviewed_rows: seniorReviewMap.size,
+            },
+            rows: snapshot.rows.map((row) => ({
+                ...row,
+                review: this.serializeHierarchyReviewEntry(ownReviewMap.get(row.recipient_id)),
+                linked_senior_review: link.role === HierarchyReviewTargetRole.HEAD
+                    ? seniorReviewMap.get(row.recipient_id) ?? null
+                    : null,
+            })),
+        };
+    }
+
     private resolveHierarchyRole(role?: string | null): HierarchyRole {
         const normalized = String(role || '')
             .trim()
@@ -1749,7 +2713,7 @@ export class MessagingService {
         return division ?? room ?? 'General';
     }
 
-    private buildHeadTargetPreview(node: HierarchyHeadNode): HierarchyTargetPreview {
+    private buildHeadTargetPreview(node: HierarchyHeadNode, publicReviewUrl: string): HierarchyTargetPreview {
         const headName = normalizeImportValue(node.target.name) || 'Unknown Head';
         const seniors = node.seniors
             .slice()
@@ -1764,9 +2728,9 @@ export class MessagingService {
                 invigilators_count: senior.members.length,
             }));
 
-        const whatsappMessage = this.buildHeadBriefMessage(node);
+        const whatsappMessage = this.buildHeadBriefMessage(node, publicReviewUrl);
         const emailSubject = `EST Head Brief | ${node.target.normalized_building} | ${headName}`;
-        const emailBodyHtml = this.buildHeadBriefEmailHtml(node, seniors);
+        const emailBodyHtml = this.buildHeadBriefEmailHtml(node, seniors, publicReviewUrl);
 
         return {
             role: 'HEAD',
@@ -1780,12 +2744,13 @@ export class MessagingService {
             whatsapp_message: whatsappMessage,
             email_subject: emailSubject,
             email_body_html: emailBodyHtml,
+            public_review_url: publicReviewUrl,
             seniors,
             members: [],
         };
     }
 
-    private buildSeniorTargetPreview(node: HierarchySeniorNode): HierarchyTargetPreview {
+    private buildSeniorTargetPreview(node: HierarchySeniorNode, publicReviewUrl: string): HierarchyTargetPreview {
         const seniorName = normalizeImportValue(node.target.name) || 'Unknown Senior';
         const members = node.members
             .slice()
@@ -1800,9 +2765,9 @@ export class MessagingService {
                 email: normalizeImportValue(member.email),
             }));
 
-        const whatsappMessage = this.buildSeniorBriefMessage(node);
+        const whatsappMessage = this.buildSeniorBriefMessage(node, publicReviewUrl);
         const emailSubject = `EST Senior Brief | ${node.floor} | ${node.target.normalized_building} | ${seniorName}`;
-        const emailBodyHtml = this.buildSeniorBriefEmailHtml(node, members);
+        const emailBodyHtml = this.buildSeniorBriefEmailHtml(node, members, publicReviewUrl);
 
         return {
             role: 'SENIOR',
@@ -1816,12 +2781,13 @@ export class MessagingService {
             whatsapp_message: whatsappMessage,
             email_subject: emailSubject,
             email_body_html: emailBodyHtml,
+            public_review_url: publicReviewUrl,
             seniors: [],
             members,
         };
     }
 
-    private buildHeadBriefMessage(node: HierarchyHeadNode) {
+    private buildHeadBriefMessage(node: HierarchyHeadNode, publicReviewUrl?: string | null) {
         const headName = normalizeImportValue(node.target.name) || 'Unknown Head';
         const lines = [
             '*EST Building Brief*',
@@ -1847,14 +2813,15 @@ export class MessagingService {
             '',
             '*Coordination*',
             'Please create WhatsApp groups with each assigned senior and share the final invigilator distribution.',
+            publicReviewUrl ? `Public review sheet: ${publicReviewUrl}` : '',
             '',
             'Best regards,',
             'EST Team',
         );
-        return lines.join('\n');
+        return lines.filter(Boolean).join('\n');
     }
 
-    private buildSeniorBriefMessage(node: HierarchySeniorNode) {
+    private buildSeniorBriefMessage(node: HierarchySeniorNode, publicReviewUrl?: string | null) {
         const seniorName = normalizeImportValue(node.target.name) || 'Unknown Senior';
         const lines = [
             '*EST Senior Brief*',
@@ -1883,11 +2850,12 @@ export class MessagingService {
             '',
             '*Coordination*',
             'Please create room-wise WhatsApp groups with the invigilators listed above and confirm room coverage.',
+            publicReviewUrl ? `Public review sheet: ${publicReviewUrl}` : '',
             '',
             'Best regards,',
             'EST Team',
         );
-        return lines.join('\n');
+        return lines.filter(Boolean).join('\n');
     }
 
     private buildHeadBriefEmailHtml(
@@ -1900,6 +2868,7 @@ export class MessagingService {
             email: string | null;
             invigilators_count: number;
         }>,
+        publicReviewUrl?: string | null,
     ) {
         const rows = seniors.length
             ? seniors.map((senior) => `
@@ -1937,6 +2906,7 @@ export class MessagingService {
                     <tbody>${rows}</tbody>
                 </table>
                 <p style="margin:16px 0 0;">Please create WhatsApp groups with each assigned senior and share final invigilator distribution.</p>
+                ${publicReviewUrl ? `<p style="margin:14px 0 0;"><a href="${this.escapeHtml(publicReviewUrl)}" style="display:inline-block;padding:10px 14px;border-radius:10px;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:600;">Open public review sheet</a></p>` : ''}
                 <p style="margin:14px 0 0;">Best regards,<br /><strong>EST Team</strong></p>
             </div>
         `.trim();
@@ -1952,6 +2922,7 @@ export class MessagingService {
             phone: string | null;
             email: string | null;
         }>,
+        publicReviewUrl?: string | null,
     ) {
         const rows = members.length
             ? members.map((member) => `
@@ -1990,6 +2961,7 @@ export class MessagingService {
                     <tbody>${rows}</tbody>
                 </table>
                 <p style="margin:16px 0 0;">Please create room-wise WhatsApp groups and confirm full invigilator coverage.</p>
+                ${publicReviewUrl ? `<p style="margin:14px 0 0;"><a href="${this.escapeHtml(publicReviewUrl)}" style="display:inline-block;padding:10px 14px;border-radius:10px;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:600;">Open public review sheet</a></p>` : ''}
                 <p style="margin:14px 0 0;">Best regards,<br /><strong>EST Team</strong></p>
             </div>
         `.trim();

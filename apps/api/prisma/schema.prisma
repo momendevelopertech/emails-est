@@ -42,6 +42,16 @@ enum TemplateType {
   BOTH
 }
 
+enum HierarchyReviewTargetRole {
+  HEAD
+  SENIOR
+}
+
+enum HierarchyNominationRole {
+  ROAMING
+  SENIOR
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -91,6 +101,7 @@ model RecipientCycle {
   created_at       DateTime    @default(now())
   updated_at       DateTime    @updatedAt
   recipients       Recipient[]
+  hierarchy_review_links HierarchyReviewLink[]
 
   @@index([created_at])
 }
@@ -148,6 +159,7 @@ model Recipient {
   updated_at      DateTime        @updatedAt
   cycle           RecipientCycle? @relation(fields: [cycleId], references: [id], onDelete: SetNull)
   logs            Log[]
+  hierarchy_review_links HierarchyReviewLink[]
 
   @@index([cycleId, created_at])
   @@index([cycleId, status])
@@ -162,6 +174,46 @@ model Log {
   created_at  DateTime        @default(now())
 
   recipient Recipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+}
+
+model HierarchyReviewLink {
+  id            String                    @id @default(cuid())
+  token         String                    @unique
+  scopeKey      String
+  cycleId       String?
+  recipientId   String
+  role          HierarchyReviewTargetRole
+  recipientName String
+  building      String
+  floor         String?
+  snapshot      Json
+  created_at    DateTime                  @default(now())
+  updated_at    DateTime                  @updatedAt
+  cycle         RecipientCycle?           @relation(fields: [cycleId], references: [id], onDelete: SetNull)
+  recipient     Recipient                 @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  entries       HierarchyReviewEntry[]
+
+  @@unique([scopeKey, recipientId, role])
+  @@index([scopeKey, role])
+  @@index([scopeKey, building, role])
+}
+
+model HierarchyReviewEntry {
+  id                String                  @id @default(cuid())
+  linkId            String
+  targetRecipientId String
+  targetRecipientName String
+  targetRole        String?
+  targetRoom        String?
+  rating            Int?
+  comment           String?
+  nominationRole    HierarchyNominationRole?
+  created_at        DateTime                @default(now())
+  updated_at        DateTime                @updatedAt
+  link              HierarchyReviewLink     @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@unique([linkId, targetRecipientId])
+  @@index([targetRecipientId])
 }
 
 model EmailSettings {
