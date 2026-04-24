@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import {
+    AlertTriangle,
     BadgeCheck,
     Building2,
+    CheckCircle2,
     Download,
     Loader2,
     Mail,
@@ -16,6 +18,7 @@ import {
     Users,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import toast from 'react-hot-toast';
 import api from '@/lib/api';
 
 type NominationRole = 'ROAMING' | 'SENIOR';
@@ -143,6 +146,20 @@ const sanitizeFileName = (value: string) => value
     .replace(/ /g, '-')
     .toLowerCase();
 
+const getPendingRatingsMessage = (pendingRows: EditableReviewRow[], pageRole: ReviewPageRole) => {
+    if (pendingRows.length === 0) {
+        return '';
+    }
+
+    const ratingLabel = pageRole === 'HEAD' ? 'your rating' : 'a rating';
+
+    if (pendingRows.length === 1) {
+        return `Please add ${ratingLabel} for ${pendingRows[0].recipient_name} before saving.`;
+    }
+
+    return `Please complete ${ratingLabel} for the remaining ${pendingRows.length} people before saving.`;
+};
+
 export default function PublicHierarchyReviewClient({ initialToken }: { initialToken?: string }) {
     const params = useParams<RouteParams>();
     const searchParams = useSearchParams();
@@ -195,6 +212,26 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
         }));
     }, [rows]);
 
+    const progress = useMemo(() => {
+        const totalRows = rows.length;
+        const ratedRows = rows.filter((row) => Boolean(row.draftRating)).length;
+        const pendingRows = rows.filter((row) => !row.draftRating);
+        const seniorSyncedRows = payload?.role === 'HEAD'
+            ? rows.filter((row) => Boolean(row.linked_senior_review?.rating)).length
+            : 0;
+
+        return {
+            totalRows,
+            ratedRows,
+            pendingRows,
+            pendingCount: pendingRows.length,
+            savedRows: payload?.summary.reviewed_rows ?? 0,
+            seniorSyncedRows,
+            completionPercent: totalRows > 0 ? Math.round((ratedRows / totalRows) * 100) : 100,
+            isComplete: pendingRows.length === 0,
+        };
+    }, [payload?.role, payload?.summary.reviewed_rows, rows]);
+
     const handleRowChange = (
         recipientId: string,
         field: 'draftRating' | 'draftComment' | 'draftNominationRole',
@@ -218,6 +255,24 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
 
     const saveAllReviews = async () => {
         if (!payload) {
+            return;
+        }
+
+        if (progress.pendingCount > 0) {
+            const warningMessage = getPendingRatingsMessage(progress.pendingRows, payload.role);
+            const firstPendingRow = progress.pendingRows[0];
+
+            setViewState('ready');
+            setMessage(warningMessage);
+            toast.error(warningMessage, { duration: 4500 });
+
+            if (firstPendingRow) {
+                document.getElementById(`review-row-${firstPendingRow.recipient_id}`)?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                });
+            }
+
             return;
         }
 
@@ -347,18 +402,56 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
 
                     <div className="border-b border-slate-200 bg-slate-50 px-5 py-5 md:px-7">
                         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                            <div className="grid gap-3 sm:grid-cols-3">
-                                <div className="rounded-[1rem] border border-slate-200 bg-white px-4 py-3 text-sm">
-                                    <div className="text-slate-500">Rows</div>
-                                    <div className="mt-1 text-lg font-semibold text-slate-950">{payload.summary.total_rows}</div>
+                            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                                <div className="rounded-[1.15rem] border border-slate-900 bg-slate-900 px-4 py-3.5 text-sm text-white shadow-sm shadow-slate-900/10">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="text-white/70">Total people</div>
+                                        <Users size={16} className="text-white/70" />
+                                    </div>
+                                    <div className="mt-2 text-2xl font-semibold text-white">{progress.totalRows}</div>
+                                    <div className="mt-1 text-xs text-white/70">Visible in this brief</div>
                                 </div>
-                                <div className="rounded-[1rem] border border-slate-200 bg-white px-4 py-3 text-sm">
-                                    <div className="text-slate-500">Saved by this sheet</div>
-                                    <div className="mt-1 text-lg font-semibold text-slate-950">{payload.summary.reviewed_rows}</div>
+                                <div className="rounded-[1.15rem] border border-emerald-200 bg-emerald-50 px-4 py-3.5 text-sm text-emerald-950 shadow-sm shadow-emerald-900/5">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="text-emerald-700">Rated now</div>
+                                        <CheckCircle2 size={16} className="text-emerald-600" />
+                                    </div>
+                                    <div className="mt-2 text-2xl font-semibold text-emerald-950">{progress.ratedRows}</div>
+                                    <div className="mt-1 text-xs text-emerald-700">
+                                        {progress.completionPercent}% complete on this page
+                                    </div>
                                 </div>
-                                <div className="rounded-[1rem] border border-slate-200 bg-white px-4 py-3 text-sm">
-                                    <div className="text-slate-500">Senior updates</div>
-                                    <div className="mt-1 text-lg font-semibold text-slate-950">{payload.summary.senior_reviewed_rows}</div>
+                                <div className={`rounded-[1.15rem] border px-4 py-3.5 text-sm shadow-sm ${
+                                    progress.isComplete
+                                        ? 'border-emerald-200 bg-white text-emerald-950 shadow-emerald-900/5'
+                                        : 'border-amber-200 bg-amber-50 text-amber-950 shadow-amber-900/5'
+                                }`}>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className={progress.isComplete ? 'text-emerald-700' : 'text-amber-700'}>
+                                            Remaining
+                                        </div>
+                                        <AlertTriangle size={16} className={progress.isComplete ? 'text-emerald-500' : 'text-amber-500'} />
+                                    </div>
+                                    <div className="mt-2 text-2xl font-semibold">{progress.pendingCount}</div>
+                                    <div className={`mt-1 text-xs ${progress.isComplete ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                        {progress.isComplete ? 'All people are rated and ready to save.' : 'Still required before saving.'}
+                                    </div>
+                                </div>
+                                <div className="rounded-[1.15rem] border border-cyan-200 bg-cyan-50 px-4 py-3.5 text-sm text-cyan-950 shadow-sm shadow-cyan-900/5">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="text-cyan-700">
+                                            {payload.role === 'HEAD' ? 'Senior synced' : 'Saved on this link'}
+                                        </div>
+                                        <BadgeCheck size={16} className="text-cyan-600" />
+                                    </div>
+                                    <div className="mt-2 text-2xl font-semibold text-cyan-950">
+                                        {payload.role === 'HEAD' ? progress.seniorSyncedRows : progress.savedRows}
+                                    </div>
+                                    <div className="mt-1 text-xs text-cyan-700">
+                                        {payload.role === 'HEAD'
+                                            ? 'Rows already supported by senior feedback'
+                                            : 'Rows already saved from this brief'}
+                                    </div>
                                 </div>
                             </div>
 
@@ -383,9 +476,74 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                             </div>
                         </div>
 
-                        <div className="mt-3 rounded-[1rem] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                        <div className="mt-4 rounded-[1.15rem] border border-slate-200 bg-white p-4">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Rating progress</div>
+                                    <div className="mt-1 text-sm font-medium text-slate-700">
+                                        {progress.isComplete
+                                            ? 'Every person on this brief has a rating and the sheet is ready to save.'
+                                            : payload.role === 'HEAD'
+                                                ? `${progress.pendingCount} people still need your rating before you can save confidently.`
+                                                : `${progress.pendingCount} people still need a rating before you can save confidently.`}
+                                    </div>
+                                </div>
+                                <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold ${
+                                    progress.isComplete
+                                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                                        : 'border border-amber-200 bg-amber-50 text-amber-700'
+                                }`}>
+                                    {progress.isComplete ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+                                    <span>{progress.ratedRows} / {progress.totalRows} rated</span>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                    className={`h-full rounded-full transition-all ${
+                                        progress.isComplete ? 'bg-emerald-500' : 'bg-cyan-600'
+                                    }`}
+                                    style={{ width: `${progress.completionPercent}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        {!progress.isComplete ? (
+                            <div className="mt-4 rounded-[1.15rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                <div className="flex items-start gap-3">
+                                    <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+                                    <div>
+                                        <div className="font-semibold">Ratings are still missing.</div>
+                                        <div className="mt-1 leading-6">
+                                            {payload.role === 'HEAD'
+                                                ? `Finish adding your rating for the remaining ${progress.pendingCount} people before pressing save.`
+                                                : `Finish rating the remaining ${progress.pendingCount} people before pressing save.`}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
+
+                        <div
+                            className={`mt-4 rounded-[1rem] border px-4 py-3 text-sm ${
+                                viewState === 'error'
+                                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                    : progress.isComplete
+                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                        : 'border-slate-200 bg-white text-slate-600'
+                            }`}
+                            aria-live="polite"
+                        >
                             {message}
-                            <div className="mt-1 text-xs text-slate-500">Snapshot generated on {formatDateTime(payload.generated_at)}</div>
+                            <div className={`mt-1 text-xs ${
+                                viewState === 'error'
+                                    ? 'text-rose-600'
+                                    : progress.isComplete
+                                        ? 'text-emerald-700'
+                                        : 'text-slate-500'
+                            }`}>
+                                Snapshot generated on {formatDateTime(payload.generated_at)}
+                            </div>
                         </div>
                     </div>
 
@@ -411,8 +569,11 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                         return (
                                             <article
                                                 key={row.recipient_id}
+                                                id={`review-row-${row.recipient_id}`}
                                                 className={`rounded-[1.25rem] border p-4 shadow-sm shadow-slate-900/5 ${
-                                                    row.hierarchy_role === 'SENIOR'
+                                                    !row.draftRating
+                                                        ? 'border-amber-200 bg-amber-50/50'
+                                                        : row.hierarchy_role === 'SENIOR'
                                                         ? 'border-cyan-200 bg-cyan-50/40'
                                                         : 'border-slate-200 bg-white'
                                                 }`}
@@ -431,6 +592,12 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                                                     <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
                                                                         <BadgeCheck size={12} />
                                                                         <span>Senior rating synced</span>
+                                                                    </span>
+                                                                ) : null}
+                                                                {!row.draftRating ? (
+                                                                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                                                                        <AlertTriangle size={12} />
+                                                                        <span>{row.showsInheritedSeniorRating ? 'Your rating required' : 'Rating required'}</span>
                                                                     </span>
                                                                 ) : null}
                                                             </div>
