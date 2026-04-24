@@ -63,6 +63,7 @@ type EditableReviewRow = ReviewRow & {
     draftRating: '' | '1' | '2' | '3' | '4' | '5';
     draftComment: string;
     draftNominationRole: '' | NominationRole;
+    showsInheritedSeniorRating: boolean;
 };
 
 type RouteParams = {
@@ -81,12 +82,33 @@ const roleBadgeStyles: Record<ReviewRow['hierarchy_role'], string> = {
     INVIGILATOR: 'border border-emerald-200 bg-emerald-50 text-emerald-800',
 };
 
-const mapRowsToEditable = (rows: ReviewRow[]): EditableReviewRow[] => rows.map((row) => ({
-    ...row,
-    draftRating: row.review?.rating ? String(row.review.rating) as EditableReviewRow['draftRating'] : '',
-    draftComment: row.review?.comment || '',
-    draftNominationRole: row.review?.nominationRole || '',
-}));
+const toDraftRating = (value?: number | null): EditableReviewRow['draftRating'] => (
+    value ? String(value) as EditableReviewRow['draftRating'] : ''
+);
+
+const getInheritedSeniorRating = (
+    row: Pick<ReviewRow, 'linked_senior_review'>,
+    pageRole: ReviewPageRole,
+): EditableReviewRow['draftRating'] => (
+    pageRole === 'HEAD' ? toDraftRating(row.linked_senior_review?.rating) : ''
+);
+
+const mapRowsToEditable = (rows: ReviewRow[], pageRole: ReviewPageRole): EditableReviewRow[] => rows.map((row) => {
+    const draftRating = toDraftRating(row.review?.rating);
+    const inheritedSeniorRating = getInheritedSeniorRating(row, pageRole);
+
+    return {
+        ...row,
+        draftRating,
+        draftComment: row.review?.comment || '',
+        draftNominationRole: row.review?.nominationRole || '',
+        showsInheritedSeniorRating: !draftRating && Boolean(inheritedSeniorRating),
+    };
+});
+
+const getVisibleRating = (row: EditableReviewRow, pageRole: ReviewPageRole): EditableReviewRow['draftRating'] => (
+    row.showsInheritedSeniorRating ? getInheritedSeniorRating(row, pageRole) : row.draftRating
+);
 
 const formatNominationLabel = (value?: NominationRole | null) => {
     if (value === 'ROAMING') return 'Roaming';
@@ -131,7 +153,7 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
             .then((response) => {
                 const nextPayload = response.data as ReviewPayload;
                 setPayload(nextPayload);
-                setRows(mapRowsToEditable(nextPayload.rows || []));
+                setRows(mapRowsToEditable(nextPayload.rows || [], nextPayload.role));
                 setViewState('ready');
                 setMessage('Review sheet loaded successfully.');
             })
@@ -170,6 +192,7 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                 ? {
                     ...row,
                     [field]: value,
+                    ...(field === 'draftRating' ? { showsInheritedSeniorRating: false } : {}),
                 }
                 : row
         )));
@@ -196,7 +219,7 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
 
             const nextPayload = response.data?.review as ReviewPayload;
             setPayload(nextPayload);
-            setRows(mapRowsToEditable(nextPayload.rows || []));
+            setRows(mapRowsToEditable(nextPayload.rows || [], nextPayload.role));
             setViewState('ready');
             setMessage('All review changes were saved.');
         } catch (error: any) {
@@ -216,7 +239,7 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
 
         const workbook = XLSX.utils.book_new();
         const worksheet = XLSX.utils.json_to_sheet(rows.map((row) => ({
-            Rating: row.draftRating || '',
+            Rating: getVisibleRating(row, payload.role) || '',
             Comment: row.draftComment.trim(),
             Recommendation: row.draftNominationRole ? formatNominationLabel(row.draftNominationRole) : '',
             Row: row.row_order,
@@ -389,7 +412,7 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                                         <div className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
                                                             <Star size={14} className="text-amber-500" />
                                                             <select
-                                                                value={row.draftRating}
+                                                                value={getVisibleRating(row, payload.role)}
                                                                 onChange={(event) => handleRowChange(row.recipient_id, 'draftRating', event.target.value)}
                                                                 className="bg-transparent text-sm font-medium text-slate-900 outline-none"
                                                             >
@@ -401,6 +424,11 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                                                 <option value="5">5</option>
                                                             </select>
                                                         </div>
+                                                        {row.showsInheritedSeniorRating && row.linked_senior_review ? (
+                                                            <div className="mt-2 text-xs font-medium text-emerald-700">
+                                                                Synced from senior: {row.linked_senior_review.reviewer.recipient_name}
+                                                            </div>
+                                                        ) : null}
                                                     </td>
                                                     <td className="px-3 py-3 align-top">
                                                         <div className="font-semibold text-slate-950">{row.recipient_name}</div>
