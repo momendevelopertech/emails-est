@@ -24,6 +24,7 @@ describe('MessagingService', () => {
             findMany: jest.fn(),
             create: jest.fn(),
             update: jest.fn(),
+            deleteMany: jest.fn(),
         },
         hierarchyReviewLink: {
             upsert: jest.fn(),
@@ -524,6 +525,18 @@ describe('MessagingService', () => {
 
         const templates = await service.getTemplates();
 
+        expect(prisma.template.deleteMany).toHaveBeenCalledWith({
+            where: {
+                name: {
+                    in: [
+                        'EST I Exam Assignment - V2 Modern',
+                        'EST II Exam Assignment - V2 Modern',
+                        'EST I Exam Assignment - V2 Modern (With Confirmation)',
+                        'EST II Exam Assignment - V2 Modern (With Confirmation)',
+                    ],
+                },
+            },
+        });
         expect(prisma.template.update).toHaveBeenCalledWith({
             where: { id: 'preset-est1' },
             data: expect.objectContaining({
@@ -661,12 +674,15 @@ describe('MessagingService', () => {
     });
 
     it('renders guided HTML templates into a structured WhatsApp message without system links', async () => {
+        const confirmationPreset = EXAM_ASSIGNMENT_TEMPLATE_PRESETS.find(
+            (template) => template.name === 'EST I Exam Assignment (With Confirmation)',
+        )!;
         prisma.template.findUnique.mockResolvedValue({
             id: 't2',
             name: 'EST I Exam Assignment (With Confirmation)',
             type: TemplateType.BOTH,
-            subject: EXAM_ASSIGNMENT_TEMPLATE_PRESETS[1].subject,
-            body: EXAM_ASSIGNMENT_TEMPLATE_PRESETS[1].body,
+            subject: confirmationPreset.subject,
+            body: confirmationPreset.body,
         });
         prisma.recipient.findMany.mockResolvedValue([
             {
@@ -692,10 +708,10 @@ describe('MessagingService', () => {
         expect(whatsAppService.sendWhatsApp).toHaveBeenCalledTimes(1);
         expect(whatsAppService.sendWhatsApp.mock.calls[0][0]).toBe('01145495393');
         const whatsAppMessage = whatsAppService.sendWhatsApp.mock.calls[0][1];
-        expect(whatsAppMessage).toContain('*Action required*');
-        expect(whatsAppMessage).toContain('Open response page:');
+        expect(whatsAppMessage).toContain('*Action Required*');
+        expect(whatsAppMessage).toContain('Please open the response page to confirm attendance or send an apology.');
         expect(whatsAppMessage).toContain('/r/confirm-token');
-        expect(whatsAppMessage).not.toContain('Room:');
+        expect(whatsAppMessage).toContain('🚪 Room: 201');
         expect(whatsAppMessage).not.toContain('/messaging/confirm?token=confirm-token&action=confirm');
         expect(whatsAppMessage).not.toContain('Google Maps:');
     });

@@ -1,6 +1,7 @@
 export type TemplateTypeValue = 'EMAIL' | 'WHATSAPP' | 'BOTH';
 
 export type EstGuidedTemplateConfig = {
+    examLabel: 'EST I' | 'EST II';
     examDay: string;
     examDate: string;
     arrivalTime: string;
@@ -368,71 +369,84 @@ export const TEMPLATE_PREVIEW_RECIPIENT: TemplatePreviewRecipient = {
     response_url: 'https://emails-est-web.vercel.app/messaging/confirm?token=preview',
 };
 
+const createGuidedOfficialPreset = (
+    definition: {
+        id: string;
+        name: string;
+        examLabel: 'EST I' | 'EST II';
+        examDay: string;
+        examDate: string;
+        arrivalTime: string;
+        variant: 'STANDARD' | 'CONFIRMATION';
+        description: string;
+    },
+): TemplatePresetDefinition => {
+    const content = buildGuidedTemplateContent({
+        examLabel: definition.examLabel,
+        examDay: definition.examDay,
+        examDate: definition.examDate,
+        arrivalTime: definition.arrivalTime,
+        variant: definition.variant,
+    });
+
+    return {
+        id: definition.id,
+        name: definition.name,
+        type: 'BOTH',
+        subject: content.subject,
+        body: content.body,
+        description: definition.description,
+        guidedConfig: {
+            examLabel: definition.examLabel,
+            examDay: definition.examDay,
+            examDate: definition.examDate,
+            arrivalTime: definition.arrivalTime,
+            variant: definition.variant,
+        },
+    };
+};
+
 export const EXAM_ASSIGNMENT_TEMPLATE_PRESETS: TemplatePresetDefinition[] = [
-    // EST I Templates
-    {
-        id: 'est-i-v1-classic',
-        name: 'EST I Exam Assignment - V1 Classic',
-        type: 'EMAIL',
-        subject: 'EST I Exam Assignment - V1 | {{name}}',
-        body: buildExamAssignmentEmailBodyV1({
-            examLabel: 'EST I',
-        }),
-        description: 'Classic gradient design with centered hero section for EST I assignments.',
-    },
-    {
-        id: 'est-i-v2-modern',
-        name: 'EST I Exam Assignment - V2 Modern',
-        type: 'EMAIL',
-        subject: 'EST I Exam Assignment - V2 | {{name}}',
-        body: buildExamAssignmentEmailBodyV2({
-            examLabel: 'EST I',
-            logoUrl: 'https://emails-est-web.vercel.app/brand/est-i-logo.svg',
-        }),
-        description: 'Modern design with EST I logo and color-coded cards for EST I assignments.',
-    },
-    {
-        id: 'est-i-v3-minimal',
-        name: 'EST I Exam Assignment - V3 Minimal',
-        type: 'EMAIL',
-        subject: 'EST I Exam Assignment - V3 | {{name}}',
-        body: buildExamAssignmentEmailBodyV3({
-            examLabel: 'EST I',
-        }),
-        description: 'Minimal clean design with simple table layout for EST I assignments.',
-    },
-    // EST II Templates
-    {
-        id: 'est-ii-v1-classic',
-        name: 'EST II Exam Assignment - V1 Classic',
-        type: 'EMAIL',
-        subject: 'EST II Exam Assignment - V1 | {{name}}',
-        body: buildExamAssignmentEmailBodyV1({
-            examLabel: 'EST II',
-        }),
-        description: 'Classic gradient design with centered hero section for EST II assignments.',
-    },
-    {
-        id: 'est-ii-v2-modern',
-        name: 'EST II Exam Assignment - V2 Modern',
-        type: 'EMAIL',
-        subject: 'EST II Exam Assignment - V2 | {{name}}',
-        body: buildExamAssignmentEmailBodyV2({
-            examLabel: 'EST II',
-            logoUrl: 'https://emails-est-web.vercel.app/brand/est-ii-logo.svg',
-        }),
-        description: 'Modern design with EST II logo and color-coded cards for EST II assignments.',
-    },
-    {
-        id: 'est-ii-v3-minimal',
-        name: 'EST II Exam Assignment - V3 Minimal',
-        type: 'EMAIL',
-        subject: 'EST II Exam Assignment - V3 | {{name}}',
-        body: buildExamAssignmentEmailBodyV3({
-            examLabel: 'EST II',
-        }),
-        description: 'Minimal clean design with simple table layout for EST II assignments.',
-    },
+    createGuidedOfficialPreset({
+        id: 'est-ii-assignment-confirmation',
+        name: 'EST II Exam Assignment (With Confirmation)',
+        examLabel: 'EST II',
+        examDay: 'Saturday',
+        examDate: '16th of May 2026',
+        arrivalTime: '8:00 AM',
+        variant: 'CONFIRMATION',
+        description: 'EST II assignment with a single response page link for confirmation or apology.',
+    }),
+    createGuidedOfficialPreset({
+        id: 'est-i-assignment-confirmation',
+        name: 'EST I Exam Assignment (With Confirmation)',
+        examLabel: 'EST I',
+        examDay: 'Friday',
+        examDate: '15th of May 2026',
+        arrivalTime: '8:00 AM',
+        variant: 'CONFIRMATION',
+        description: 'EST I assignment with a single response page link for confirmation or apology.',
+    }),
+    createGuidedOfficialPreset({
+        id: 'est-ii-assignment',
+        name: 'EST II Exam Assignment',
+        examLabel: 'EST II',
+        examDay: 'Saturday',
+        examDate: '16th of May 2026',
+        arrivalTime: '8:00 AM',
+        variant: 'STANDARD',
+        description: 'EST II assignment email and WhatsApp message with a concise official summary.',
+    }),
+    createGuidedOfficialPreset({
+        id: 'est-i-assignment',
+        name: 'EST I Exam Assignment',
+        examLabel: 'EST I',
+        examDay: 'Friday',
+        examDate: '15th of May 2026',
+        arrivalTime: '8:00 AM',
+        variant: 'STANDARD',
+        description: 'EST I assignment email and WhatsApp message with a concise official summary.',
+    }),
 ];
 
 export const isHtmlTemplateBody = (body: string) => /<[a-z][\w:-]*\b[^>]*>/i.test(body);
@@ -481,6 +495,7 @@ export const buildEmailPreviewDocument = (body: string) => `<!DOCTYPE html>
 </html>`;
 
 const normalizeGuidedTemplateConfig = (config: EstGuidedTemplateConfig): EstGuidedTemplateConfig => ({
+    examLabel: config.examLabel === 'EST II' ? 'EST II' : 'EST I',
     examDay: config.examDay.trim() || 'Friday',
     examDate: config.examDate.trim() || '15th of May 2026',
     arrivalTime: config.arrivalTime.trim() || '8:00 AM',
@@ -491,8 +506,8 @@ export const buildGuidedTemplateContent = (config: EstGuidedTemplateConfig) => {
     const normalized = normalizeGuidedTemplateConfig(config);
     const metadata = `<!-- ${GUIDED_TEMPLATE_META_PREFIX}${encodeURIComponent(JSON.stringify(normalized))} -->`;
     const subject = normalized.variant === 'CONFIRMATION'
-        ? 'EST Exam Assignment | {{name}} (Action Required)'
-        : 'EST Exam Assignment | {{name}}';
+        ? `${normalized.examLabel} Exam Assignment - Action Required | {{name}}`
+        : `${normalized.examLabel} Exam Assignment | {{name}}`;
     const actionSection = normalized.variant === 'CONFIRMATION'
         ? `
             <div style="margin-top:24px;padding:18px;border-radius:18px;background:#eff6ff;border:1px solid #bfdbfe;">
@@ -517,7 +532,7 @@ ${metadata}
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:720px;border-radius:28px;overflow:hidden;background:#ffffff;box-shadow:0 24px 60px rgba(15,23,42,0.08);">
                 <tr>
                     <td style="padding:34px 32px;background:linear-gradient(135deg,#0f766e 0%,#1d4ed8 100%);color:#ffffff;">
-                        <div style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">EST Assignment</div>
+                        <div style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">${normalized.examLabel} Assignment</div>
                         <div style="margin-top:12px;font-size:32px;font-weight:800;line-height:1.2;">{{name}}</div>
                         <p style="margin:14px 0 0;font-size:14px;line-height:1.8;color:rgba(255,255,255,0.92);">
                             Please review your exam assignment details carefully and keep this message for reference.
@@ -590,6 +605,7 @@ export const parseGuidedTemplateConfig = (body: string): EstGuidedTemplateConfig
     try {
         const parsed = JSON.parse(decodeURIComponent(match[1]));
         return normalizeGuidedTemplateConfig({
+            examLabel: parsed.examLabel === 'EST II' ? 'EST II' : 'EST I',
             examDay: String(parsed.examDay || ''),
             examDate: String(parsed.examDate || ''),
             arrivalTime: String(parsed.arrivalTime || ''),
@@ -608,18 +624,21 @@ export const buildWhatsAppPreviewText = (
 
     if (guidedConfig) {
         return renderTemplateTokens([
-            '*EST Assignment*',
+            `*${guidedConfig.examLabel} Exam Assignment*`,
             `Dear ${recipient.name || '{{name}}'},`,
             '',
-            `Exam day: ${guidedConfig.examDay}`,
-            `Full date: ${guidedConfig.examDate}`,
-            `Arrival time: ${guidedConfig.arrivalTime}`,
-            `Role: ${recipient.role || '{{role}}'}`,
-            `Building: ${recipient.building || '{{building}}'}`,
-            `Address: ${recipient.address || '{{address}}'}`,
+            `📅 Exam day: ${guidedConfig.examDay}`,
+            `🗓️ Date: ${guidedConfig.examDate}`,
+            `🕗 Arrival time: ${guidedConfig.arrivalTime}`,
+            `👤 Role: ${recipient.role || '{{role}}'}`,
+            `🏢 Test center: ${recipient.building || '{{building}}'}`,
+            `🚪 Room: ${recipient.room_est1 || '{{room_est1}}'}`,
+            '',
+            'Please review your assignment details carefully and arrive 30 minutes early.',
             guidedConfig.variant === 'CONFIRMATION' ? '' : null,
-            guidedConfig.variant === 'CONFIRMATION' ? '*Action required*' : null,
-            guidedConfig.variant === 'CONFIRMATION' ? `Open response page: ${recipient.response_url || '{{response_url}}'}` : null,
+            guidedConfig.variant === 'CONFIRMATION' ? '*Action Required*' : null,
+            guidedConfig.variant === 'CONFIRMATION' ? 'Please open the response page to confirm attendance or send an apology.' : null,
+            guidedConfig.variant === 'CONFIRMATION' ? `🔗 ${recipient.response_url || '{{response_url}}'}` : null,
         ].filter(Boolean).join('\n'), recipient);
     }
 

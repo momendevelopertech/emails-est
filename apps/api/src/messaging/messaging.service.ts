@@ -29,9 +29,12 @@ import {
 } from './recipient-import';
 import {
     buildExamAssignmentWhatsAppBody,
+    buildGuidedExamAssignmentWhatsAppBody,
     EXAM_ASSIGNMENT_TEMPLATE_PRESETS,
     isRichHtmlEmailTemplate,
+    OBSOLETE_EXAM_ASSIGNMENT_TEMPLATE_NAMES,
     parseExamAssignmentTemplateMeta,
+    parseGuidedTemplateConfig,
 } from './exam-assignment-template-presets';
 import { normalizeEgyptMobilePhone } from '../shared/egypt-phone';
 import { getFrontendOrigin } from '../shared/cookie-settings';
@@ -1830,6 +1833,11 @@ export class MessagingService {
 
     private renderWhatsAppBody(templateBody: string, recipient: Record<string, any>) {
         if (isRichHtmlEmailTemplate(templateBody)) {
+            const guidedTemplateConfig = parseGuidedTemplateConfig(templateBody);
+            if (guidedTemplateConfig) {
+                return buildGuidedExamAssignmentWhatsAppBody(guidedTemplateConfig, recipient);
+            }
+
             const guidedTemplateMeta = parseExamAssignmentTemplateMeta(templateBody);
             if (guidedTemplateMeta) {
                 return buildExamAssignmentWhatsAppBody(guidedTemplateMeta, recipient);
@@ -1890,6 +1898,16 @@ export class MessagingService {
     }
 
     private async ensureExamAssignmentTemplates() {
+        if (OBSOLETE_EXAM_ASSIGNMENT_TEMPLATE_NAMES.length) {
+            await this.prisma.template.deleteMany({
+                where: {
+                    name: {
+                        in: OBSOLETE_EXAM_ASSIGNMENT_TEMPLATE_NAMES,
+                    },
+                },
+            });
+        }
+
         const existingTemplates = await this.prisma.template.findMany({
             where: {
                 name: {

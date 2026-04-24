@@ -13,6 +13,23 @@ type ExamAssignmentTemplateMeta = {
     examLabel: string;
 };
 
+type GuidedExamAssignmentTemplateConfig = {
+    examLabel: 'EST I' | 'EST II';
+    examDay: string;
+    examDate: string;
+    arrivalTime: string;
+    variant: 'STANDARD' | 'CONFIRMATION';
+};
+
+const GUIDED_TEMPLATE_META_PREFIX = 'EST_GUIDED_TEMPLATE_META:';
+
+export const OBSOLETE_EXAM_ASSIGNMENT_TEMPLATE_NAMES = [
+    'EST I Exam Assignment - V2 Modern',
+    'EST II Exam Assignment - V2 Modern',
+    'EST I Exam Assignment - V2 Modern (With Confirmation)',
+    'EST II Exam Assignment - V2 Modern (With Confirmation)',
+];
+
 // V1: Classic Design with Gradient Hero
 const buildExamAssignmentEmailBodyV1 = ({
     examLabel,
@@ -287,45 +304,185 @@ const buildResponseButtons = () => '\n\n<!-- Response Links -->\n<div style="tex
     + '<a href="{{decline_url}}" style="display:inline-block;margin:0 6px 12px;padding:12px 28px;background:#dc2626;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">Send Apology</a>'
     + '</div>\n\n<p style="text-align:center;font-size:12px;color:#718096;"><a href="{{response_url}}" style="color:#718096;">Open the response page if the buttons above do not work.</a></p>';
 
+const normalizeGuidedTemplateConfig = (
+    config: GuidedExamAssignmentTemplateConfig,
+): GuidedExamAssignmentTemplateConfig => ({
+    examLabel: config.examLabel === 'EST II' ? 'EST II' : 'EST I',
+    examDay: config.examDay.trim() || 'Friday',
+    examDate: config.examDate.trim() || '15th of May 2026',
+    arrivalTime: config.arrivalTime.trim() || '8:00 AM',
+    variant: config.variant === 'CONFIRMATION' ? 'CONFIRMATION' : 'STANDARD',
+});
+
+const buildGuidedTemplateContent = (config: GuidedExamAssignmentTemplateConfig) => {
+    const normalized = normalizeGuidedTemplateConfig(config);
+    const metadata = `<!-- ${GUIDED_TEMPLATE_META_PREFIX}${encodeURIComponent(JSON.stringify(normalized))} -->`;
+    const subject = normalized.variant === 'CONFIRMATION'
+        ? `${normalized.examLabel} Exam Assignment - Action Required | {{name}}`
+        : `${normalized.examLabel} Exam Assignment | {{name}}`;
+    const actionSection = normalized.variant === 'CONFIRMATION'
+        ? `
+            <div style="margin-top:24px;padding:18px;border-radius:18px;background:#eff6ff;border:1px solid #bfdbfe;">
+                <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#1d4ed8;">Action Required</div>
+                <p style="margin:12px 0 0;font-size:14px;line-height:1.7;color:#334155;">
+                    Please open the response page to confirm attendance or send an apology.
+                </p>
+                <p style="margin:14px 0 0;font-size:13px;line-height:1.7;color:#1e40af;">
+                    {{response_url}}
+                </p>
+            </div>
+        `
+        : '';
+
+    return {
+        subject,
+        body: `
+${metadata}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:0;padding:24px;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;color:#0f172a;">
+    <tr>
+        <td align="center">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:720px;border-radius:28px;overflow:hidden;background:#ffffff;box-shadow:0 24px 60px rgba(15,23,42,0.08);">
+                <tr>
+                    <td style="padding:34px 32px;background:linear-gradient(135deg,#0f766e 0%,#1d4ed8 100%);color:#ffffff;">
+                        <div style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;">${normalized.examLabel} Assignment</div>
+                        <div style="margin-top:12px;font-size:32px;font-weight:800;line-height:1.2;">{{name}}</div>
+                        <p style="margin:14px 0 0;font-size:14px;line-height:1.8;color:rgba(255,255,255,0.92);">
+                            Please review your assignment details carefully and keep this message for reference.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:30px 32px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;">
+                            <tr>
+                                <td style="padding:0 8px 16px 0;" width="33.333%">
+                                    <div style="padding:16px;border-radius:20px;background:#ecfeff;border:1px solid #a5f3fc;">
+                                        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#0f766e;">Exam day</div>
+                                        <div style="margin-top:8px;font-size:18px;font-weight:800;color:#0f172a;">${normalized.examDay}</div>
+                                    </div>
+                                </td>
+                                <td style="padding:0 8px 16px;" width="33.333%">
+                                    <div style="padding:16px;border-radius:20px;background:#eff6ff;border:1px solid #bfdbfe;">
+                                        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#1d4ed8;">Full date</div>
+                                        <div style="margin-top:8px;font-size:18px;font-weight:800;color:#0f172a;">${normalized.examDate}</div>
+                                    </div>
+                                </td>
+                                <td style="padding:0 0 16px 8px;" width="33.333%">
+                                    <div style="padding:16px;border-radius:20px;background:#fff7ed;border:1px solid #fdba74;">
+                                        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#c2410c;">Arrival time</div>
+                                        <div style="margin-top:8px;font-size:18px;font-weight:800;color:#0f172a;">${normalized.arrivalTime}</div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <div style="margin-top:8px;padding:22px;border-radius:22px;background:#f8fafc;border:1px solid #e2e8f0;">
+                            <div style="font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Assignment details</div>
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-top:14px;">
+                                <tr>
+                                    <td style="padding:8px 0;font-size:14px;color:#475569;">Role</td>
+                                    <td style="padding:8px 0;font-size:14px;font-weight:700;color:#0f172a;text-align:right;">{{role}}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:8px 0;font-size:14px;color:#475569;">Room</td>
+                                    <td style="padding:8px 0;font-size:14px;font-weight:700;color:#0f172a;text-align:right;">{{room_est1}}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:8px 0;font-size:14px;color:#475569;">Building</td>
+                                    <td style="padding:8px 0;font-size:14px;font-weight:700;color:#0f172a;text-align:right;">{{building}}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:8px 0;font-size:14px;color:#475569;">Address</td>
+                                    <td style="padding:8px 0;font-size:14px;font-weight:700;color:#0f172a;text-align:right;">{{address}}</td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        ${actionSection}
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>`.trim(),
+    };
+};
+
 export const EXAM_ASSIGNMENT_TEMPLATE_PRESETS: TemplateRecord[] = [
     {
-        name: 'EST I Exam Assignment - V2 Modern',
-        type: TemplateType.EMAIL,
-        subject: 'EST I Exam Assignment - V2 | {{name}}',
-        body: buildExamAssignmentEmailBodyV2({
+        name: 'EST I Exam Assignment',
+        type: TemplateType.BOTH,
+        subject: buildGuidedTemplateContent({
             examLabel: 'EST I',
-            logoUrl: 'https://emails-est-web.vercel.app/brand/est-i-logo.svg',
-        }),
+            examDay: 'Friday',
+            examDate: '15th of May 2026',
+            arrivalTime: '8:00 AM',
+            variant: 'STANDARD',
+        }).subject,
+        body: buildGuidedTemplateContent({
+            examLabel: 'EST I',
+            examDay: 'Friday',
+            examDate: '15th of May 2026',
+            arrivalTime: '8:00 AM',
+            variant: 'STANDARD',
+        }).body,
         include_confirmation_button: false,
     },
     {
-        name: 'EST II Exam Assignment - V2 Modern',
-        type: TemplateType.EMAIL,
-        subject: 'EST II Exam Assignment - V2 | {{name}}',
-        body: buildExamAssignmentEmailBodyV2({
+        name: 'EST II Exam Assignment',
+        type: TemplateType.BOTH,
+        subject: buildGuidedTemplateContent({
             examLabel: 'EST II',
-            logoUrl: 'https://emails-est-web.vercel.app/brand/est-ii-logo.svg',
-        }),
+            examDay: 'Saturday',
+            examDate: '16th of May 2026',
+            arrivalTime: '8:00 AM',
+            variant: 'STANDARD',
+        }).subject,
+        body: buildGuidedTemplateContent({
+            examLabel: 'EST II',
+            examDay: 'Saturday',
+            examDate: '16th of May 2026',
+            arrivalTime: '8:00 AM',
+            variant: 'STANDARD',
+        }).body,
         include_confirmation_button: false,
     },
     {
-        name: 'EST I Exam Assignment - V2 Modern (With Confirmation)',
-        type: TemplateType.EMAIL,
-        subject: 'EST I Exam Assignment - V2 | {{name}} (Action Required)',
-        body: buildExamAssignmentEmailBodyV2({
+        name: 'EST I Exam Assignment (With Confirmation)',
+        type: TemplateType.BOTH,
+        subject: buildGuidedTemplateContent({
             examLabel: 'EST I',
-            logoUrl: 'https://emails-est-web.vercel.app/brand/est-i-logo.svg',
-        }) + buildResponseButtons(),
+            examDay: 'Friday',
+            examDate: '15th of May 2026',
+            arrivalTime: '8:00 AM',
+            variant: 'CONFIRMATION',
+        }).subject,
+        body: buildGuidedTemplateContent({
+            examLabel: 'EST I',
+            examDay: 'Friday',
+            examDate: '15th of May 2026',
+            arrivalTime: '8:00 AM',
+            variant: 'CONFIRMATION',
+        }).body,
         include_confirmation_button: true,
     },
     {
-        name: 'EST II Exam Assignment - V2 Modern (With Confirmation)',
-        type: TemplateType.EMAIL,
-        subject: 'EST II Exam Assignment - V2 | {{name}} (Action Required)',
-        body: buildExamAssignmentEmailBodyV2({
+        name: 'EST II Exam Assignment (With Confirmation)',
+        type: TemplateType.BOTH,
+        subject: buildGuidedTemplateContent({
             examLabel: 'EST II',
-            logoUrl: 'https://emails-est-web.vercel.app/brand/est-ii-logo.svg',
-        }) + buildResponseButtons(),
+            examDay: 'Saturday',
+            examDate: '16th of May 2026',
+            arrivalTime: '8:00 AM',
+            variant: 'CONFIRMATION',
+        }).subject,
+        body: buildGuidedTemplateContent({
+            examLabel: 'EST II',
+            examDay: 'Saturday',
+            examDate: '16th of May 2026',
+            arrivalTime: '8:00 AM',
+            variant: 'CONFIRMATION',
+        }).body,
         include_confirmation_button: true,
     },
 ];
@@ -344,28 +501,82 @@ export function parseExamAssignmentTemplateMeta(body: string): ExamAssignmentTem
     };
 }
 
+export function parseGuidedTemplateConfig(body: string): GuidedExamAssignmentTemplateConfig | null {
+    const match = String(body || '').match(new RegExp(`<!--\\s*${GUIDED_TEMPLATE_META_PREFIX}([^>]+)\\s*-->`, 'i'));
+    if (!match) {
+        return null;
+    }
+
+    try {
+        const parsed = JSON.parse(decodeURIComponent(match[1]));
+        return normalizeGuidedTemplateConfig({
+            examLabel: parsed.examLabel === 'EST II' ? 'EST II' : 'EST I',
+            examDay: String(parsed.examDay || ''),
+            examDate: String(parsed.examDate || ''),
+            arrivalTime: String(parsed.arrivalTime || ''),
+            variant: parsed.variant === 'CONFIRMATION' ? 'CONFIRMATION' : 'STANDARD',
+        });
+    } catch {
+        return null;
+    }
+}
+
+export function buildGuidedExamAssignmentWhatsAppBody(
+    config: GuidedExamAssignmentTemplateConfig,
+    recipient: Record<string, any>,
+) {
+    const normalized = normalizeGuidedTemplateConfig(config);
+    const name = String(recipient.name || '').trim();
+    const role = String(recipient.assignment_role || recipient.role || '').trim();
+    const building = String(recipient.building || recipient.test_center || '').trim();
+    const room = String(recipient.room_est1 || recipient.room || '').trim();
+    const responseUrl = String(recipient.response_url || '').trim();
+
+    return [
+        `*${normalized.examLabel} Exam Assignment*`,
+        name ? `Dear ${name},` : 'Dear colleague,',
+        '',
+        `📅 Exam day: ${normalized.examDay}`,
+        `🗓️ Date: ${normalized.examDate}`,
+        `🕗 Arrival time: ${normalized.arrivalTime}`,
+        role ? `👤 Role: ${role}` : null,
+        building ? `🏢 Test center: ${building}` : null,
+        room ? `🚪 Room: ${room}` : null,
+        '',
+        'Please review your assignment details carefully and arrive 30 minutes early.',
+        normalized.variant === 'CONFIRMATION' ? '' : null,
+        normalized.variant === 'CONFIRMATION' ? '*Action Required*' : null,
+        normalized.variant === 'CONFIRMATION'
+            ? 'Please open the response page to confirm attendance or send an apology.'
+            : null,
+        normalized.variant === 'CONFIRMATION' && responseUrl ? `🔗 ${responseUrl}` : null,
+    ]
+        .filter((line): line is string => Boolean(line))
+        .join('\n');
+}
+
 export function buildExamAssignmentWhatsAppBody(
     meta: ExamAssignmentTemplateMeta,
     recipient: Record<string, any>,
 ) {
     const role = String(recipient.assignment_role || recipient.role || '').trim();
     const building = String(recipient.building || recipient.test_center || '').trim();
-    const address = String(recipient.address || '').trim();
-    const governorate = String(recipient.governorate || '').trim();
+    const room = String(recipient.room_est1 || recipient.room || '').trim();
     const responseUrl = String(recipient.response_url || '').trim();
 
     return [
-        `*${meta.examLabel} Assignment*`,
+        `*${meta.examLabel} Exam Assignment*`,
         recipient.name ? `Dear ${recipient.name},` : 'Dear colleague,',
         '',
-        'Your assignment details are ready.',
-        role ? `Role: ${role}` : null,
-        building ? `Center: ${building}` : null,
-        address ? `Address: ${address}` : null,
-        governorate ? `Governorate: ${governorate}` : null,
+        role ? `👤 Role: ${role}` : null,
+        building ? `🏢 Test center: ${building}` : null,
+        room ? `🚪 Room: ${room}` : null,
         '',
-        '*Action required*',
-        responseUrl ? `Open response page: ${responseUrl}` : null,
+        'Please review your assignment details carefully.',
+        responseUrl ? '' : null,
+        responseUrl ? '*Action Required*' : null,
+        responseUrl ? 'Please open the response page to confirm attendance or send an apology.' : null,
+        responseUrl ? `🔗 ${responseUrl}` : null,
     ]
         .filter((line): line is string => Boolean(line))
         .join('\n');
