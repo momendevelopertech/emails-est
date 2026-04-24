@@ -59,6 +59,7 @@ import {
 } from './recipient-sheet-utils';
 import ConfirmDialog from '../ConfirmDialog';
 import FormSelect from '../FormSelect';
+import DraggableTableScrollArea from './DraggableTableScrollArea';
 
 type WorkspaceTab = 'recipients' | 'templates' | 'campaign' | 'settings';
 type CampaignViewTab = 'send' | 'briefs' | 'logs';
@@ -3379,7 +3380,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     </div>
                                 ) : null}
 
-                                <div className="overflow-x-auto">
+                                <DraggableTableScrollArea className="overflow-x-auto">
                                     <div className="min-w-[1280px]">
                                         <table className="w-full table-fixed divide-y divide-slate-200 text-left text-sm">
                                             <thead className="bg-slate-50 text-slate-600">
@@ -3616,7 +3617,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             </tbody>
                                         </table>
                                     </div>
-                                </div>
+                                </DraggableTableScrollArea>
 
                             </div>
                         </div>
@@ -3781,7 +3782,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                             </div>
 
                             <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-slate-200">
-                                <div className="max-h-[34rem] overflow-auto">
+                                <DraggableTableScrollArea className="max-h-[34rem] overflow-auto">
                                     <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
                                         <thead className="bg-slate-50 text-slate-600">
                                             <tr>
@@ -4006,7 +4007,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             })}
                                         </tbody>
                                     </table>
-                                </div>
+                                </DraggableTableScrollArea>
                             </div>
 
                             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -4808,7 +4809,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                     </div>
                                 </div>
 
-                                <div className="overflow-x-auto">
+                                <DraggableTableScrollArea className="overflow-x-auto">
                                     <div className="min-w-[1160px]">
                                         <table className="w-full table-fixed divide-y divide-slate-200 text-left text-sm">
                                             <thead className="bg-slate-50 text-slate-600">
@@ -4997,7 +4998,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             </tbody>
                                         </table>
                                     </div>
-                                </div>
+                                </DraggableTableScrollArea>
 
                                 <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                                     <div className="text-sm text-slate-500">
@@ -5483,7 +5484,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             </div>
 
                                             {target.role === 'HEAD' ? (
-                                                <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+                                                <DraggableTableScrollArea className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
                                                     <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
                                                         <thead className="bg-slate-50 text-slate-600">
                                                             <tr>
@@ -5508,9 +5509,9 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                             )}
                                                         </tbody>
                                                     </table>
-                                                </div>
+                                                </DraggableTableScrollArea>
                                             ) : (
-                                                <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+                                                <DraggableTableScrollArea className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
                                                     <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
                                                         <thead className="bg-slate-50 text-slate-600">
                                                             <tr>
@@ -5535,7 +5536,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                                             )}
                                                         </tbody>
                                                     </table>
-                                                </div>
+                                                </DraggableTableScrollArea>
                                             )}
                                         </div>
                                     ))}
@@ -5617,7 +5618,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
 
                         {logsExpanded && (
                             <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-slate-200">
-                                <div className="overflow-x-auto">
+                                <DraggableTableScrollArea className="overflow-x-auto">
                                     <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
                                         <thead className="bg-slate-50 text-slate-600">
                                             <tr>
@@ -5655,7 +5656,7 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
                                             )}
                                         </tbody>
                                     </table>
-                                </div>
+                                </DraggableTableScrollArea>
                             </div>
                         )}
                     </div>

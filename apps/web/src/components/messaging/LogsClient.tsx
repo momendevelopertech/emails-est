@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useTranslations } from 'next-intl';
 import api from '@/lib/api';
+import DraggableTableScrollArea from './DraggableTableScrollArea';
 
 const statusStyles: Record<string, string> = {
     PENDING: 'bg-slate-100 text-slate-700',
@@ -40,7 +41,7 @@ export default function LogsClient({ locale }: { locale: string }) {
             </div>
 
             <div className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <div className="overflow-x-auto">
+                <DraggableTableScrollArea className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
                         <thead className="bg-slate-50 text-slate-700">
                             <tr>
@@ -79,7 +80,7 @@ export default function LogsClient({ locale }: { locale: string }) {
                             )}
                         </tbody>
                     </table>
-                </div>
+                </DraggableTableScrollArea>
             </div>
         </section>
     );

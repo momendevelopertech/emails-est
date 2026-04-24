@@ -23,6 +23,7 @@ import {
     type ManagedRecipientSheet,
     type SwappableRecipientSheet,
 } from './recipient-sheet-utils';
+import DraggableTableScrollArea from './DraggableTableScrollArea';
 
 type SheetTab = ManagedRecipientSheet;
 
@@ -500,7 +501,7 @@ export default function ExcelSheetManagerClient({
                     </div>
                 ) : null}
 
-                <div className="overflow-x-auto">
+                <DraggableTableScrollArea className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-slate-100 bg-slate-50/80 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -594,7 +595,7 @@ export default function ExcelSheetManagerClient({
                             }) : null}
                         </tbody>
                     </table>
-                </div>
+                </DraggableTableScrollArea>
 
                 {!isLoading && currentItems.length > 0 ? (
                     <div className={`flex items-center justify-between border-t border-slate-100 px-5 py-3 ${SHEET_META[activeTab].bg}`}>
