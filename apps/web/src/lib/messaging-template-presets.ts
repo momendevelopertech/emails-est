@@ -494,13 +494,15 @@ export const buildEmailPreviewDocument = (body: string) => `<!DOCTYPE html>
   </body>
 </html>`;
 
-const normalizeGuidedTemplateConfig = (config: EstGuidedTemplateConfig): EstGuidedTemplateConfig => ({
-    examLabel: config.examLabel === 'EST II' ? 'EST II' : 'EST I',
-    examDay: config.examDay.trim() || 'Friday',
-    examDate: config.examDate.trim() || '15th of May 2026',
-    arrivalTime: config.arrivalTime.trim() || '8:00 AM',
-    variant: config.variant === 'CONFIRMATION' ? 'CONFIRMATION' : 'STANDARD',
-});
+function normalizeGuidedTemplateConfig(config: EstGuidedTemplateConfig): EstGuidedTemplateConfig {
+    return {
+        examLabel: config.examLabel === 'EST II' ? 'EST II' : 'EST I',
+        examDay: config.examDay.trim() || 'Friday',
+        examDate: config.examDate.trim() || '15th of May 2026',
+        arrivalTime: config.arrivalTime.trim() || '8:00 AM',
+        variant: config.variant === 'CONFIRMATION' ? 'CONFIRMATION' : 'STANDARD',
+    };
+}
 
 export function buildGuidedTemplateContent(config: EstGuidedTemplateConfig) {
     const normalized = normalizeGuidedTemplateConfig(config);
