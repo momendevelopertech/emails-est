@@ -126,6 +126,14 @@ const getVisibleRating = (row: EditableReviewRow, pageRole: ReviewPageRole): Edi
     row.showsInheritedSeniorRating ? getInheritedSeniorRating(row, pageRole) : row.draftRating
 );
 
+const hasLinkedSeniorRating = (row: Pick<ReviewRow, 'linked_senior_review'>, pageRole: ReviewPageRole) => (
+    pageRole === 'HEAD' && Boolean(row.linked_senior_review?.rating)
+);
+
+const isRowCoveredForCurrentReview = (row: EditableReviewRow, pageRole: ReviewPageRole) => (
+    Boolean(row.draftRating) || hasLinkedSeniorRating(row, pageRole)
+);
+
 const formatNominationLabel = (value?: NominationRole | null) => {
     if (value === 'ROAMING') return 'Roaming';
     if (value === 'SENIOR') return 'Senior';
@@ -214,20 +222,22 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
 
     const progress = useMemo(() => {
         const totalRows = rows.length;
-        const ratedRows = rows.filter((row) => Boolean(row.draftRating)).length;
-        const pendingRows = rows.filter((row) => !row.draftRating);
+        const coveredRows = rows.filter((row) => isRowCoveredForCurrentReview(row, payload?.role || 'SENIOR')).length;
+        const pendingRows = rows.filter((row) => !isRowCoveredForCurrentReview(row, payload?.role || 'SENIOR'));
+        const ownRatedRows = rows.filter((row) => Boolean(row.draftRating)).length;
         const seniorSyncedRows = payload?.role === 'HEAD'
             ? rows.filter((row) => Boolean(row.linked_senior_review?.rating)).length
             : 0;
 
         return {
             totalRows,
-            ratedRows,
+            coveredRows,
+            ownRatedRows,
             pendingRows,
             pendingCount: pendingRows.length,
             savedRows: payload?.summary.reviewed_rows ?? 0,
             seniorSyncedRows,
-            completionPercent: totalRows > 0 ? Math.round((ratedRows / totalRows) * 100) : 100,
+            completionPercent: totalRows > 0 ? Math.round((coveredRows / totalRows) * 100) : 100,
             isComplete: pendingRows.length === 0,
         };
     }, [payload?.role, payload?.summary.reviewed_rows, rows]);
@@ -413,12 +423,16 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                 </div>
                                 <div className="rounded-[1.15rem] border border-emerald-200 bg-emerald-50 px-4 py-3.5 text-sm text-emerald-950 shadow-sm shadow-emerald-900/5">
                                     <div className="flex items-center justify-between gap-3">
-                                        <div className="text-emerald-700">Rated now</div>
+                                        <div className="text-emerald-700">
+                                            {payload.role === 'HEAD' ? 'Covered now' : 'Rated now'}
+                                        </div>
                                         <CheckCircle2 size={16} className="text-emerald-600" />
                                     </div>
-                                    <div className="mt-2 text-2xl font-semibold text-emerald-950">{progress.ratedRows}</div>
+                                    <div className="mt-2 text-2xl font-semibold text-emerald-950">{progress.coveredRows}</div>
                                     <div className="mt-1 text-xs text-emerald-700">
-                                        {progress.completionPercent}% complete on this page
+                                        {payload.role === 'HEAD'
+                                            ? `${progress.completionPercent}% complete including senior reviews`
+                                            : `${progress.completionPercent}% complete on this page`}
                                     </div>
                                 </div>
                                 <div className={`rounded-[1.15rem] border px-4 py-3.5 text-sm shadow-sm ${
@@ -449,7 +463,7 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                     </div>
                                     <div className="mt-1 text-xs text-cyan-700">
                                         {payload.role === 'HEAD'
-                                            ? 'Rows already supported by senior feedback'
+                                            ? `${progress.ownRatedRows} rated by head, ${progress.seniorSyncedRows} already covered by seniors`
                                             : 'Rows already saved from this brief'}
                                     </div>
                                 </div>
@@ -484,7 +498,7 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                         {progress.isComplete
                                             ? 'Every person on this brief has a rating and the sheet is ready to save.'
                                             : payload.role === 'HEAD'
-                                                ? `${progress.pendingCount} people still need your rating before you can save confidently.`
+                                                ? `${progress.pendingCount} people still need head review. Senior-reviewed rows are already counted.`
                                                 : `${progress.pendingCount} people still need a rating before you can save confidently.`}
                                     </div>
                                 </div>
@@ -494,7 +508,7 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                         : 'border border-amber-200 bg-amber-50 text-amber-700'
                                 }`}>
                                     {progress.isComplete ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
-                                    <span>{progress.ratedRows} / {progress.totalRows} rated</span>
+                                    <span>{progress.coveredRows} / {progress.totalRows} complete</span>
                                 </div>
                             </div>
 
@@ -516,7 +530,7 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                         <div className="font-semibold">Ratings are still missing.</div>
                                         <div className="mt-1 leading-6">
                                             {payload.role === 'HEAD'
-                                                ? `Finish adding your rating for the remaining ${progress.pendingCount} people before pressing save.`
+                                                ? `Finish reviewing the remaining ${progress.pendingCount} people. Rows already rated by seniors are already counted for the head.`
                                                 : `Finish rating the remaining ${progress.pendingCount} people before pressing save.`}
                                         </div>
                                     </div>
@@ -571,7 +585,7 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                                 key={row.recipient_id}
                                                 id={`review-row-${row.recipient_id}`}
                                                 className={`rounded-[1.25rem] border p-4 shadow-sm shadow-slate-900/5 ${
-                                                    !row.draftRating
+                                                    !isRowCoveredForCurrentReview(row, payload.role)
                                                         ? 'border-amber-200 bg-amber-50/50'
                                                         : row.hierarchy_role === 'SENIOR'
                                                         ? 'border-cyan-200 bg-cyan-50/40'
@@ -594,10 +608,10 @@ export default function PublicHierarchyReviewClient({ initialToken }: { initialT
                                                                         <span>Senior rating synced</span>
                                                                     </span>
                                                                 ) : null}
-                                                                {!row.draftRating ? (
+                                                                {!isRowCoveredForCurrentReview(row, payload.role) ? (
                                                                     <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
                                                                         <AlertTriangle size={12} />
-                                                                        <span>{row.showsInheritedSeniorRating ? 'Your rating required' : 'Rating required'}</span>
+                                                                        <span>{payload.role === 'HEAD' ? 'Head review required' : 'Rating required'}</span>
                                                                     </span>
                                                                 ) : null}
                                                             </div>
