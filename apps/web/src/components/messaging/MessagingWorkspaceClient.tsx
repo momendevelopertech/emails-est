@@ -1010,11 +1010,21 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     const [spareAssignmentRoomKey, setSpareAssignmentRoomKey] = useState('');
     const [spareSwapRecipient, setSpareSwapRecipient] = useState<Recipient | null>(null);
     const [spareSwapPhone, setSpareSwapPhone] = useState('');
+    const pendingTabNavigationRef = useRef<WorkspaceTab | null>(null);
     const subjectInputRef = useRef<HTMLInputElement>(null);
     const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
         const nextTab = searchParams.get('tab');
+        const pendingTabNavigation = pendingTabNavigationRef.current;
+
+        if (pendingTabNavigation) {
+            if (nextTab === pendingTabNavigation) {
+                pendingTabNavigationRef.current = null;
+            }
+            return;
+        }
+
         if (isWorkspaceTab(nextTab) && nextTab !== activeTab) {
             setActiveTab(nextTab);
         }
@@ -1074,6 +1084,10 @@ export default function MessagingWorkspaceClient({ locale }: { locale: string })
     }, [activeTab]);
 
     const updateTab = (nextTab: WorkspaceTab) => {
+        if (nextTab === 'campaign') {
+            setCampaignViewTab('send');
+        }
+        pendingTabNavigationRef.current = nextTab;
         setActiveTab(nextTab);
     };
 
