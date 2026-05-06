@@ -14,8 +14,8 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
     const router = useRouter();
     const { setUser, setBootstrapped } = useAuthStore();
     const formRef = useRef<HTMLFormElement>(null);
-    const [identifier, setIdentifier] = useState('superadmin@sphinx.com');
-    const [password, setPassword] = useState('Admin@123456');
+    const [identifier, setIdentifier] = useState('');
+    const [password, setPassword] = useState('');
     const [pending, setPending] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -90,18 +90,9 @@ export default function LoginPage({ params }: { params: { locale: 'en' | 'ar' } 
                         </h1>
                         <p className="text-sm text-slate-500">
                             {params.locale === 'ar'
-                                ? 'تسجيل دخول مباشر وبسيط. عدل البريد أو كلمة المرور فقط إذا احتجت.'
-                                : 'Simple sign in. Edit the email or password only if you need to.'}
+                                ? 'سجّل الدخول باستخدام بيانات حسابك المصرح بها.'
+                                : 'Sign in with your authorized account credentials.'}
                         </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-900">
-                        <div className="font-medium">
-                            {params.locale === 'ar' ? 'حساب جاهز للتجربة السريعة' : 'Ready-to-use test account'}
-                        </div>
-                        <div className="mt-1 font-mono text-xs" dir="ltr">
-                            superadmin@sphinx.com / Admin@123456
-                        </div>
                     </div>
 
                     <div className="space-y-4">
